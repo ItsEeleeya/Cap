@@ -11,7 +11,7 @@ export const Camera = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { selectedVideoDevice } = useMediaDevices();
   const [isLoading, setIsLoading] = useState(true);
-  const tauriWindowImport = import("@tauri-apps/api/window");
+  const tauriWindowImport = import("webviewWindow");
   const [cameraMirrored, setCameraMirrored] = useState(
     typeof window !== "undefined"
       ? localStorage.getItem("cameraMirrored") || "false"

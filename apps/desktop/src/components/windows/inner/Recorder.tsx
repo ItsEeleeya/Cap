@@ -10,7 +10,7 @@ import { ActionButton } from "@/components/windows/inner/ActionButton";
 import { Button } from "@cap/ui";
 import { Logo } from "@/components/icons/Logo";
 import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "core";
 import {
   getLatestVideoId,
   saveLatestVideoId,
@@ -45,7 +45,7 @@ export const Recorder = () => {
     useState("Stopping Recording");
   const [recordingTime, setRecordingTime] = useState("00:00");
   const [hasStartedRecording, setHasStartedRecording] = useState(false);
-  const tauriWindow = import("@tauri-apps/api/window");
+  const tauriWindow = import("webviewWindow");
   const proCheckPromise = isUserPro();
   const [proCheck, setProCheck] = useState<boolean>(false);
   const [limitReached, setLimitReached] = useState(false);

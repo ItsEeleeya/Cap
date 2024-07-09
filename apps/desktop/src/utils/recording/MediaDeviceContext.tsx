@@ -60,7 +60,7 @@ export const MediaDeviceProvider: React.FC<React.PropsWithChildren<{}>> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [startingRecording, setStartingRecording] = useState(false);
   const getDevicesCalled = useRef(false);
-  const tauriWindowImport = import("@tauri-apps/api/window");
+  const tauriWindowImport = import("webviewWindow");
 
   const getDevices = useCallback(async () => {
     await enumerateAndStoreDevices();

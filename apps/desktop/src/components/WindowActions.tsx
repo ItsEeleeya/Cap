@@ -1,12 +1,12 @@
 "use client";
 
-import { exit } from "@tauri-apps/api/process";
+import { exit } from "@tauri-apps/plugin-process";
 import { Home } from "@/components/icons/Home";
 import { openLinkInBrowser } from "@/utils/helpers";
 
 export const WindowActions = () => {
   const actionButtonBase = "w-3 h-3 bg-gray-500 rounded-full m-0 p-0 block";
-  const tauriWindow = import("@tauri-apps/api/window");
+  const tauriWindow = import("webviewWindow");
 
   return (
     <div className="w-full flex items-center -mt-3 z-20 absolute top-5">

@@ -5,7 +5,7 @@ import callbackTemplate from "./callback.template";
 const dynamicImports = {
   invoke: () => import("@tauri-apps/api").then(({ invoke }) => invoke),
   listen: () => import("@tauri-apps/api/event").then(({ listen }) => listen),
-  shell: () => import("@tauri-apps/api/shell"),
+  shell: () => import("@tauri-apps/plugin-shell"),
 };
 
 export const openSignIn = async (port: string) => {
