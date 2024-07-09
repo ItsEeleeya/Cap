@@ -33,6 +33,11 @@
       "windows": {
         "installMode": "passive"
       }
+    },
+    "deep-link": {
+      "desktop": {
+        "schemas": ["caprecorder"]
+      }
     }
   },
   "app": {
