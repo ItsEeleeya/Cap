@@ -14,20 +14,36 @@ tauri-build = { version = "2.0.0-beta", features = [] }
 ffmpeg-sidecar = "0.5.1"
 
 [dependencies]
-tauri = { version = "2.0.0-beta.22", features = [
+tauri = { version = "1.6.1", features = [
+  "system-tray",
+  "updater",
   "macos-private-api",
+  "window-set-position",
+  "fs-write-file",
+  "fs-remove-file",
+  "fs-read-file",
+  "fs-rename-file",
+  "fs-exists",
+  "fs-remove-dir",
+  "fs-read-dir",
+  "fs-copy-file",
+  "fs-create-dir",
+  "window-set-ignore-cursor-events",
+  "window-unminimize",
+  "window-minimize",
+  "window-close",
+  "window-show",
+  "window-start-dragging",
+  "window-hide",
+  "window-unmaximize",
+  "window-maximize",
+  "window-set-always-on-top",
+  "shell-open",
   "devtools",
-  "tray-icon",
+  "os-all",
+  "http-all",
+  "icon-png",
 ] }
-
-# tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "main" } # Use deep-link instead.
-tauri-plugin-positioner = "2.0.0-beta"
-tauri-plugin-deep-link = "2.0.0-beta"
-tauri-specta = { version = "=2.0.0-rc.11", features = [
-  "javascript",
-  "typescript",
-] }
-specta = "=2.0.0-rc.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ffmpeg-sidecar = "0.5.1"
@@ -42,7 +58,7 @@ dotenv_codegen = "0.15.0"
 byteorder = "1.4.3"
 bytemuck = "1.14.3"
 regex = "1"
-capture = { path = "./src/capture" }
+capture = { path = "../../../crates/capture" }
 image = "0.24.9"
 sentry = "0.32.2"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
