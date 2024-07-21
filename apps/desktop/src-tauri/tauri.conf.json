@@ -36,7 +36,9 @@
     },
     "deep-link": {
       "desktop": {
-        "schemas": ["caprecorder"]
+        "schemas": [
+          "caprecorder"
+        ]
       }
     }
   },
@@ -53,7 +55,13 @@
         "resizable": false,
         "fullscreen": false,
         "transparent": true,
-        "decorations": false,
+        "decorations": true,
+        "shadow": true,
+        "windowEffects": {
+          "effects": [
+            "underWindowBackground"
+          ]
+        },
         "alwaysOnTop": false,
         "center": true
       }

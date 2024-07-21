@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[tauri::command]
-#[specta::specta]
+// #[specta::specta]
 pub fn has_screen_capture_access() -> bool {
     let display = match Display::primary() {
         Ok(display) => display,

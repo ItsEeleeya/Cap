@@ -3,7 +3,7 @@
 import callbackTemplate from "./callback.template";
 
 const dynamicImports = {
-  invoke: () => import("@tauri-apps/api").then(({ invoke }) => invoke),
+  invoke: () => import("@tauri-apps/api/core").then(({ invoke }) => invoke),
   listen: () => import("@tauri-apps/api/event").then(({ listen }) => listen),
   shell: () => import("@tauri-apps/plugin-shell"),
 };

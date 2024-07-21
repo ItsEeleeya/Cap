@@ -33,7 +33,8 @@ unsafe impl Sync for RecordingState {}
 unsafe impl Send for MediaRecorder {}
 unsafe impl Sync for MediaRecorder {}
 
-#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+// #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecordingOptions {
     pub user_id: String,
     pub video_id: String,
@@ -45,7 +46,7 @@ pub struct RecordingOptions {
 }
 
 #[tauri::command]
-#[specta::specta]
+// #[specta::specta]
 pub async fn start_dual_recording(
     state: State<'_, Arc<Mutex<RecordingState>>>,
     options: RecordingOptions,
@@ -137,7 +138,7 @@ pub async fn start_dual_recording(
 }
 
 #[tauri::command]
-#[specta::specta]
+// #[specta::specta]
 pub async fn stop_all_recordings(
     state: State<'_, Arc<Mutex<RecordingState>>>,
 ) -> Result<(), String> {

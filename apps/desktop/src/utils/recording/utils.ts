@@ -51,7 +51,7 @@ export const getSelectedVideoProperties = async () => {
 
 export const initializeCameraWindow = async () => {
   if (typeof window === "undefined") return;
-  import("webviewWindow").then(({ currentMonitor, WebviewWindow }) => {
+  import("@tauri-apps/api/webviewWindow").then(({ currentMonitor, WebviewWindow }) => {
     currentMonitor().then((monitor) => {
       const windowWidth = 230;
       const windowHeight = 230;

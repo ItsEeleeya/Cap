@@ -45,7 +45,7 @@ export const Recorder = () => {
     useState("Stopping Recording");
   const [recordingTime, setRecordingTime] = useState("00:00");
   const [hasStartedRecording, setHasStartedRecording] = useState(false);
-  const tauriWindow = import("webviewWindow");
+  const tauriWindow = import("@tauri-apps/api/webviewWindow");
   const proCheckPromise = isUserPro();
   const [proCheck, setProCheck] = useState<boolean>(false);
   const [limitReached, setLimitReached] = useState(false);
@@ -55,57 +55,58 @@ export const Recorder = () => {
   }, [proCheckPromise]);
 
   const handleContextClick = async (option: "video" | "audio") => {
-    const { showMenu } = await import("tauri-plugin-context-menu");
-    const deviceKind = option === "video" ? "videoinput" : "audioinput";
-    const isSelected = (device: Device | null) => {
-      if (device === null) {
-        return deviceKind === "videoinput"
-          ? selectedVideoDevice === null
-          : selectedAudioDevice === null;
-      }
+    return;
+    // const { showMenu } = await import("tauri-plugin-context-menu");
+    // const deviceKind = option === "video" ? "videoinput" : "audioinput";
+    // const isSelected = (device: Device | null) => {
+    //   if (device === null) {
+    //     return deviceKind === "videoinput"
+    //       ? selectedVideoDevice === null
+    //       : selectedAudioDevice === null;
+    //   }
 
-      return deviceKind === "videoinput"
-        ? device.index === selectedVideoDevice?.index
-        : device.index === selectedAudioDevice?.index;
-    };
-    const select = async (device: Device | null) => {
-      // if (isSelected(device)) {
-      //   return
-      // }
-      emit("change-device", { type: deviceKind, device: device }).catch(
-        (error) => {
-          console.log("Failed to emit change-device event:", error);
-        }
-      );
-    };
+    //   return deviceKind === "videoinput"
+    //     ? device.index === selectedVideoDevice?.index
+    //     : device.index === selectedAudioDevice?.index;
+    // };
+    // const select = async (device: Device | null) => {
+    //   // if (isSelected(device)) {
+    //   //   return
+    //   // }
+    //   emit("change-device", { type: deviceKind, device: device }).catch(
+    //     (error) => {
+    //       console.log("Failed to emit change-device event:", error);
+    //     }
+    //   );
+    // };
 
-    const devicesOfKind = devices.filter(
-      (device) => device.kind === deviceKind
-    );
+    // const devicesOfKind = devices.filter(
+    //   (device) => device.kind === deviceKind
+    // );
 
-    const menuItems = [
-      {
-        label: "None",
-        checked: isSelected(null),
-        event: async () => select(null),
-      },
-      ...devicesOfKind.map((device) => ({
-        label: device.label,
-        checked: isSelected(device),
-        event: async () => select(device),
-      })),
-    ];
+    // const menuItems = [
+    //   {
+    //     label: "None",
+    //     checked: isSelected(null),
+    //     event: async () => select(null),
+    //   },
+    //   ...devicesOfKind.map((device) => ({
+    //     label: device.label,
+    //     checked: isSelected(device),
+    //     event: async () => select(device),
+    //   })),
+    // ];
 
-    await showMenu({
-      items: [...menuItems],
-      ...(devicesOfKind.length === 0 && {
-        items: [
-          {
-            label: "Nothing found.",
-          },
-        ],
-      }),
-    });
+    // await showMenu({
+    //   items: [...menuItems],
+    //   ...(devicesOfKind.length === 0 && {
+    //     items: [
+    //       {
+    //         label: "Nothing found.",
+    //       },
+    //     ],
+    //   }),
+    // });
   };
 
   const prepareVideoData = async () => {

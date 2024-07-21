@@ -15,6 +15,7 @@
     "@sentry/nextjs": "^7.118.0",
     "@tauri-apps/api": "2.0.0-beta.14",
     "@tauri-apps/plugin-positioner": "2.0.0-beta.6",
+    "@tauri-apps/plugin-shell": "2.0.0-beta.8",
     "@tensorflow-models/body-pix": "^2.2.1",
     "@tensorflow/tfjs": "^4.20.0",
     "autoprefixer": "^10.4.19",

@@ -47,6 +47,9 @@ importers:
       '@tauri-apps/plugin-positioner':
         specifier: 2.0.0-beta.6
         version: 2.0.0-beta.6
+      '@tauri-apps/plugin-shell':
+        specifier: 2.0.0-beta.8
+        version: 2.0.0-beta.8
       '@tensorflow-models/body-pix':
         specifier: ^2.2.1
         version: 2.2.1(@tensorflow/tfjs-backend-webgl@4.20.0)(@tensorflow/tfjs-converter@4.20.0)(@tensorflow/tfjs-core@4.20.0)
@@ -149,7 +152,7 @@ importers:
         version: 3.9.7
       next:
         specifier: 14.2.3
-        version: 14.2.3(@babel/core@7.23.7)(react-dom@18.2.0)(react@18.2.0)
+        version: 14.2.3(@babel/core@7.24.7)(react-dom@18.2.0)(react@18.2.0)
       next-auth:
         specifier: ^4.24.5
         version: 4.24.5(next@14.2.3)(react-dom@18.2.0)(react@18.2.0)
@@ -388,7 +391,7 @@ importers:
         version: 3.9.7
       next:
         specifier: 14.2.3
-        version: 14.2.3(@babel/core@7.23.7)(react-dom@18.2.0)(react@18.2.0)
+        version: 14.2.3(@babel/core@7.24.7)(react-dom@18.2.0)(react@18.2.0)
       next-auth:
         specifier: ^4.24.5
         version: 4.24.5(next@14.2.3)(react-dom@18.2.0)(react@18.2.0)
@@ -513,7 +516,7 @@ importers:
         version: 1.11.3(eslint@8.56.0)
       eslint-plugin-prettier:
         specifier: ^4.2.1
-        version: 4.2.1(eslint-config-prettier@8.10.0)(eslint@8.56.0)(prettier@3.3.2)
+        version: 4.2.1(eslint-config-prettier@8.10.0)(eslint@8.56.0)(prettier@2.8.8)
       eslint-plugin-react:
         specifier: ^7.32.2
         version: 7.33.2(eslint@8.56.0)
@@ -6990,6 +6993,11 @@ packages:
     engines: {node: '>= 18.18', npm: '>= 6.6.0', yarn: '>= 1.19.1'}
     dev: false
 
+  /@tauri-apps/api@2.0.0-beta.15:
+    resolution: {integrity: sha512-H9w6iISmR+NvH4XuyCZB4zDN10tf9RFt6i/9JHEjaRhAowdAaJ+oiXq/3kedizNClHMtbTQ5j0oqDVPkZDAI8g==}
+    engines: {node: '>= 18.18', npm: '>= 6.6.0', yarn: '>= 1.19.1'}
+    dev: false
+
   /@tauri-apps/cli-darwin-arm64@1.5.11:
     resolution: {integrity: sha512-2NLSglDb5VfvTbMtmOKWyD+oaL/e8Z/ZZGovHtUFyUSFRabdXc6cZOlcD1BhFvYkHqm+TqGaz5qtPR5UbqDs8A==}
     engines: {node: '>= 10'}
@@ -7208,6 +7216,12 @@ packages:
     resolution: {integrity: sha512-cBn5ngUQ9G0sIXJcDOAR9z5EOYe0qin561dY6csrqWzdpvTTphiAqL3LqrLiINREivhRlmjgCpOxAB2ILQfEyw==}
     dependencies:
       '@tauri-apps/api': 2.0.0-beta.14
+    dev: false
+
+  /@tauri-apps/plugin-shell@2.0.0-beta.8:
+    resolution: {integrity: sha512-rFXI6MvsCdSGbuKbDu/NaOePREb9YTVTdeugHdvvljnKWW3dvmThBb2h/8Hxj+Z7Cd8MUoRxPeJWUZbPbJ2Imw==}
+    dependencies:
+      '@tauri-apps/api': 2.0.0-beta.15
     dev: false
 
   /@tensorflow-models/body-pix@2.2.1(@tensorflow/tfjs-backend-webgl@4.20.0)(@tensorflow/tfjs-converter@4.20.0)(@tensorflow/tfjs-core@4.20.0):
@@ -10410,7 +10424,7 @@ packages:
       doctrine: 2.1.0
       eslint: 8.57.0
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.8.0(@typescript-eslint/parser@7.13.1)(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.1)(eslint@8.57.0)
+      eslint-module-utils: 2.8.0(@typescript-eslint/parser@5.62.0)(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.1)(eslint@8.57.0)
       hasown: 2.0.0
       is-core-module: 2.13.1
       is-glob: 4.0.3
@@ -10546,7 +10560,7 @@ packages:
       object.fromentries: 2.0.7
     dev: true
 
-  /eslint-plugin-prettier@4.2.1(eslint-config-prettier@8.10.0)(eslint@8.56.0)(prettier@3.3.2):
+  /eslint-plugin-prettier@4.2.1(eslint-config-prettier@8.10.0)(eslint@8.56.0)(prettier@2.8.8):
     resolution: {integrity: sha512-f/0rXLXUt0oFYs8ra4w49wYZBG5GKZpAYsJSm6rnYL5uVDjd+zowwMwVZHnAjf4edNrKpCDYfXDgmRE/Ak7QyQ==}
     engines: {node: '>=12.0.0'}
     peerDependencies:
@@ -10559,7 +10573,7 @@ packages:
     dependencies:
       eslint: 8.56.0
       eslint-config-prettier: 8.10.0(eslint@8.56.0)
-      prettier: 3.3.2
+      prettier: 2.8.8
       prettier-linter-helpers: 1.0.0
     dev: true
 
@@ -13804,7 +13818,7 @@ packages:
       '@panva/hkdf': 1.1.1
       cookie: 0.5.0
       jose: 4.15.4
-      next: 14.2.3(@babel/core@7.23.7)(react-dom@18.2.0)(react@18.2.0)
+      next: 14.2.3(@babel/core@7.24.7)(react-dom@18.2.0)(react@18.2.0)
       oauth: 0.9.15
       openid-client: 5.6.4
       preact: 10.19.3
@@ -13882,7 +13896,7 @@ packages:
       postcss: 8.4.31
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      styled-jsx: 5.1.1(@babel/core@7.23.7)(react@18.2.0)
+      styled-jsx: 5.1.1(@babel/core@7.24.7)(react@18.2.0)
     optionalDependencies:
       '@next/swc-darwin-arm64': 14.1.0
       '@next/swc-darwin-x64': 14.1.0
@@ -13898,7 +13912,7 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /next@14.2.3(@babel/core@7.23.7)(react-dom@18.2.0)(react@18.2.0):
+  /next@14.2.3(@babel/core@7.24.7)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-dowFkFTR8v79NPJO4QsBUtxv0g9BrS/phluVpMAt2ku7H+cbcBJlopXjkWlwxrk/xGqMemr7JkGPGemPrLLX7A==}
     engines: {node: '>=18.17.0'}
     hasBin: true
@@ -13924,7 +13938,7 @@ packages:
       postcss: 8.4.31
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      styled-jsx: 5.1.1(@babel/core@7.23.7)(react@18.2.0)
+      styled-jsx: 5.1.1(@babel/core@7.24.7)(react@18.2.0)
     optionalDependencies:
       '@next/swc-darwin-arm64': 14.2.3
       '@next/swc-darwin-x64': 14.2.3
@@ -13988,7 +14002,7 @@ packages:
       next: ^8.1.1-canary.54 || ^9.0.0 || ^10.0.0-0 || ^11.0.0 || ^12.0.0 || ^13.0.0 || ^14.0.0
     dependencies:
       cors: 2.8.5
-      next: 14.2.3(@babel/core@7.23.7)(react-dom@18.2.0)(react@18.2.0)
+      next: 14.2.3(@babel/core@7.24.7)(react-dom@18.2.0)(react@18.2.0)
     dev: false
 
   /no-case@2.3.2:
@@ -14693,12 +14707,6 @@ packages:
   /prettier@2.8.8:
     resolution: {integrity: sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q==}
     engines: {node: '>=10.13.0'}
-    hasBin: true
-    dev: true
-
-  /prettier@3.3.2:
-    resolution: {integrity: sha512-rAVeHYMcv8ATV5d508CFdn+8/pHPpXeIid1DdrPwXnaAdH7cqjVbpJaT5eq4yRAFU/lsbwYwSF/n5iNrdJHPQA==}
-    engines: {node: '>=14'}
     hasBin: true
     dev: true
 
@@ -15932,7 +15940,7 @@ packages:
       inline-style-parser: 0.1.1
     dev: false
 
-  /styled-jsx@5.1.1(@babel/core@7.23.7)(react@18.2.0):
+  /styled-jsx@5.1.1(@babel/core@7.24.7)(react@18.2.0):
     resolution: {integrity: sha512-pW7uC1l4mBZ8ugbiZrcIsiIvVx1UmTfw7UkC3Um2tmfUq9Bhk8IiyEIPl6F8agHgjzku6j0xQEZbfA5uSgSaCw==}
     engines: {node: '>= 12.0.0'}
     peerDependencies:
@@ -15945,7 +15953,7 @@ packages:
       babel-plugin-macros:
         optional: true
     dependencies:
-      '@babel/core': 7.23.7
+      '@babel/core': 7.24.7
       client-only: 0.0.1
       react: 18.2.0
     dev: false
