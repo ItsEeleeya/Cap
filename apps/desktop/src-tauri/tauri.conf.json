@@ -56,10 +56,11 @@
         "fullscreen": false,
         "transparent": true,
         "decorations": true,
+        "titleBarStyle": "Overlay",
         "shadow": true,
         "windowEffects": {
           "effects": [
-            "underWindowBackground"
+            "sidebar"
           ]
         },
         "alwaysOnTop": false,
