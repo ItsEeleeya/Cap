@@ -1,13 +1,20 @@
-import { createResource, Show, For } from "solid-js";
+import {
+  createResource,
+  Show,
+  For,
+} from "solid-js";
 import { createStore } from "solid-js/store";
 import { generalSettingsStore } from "~/store";
-import { commands, type GeneralSettingsStore } from "~/utils/tauri";
+import type { AppTheme, GeneralSettingsStore } from "~/utils/tauri";
 // import { themeStore } from "~/store/theme";
 import {
   isPermissionGranted,
   requestPermission,
 } from "@tauri-apps/plugin-notification";
-import { OsType, Platform, type } from "@tauri-apps/plugin-os";
+import { type OsType, type } from "@tauri-apps/plugin-os";
+import themePreviewAuto from "~/assets/theme-previews/auto.jpg";
+import themePreviewLight from "~/assets/theme-previews/light.jpg";
+import themePreviewDark from "~/assets/theme-previews/dark.jpg";
 
 const settingsList: Array<{
   key: keyof GeneralSettingsStore;
@@ -18,15 +25,6 @@ const settingsList: Array<{
   pro?: boolean;
   onChange?: (value: boolean) => Promise<void>;
 }> = [
-  {
-    key: "darkMode",
-    label: "Dark Mode",
-    description:
-      "Switch between light and dark theme for the application interface.",
-    onChange: async () => {
-      // await themeStore.toggleTheme();
-    },
-  },
   {
     key: "uploadIndividualFiles",
     label: "Upload individual recording files when creating shareable link",
@@ -76,6 +74,66 @@ export default function GeneralSettings() {
     <Show when={store.state === "ready" && ([store()] as const)}>
       {(store) => <Inner initialStore={store()[0] ?? null} />}
     </Show>
+  );
+}
+
+function AppearanceSection(props: {
+  currentTheme: AppTheme;
+  onThemeChange: (theme: AppTheme) => void;
+}) {
+  const options = [
+    { id: "system", name: "System", preview: themePreviewAuto },
+    { id: "light", name: "Light", preview: themePreviewLight },
+    { id: "dark", name: "Dark", preview: themePreviewDark },
+  ] satisfies { id: AppTheme; name: string; preview: string }[];
+
+  return (
+    <div class="flex flex-col gap-4">
+      <p class="text-[--text-primary]">Appearance</p>
+      <div
+        class="flex justify-start items-center text-[--text-primary]"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <div class="flex justify-between m-1 min-w-[20rem] w-[22.2rem] flex-nowrap">
+          <For each={options}>
+            {(theme) => (
+              <button
+                type="button"
+                aria-checked={props.currentTheme === theme.id}
+                class="flex flex-col items-center group rounded-md focus:outline-none focus-visible:ring-gray-300 focus-visible:ring-offset-gray-50 focus-visible:ring-offset-2 focus-visible:ring-4"
+                onClick={() => props.onThemeChange(theme.id)}
+              >
+                <div
+                  class={`w-24 h-[4.8rem] rounded-md overflow-hidden focus:outline-none ring-offset-gray-50 transition-all duration-200 ${
+                    props.currentTheme === theme.id
+                      ? "ring-2 ring-offset-2"
+                      : "group-hover:ring-2 ring-offset-2 group-hover:ring-gray-300" 
+                  }`}
+                  aria-label={`Select theme: ${theme.name}`}
+                >
+                  <div class="w-full h-full flex items-center justify-center">
+                    <img
+                      draggable={false}
+                      src={theme.preview}
+                      alt={`Preview of ${theme.name} theme`}
+                    />
+                  </div>
+                </div>
+                <span
+                  class={`mt-2 text-sm transition-color duration-200 ${
+                    props.currentTheme === theme.id
+                      ? "text-blue-400"
+                      : ""
+                  }`}
+                >
+                  {theme.name}
+                </span>
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -132,6 +190,13 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
     <div class="flex flex-col w-full h-full">
       <div class="flex-1 overflow-y-auto">
         <div class="p-4 space-y-2 divide-y divide-gray-200">
+          <AppearanceSection
+            currentTheme={settings.theme ?? "system"}
+            onThemeChange={(newTheme) => {
+              setSettings("theme", newTheme);
+              generalSettingsStore.set({ theme: newTheme });
+            }}
+          />
           <For each={settingsList}>
             {(setting) => (
               <Show
