@@ -292,10 +292,12 @@ function TargetSelects(props: {
   const windows = createQuery(() => listWindows);
   const [isAreaSelectVisible, setIsAreaSelectVisible] = createSignal(props.options?.captureTarget.variant === "screen");
   const [isAreaSelected, setIsAreaSelected] = createSignal(true);
+
+  let shouldAnimateAreaSelect = false;
   createEffect(() => {
     setIsAreaSelectVisible(props.options?.captureTarget.variant === "screen");
+    if (props.options?.captureTarget.variant === "window") shouldAnimateAreaSelect = true;
   });
-  let shouldAnimateAreaSelect = props.options?.captureTarget.variant !== "screen";
 
   return (
     <div>
@@ -309,7 +311,7 @@ function TargetSelects(props: {
               ], {
                 duration: 300,
                 easing: 'ease-in-out'
-              }).finished.then(done)
+              }).finished.then(done);
               shouldAnimateAreaSelect = true;
             }}
             onExit={(el, done) =>
