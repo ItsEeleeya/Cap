@@ -2,6 +2,10 @@
 
 use crate::{fake_window, general_settings::AppTheme};
 use cap_flags::FLAGS;
+use cap_media::{
+    platform::monitor_bounds,
+    sources::{AVFrameCapture, CaptureArea, ScreenCaptureSource},
+};
 use serde::Deserialize;
 use specta::Type;
 use std::{path::PathBuf, str::FromStr};
@@ -20,6 +24,7 @@ pub enum CapWindowId {
     Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
+    AreaSelect,
     Camera,
     InProgressRecording,
     Upgrade,
@@ -35,6 +40,7 @@ impl FromStr for CapWindowId {
             "settings" => Self::Settings,
             "camera" => Self::Camera,
             "window-capture-occluder" => Self::WindowCaptureOccluder,
+            "area-select" => Self::AreaSelect,
             "in-progress-recording" => Self::InProgressRecording,
             "prev-recordings" => Self::PrevRecordings,
             "upgrade" => Self::Upgrade,
@@ -54,6 +60,7 @@ impl std::fmt::Display for CapWindowId {
             Self::Settings => write!(f, "settings"),
             Self::Camera => write!(f, "camera"),
             Self::WindowCaptureOccluder => write!(f, "window-capture-occluder"),
+            Self::AreaSelect => write!(f, "area-select"),
             Self::InProgressRecording => write!(f, "in-progress-recording"),
             Self::PrevRecordings => write!(f, "prev-recordings"),
             Self::Upgrade => write!(f, "upgrade"),
@@ -72,6 +79,7 @@ impl CapWindowId {
             Self::Setup => "Cap Setup".to_string(),
             Self::Settings => "Cap Settings".to_string(),
             Self::WindowCaptureOccluder => "Cap Window Capture Occluder".to_string(),
+            Self::AreaSelect => "Cap Area Select".to_string(),
             Self::InProgressRecording => "Cap In Progress Recording".to_string(),
             Self::Editor { .. } => "Cap Editor".to_string(),
             _ => "Cap".to_string(),
@@ -95,7 +103,10 @@ impl CapWindowId {
             Self::Editor { .. } => Some(Some(LogicalPosition::new(20.0, 40.0))),
             Self::Setup => Some(Some(LogicalPosition::new(14.0, 24.0))),
             Self::InProgressRecording => Some(Some(LogicalPosition::new(-100.0, -100.0))),
-            Self::Camera | Self::WindowCaptureOccluder | Self::PrevRecordings => None,
+            Self::Camera
+            | Self::WindowCaptureOccluder
+            | Self::PrevRecordings
+            | Self::AreaSelect => None,
             _ => Some(None),
         }
     }
@@ -109,6 +120,7 @@ pub enum ShowCapWindow {
     Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
+    AreaSelect { capture_area: CaptureArea },
     Camera { ws_port: u16 },
     InProgressRecording { position: Option<(f64, f64)> },
     Upgrade,
@@ -223,12 +235,52 @@ impl ShowCapWindow {
                 window.set_ignore_cursor_events(true).unwrap();
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(
-                        window.as_ref().window(),
-                        objc2_app_kit::NSScreenSaverWindowLevel as u32,
-                    );
+                crate::platform::set_window_level(
+                    window.as_ref().window(),
+                    objc2_app_kit::NSScreenSaverWindowLevel,
+                )?;
+
+                window
+            }
+            Self::AreaSelect { capture_area } => {
+                // TODO(Ilya): Respect the selected screen
+                let target_monitor = app
+                    .primary_monitor()
+                    .expect("Failed to get primary monitor");
+
+                println!("Target monitor: {:?}", target_monitor);
+
+                let mut window_builder = self
+                    .window_builder(app, "/area-select")
+                    .maximized(false)
+                    .resizable(false)
+                    .fullscreen(false)
+                    .shadow(false)
+                    .always_on_top(true)
+                    .content_protected(true)
+                    .skip_taskbar(true)
+                    .transparent(true);
+
+                if let Some(target) = target_monitor {
+                    let size = target.size();
+                    let scale_factor = target.scale_factor();
+                    let pos = target.position();
+
+                    window_builder = window_builder
+                        .inner_size(
+                            (size.width as f64) / scale_factor,
+                            (size.height as f64) / scale_factor,
+                        )
+                        .position(pos.x as f64, pos.y as f64);
                 }
+
+                let window = window_builder.build()?;
+
+                #[cfg(target_os = "macos")]
+                crate::platform::set_window_level(
+                    window.as_ref().window(),
+                    objc2_app_kit::NSScreenSaverWindowLevel,
+                )?;
 
                 window
             }
@@ -365,6 +417,7 @@ impl ShowCapWindow {
             },
             ShowCapWindow::PrevRecordings => CapWindowId::PrevRecordings,
             ShowCapWindow::WindowCaptureOccluder => CapWindowId::WindowCaptureOccluder,
+            ShowCapWindow::AreaSelect { .. } => CapWindowId::AreaSelect,
             ShowCapWindow::Camera { .. } => CapWindowId::Camera,
             ShowCapWindow::InProgressRecording { .. } => CapWindowId::InProgressRecording,
             ShowCapWindow::Upgrade => CapWindowId::Upgrade,
@@ -375,6 +428,8 @@ impl ShowCapWindow {
 #[cfg(target_os = "macos")]
 fn add_traffic_lights(window: &WebviewWindow<Wry>, controls_inset: Option<LogicalPosition<f64>>) {
     use crate::platform::delegates;
+
+    println!("Removing decorations from {}", &window.label());
 
     let target_window = window.clone();
     window

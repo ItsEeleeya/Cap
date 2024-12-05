@@ -259,6 +259,7 @@ import titlebarState, { setTitlebar } from "~/utils/titlebar-state";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { checkIsUpgradedAndUpdate } from "~/utils/plans";
 import { Transition } from "solid-transition-group";
+import { availableMonitors } from "@tauri-apps/api/window";
 
 let hasChecked = false;
 function createUpdateCheck() {
@@ -290,12 +291,46 @@ function TargetSelects(props: {
 }) {
   const screens = createQuery(() => listScreens);
   const windows = createQuery(() => listWindows);
+  const [selectedScreen, setSelectedScreen] = createSignal<CaptureScreen | null>(screens?.data?.[0] ?? null);
+
   const [isAreaSelectVisible, setIsAreaSelectVisible] = createSignal(props.options?.captureTarget.variant === "screen");
-  const [isAreaSelected, setIsAreaSelected] = createSignal(true);
+  const [isAreaSelected, setIsAreaSelected] = createSignal(false);
+
+  const isTargetScreenOrArea = () => props.options?.captureTarget.variant === "area" || props.options?.captureTarget.variant === "screen";
+  function handleAreaSelectButtonClick() {
+    console.log(`Screen: ${JSON.stringify(selectedScreen())}`);
+    if (!isTargetScreenOrArea() || !selectedScreen()) return;
+    // IF area not selected. create window
+
+    // commands.setRecordingOptions({
+    //   ...props.options,
+    //   captureTarget: { variant: "area", screen: selectedScreen()!, bounds: },
+    // });
+
+    availableMonitors().then(monitors => {
+      console.log(`Monitors: ${JSON.stringify(monitors)}`);
+    });
+
+    commands.showWindow({
+      AreaSelect: {
+        capture_area: {
+          screen: selectedScreen()!!,
+          // TODO(Ilya): Store last selected area
+          bounds: {
+            x: 0,
+            y: 0,
+            width: 300,
+            height: 300,
+          }
+        }
+      }
+    });
+  }
 
   let shouldAnimateAreaSelect = false;
   createEffect(() => {
-    setIsAreaSelectVisible(props.options?.captureTarget.variant === "screen");
+    setIsAreaSelectVisible(isTargetScreenOrArea());
+    if (props?.options?.captureTarget.variant === "screen") setSelectedScreen(props?.options?.captureTarget);
     if (props.options?.captureTarget.variant === "window") shouldAnimateAreaSelect = true;
   });
 
@@ -309,7 +344,7 @@ function TargetSelects(props: {
                 { transform: 'scale(0.5)', opacity: 0, width: '0px', height: '0px' },
                 { transform: 'scale(1)', opacity: 1, width: '2rem', height: '2rem' },
               ], {
-                duration: 300,
+                duration: 350,
                 easing: 'ease-in-out'
               }).finished.then(done);
               shouldAnimateAreaSelect = true;
@@ -319,7 +354,7 @@ function TargetSelects(props: {
                 { transform: 'scale(1)', opacity: 1, width: '2rem', height: '2rem' },
                 { transform: 'scale(0.2)', opacity: 0, width: '0px', height: '0px' },
               ], {
-                duration: 300,
+                duration: 350,
                 easing: 'ease-in-out'
               }).finished.then(done)
             }
@@ -328,7 +363,7 @@ function TargetSelects(props: {
               <button
                 type="button"
                 disabled={!isAreaSelectVisible()}
-                onClick={() => setIsAreaSelected((prev) => !prev)}
+                onClick={handleAreaSelectButtonClick}
                 class={cx(
                   "flex items-center justify-center flex-shrink-0 w-full h-full rounded-[0.5rem] transition-all duration-200",
                   "hover:bg-gray-200 disabled:bg-gray-100 disabled:text-gray-400",
@@ -366,6 +401,8 @@ function TargetSelects(props: {
           onChange={(value) => {
             if (!value || !props.options) return;
 
+            setSelectedScreen(value);
+            // setIsAreaSelected((prev) => !prev); TODO: de-select when screen changes.
             commands.setRecordingOptions({
               ...props.options,
               captureTarget: { ...value, variant: "screen" },
@@ -378,7 +415,7 @@ function TargetSelects(props: {
           }
           placeholder="Screen"
           optionsEmptyText="No screens found"
-          selected={props.options?.captureTarget.variant === "screen"}
+          selected={isTargetScreenOrArea()}
         />
         <TargetSelect<CaptureWindow>
           options={windows.data ?? []}

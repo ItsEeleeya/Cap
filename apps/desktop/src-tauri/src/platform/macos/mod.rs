@@ -4,53 +4,29 @@ use cocoa::{
     base::{id, nil},
     foundation::NSString,
 };
-use core_graphics::{
-    base::boolean_t,
-    display::{CFDictionaryRef, CGRect},
-};
 use objc::{class, msg_send, sel, sel_impl};
 
 pub mod delegates;
 
-#[derive(Debug)]
-pub struct Window {
-    pub window_number: u32,
-    pub name: String,
-    pub owner_name: String,
-    pub process_id: u32,
-    pub bounds: Bounds,
-}
-
-#[derive(Debug)]
-pub struct Bounds {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-pub fn set_window_level(window: tauri::Window, level: u32) {
+pub fn set_window_level(
+    window: tauri::Window,
+    level: objc2_app_kit::NSWindowLevel,
+) -> tauri::Result<()> {
     let c_window = window.clone();
     window.run_on_main_thread(move || unsafe {
         let ns_win = c_window
             .ns_window()
-            .expect("Failed to get native window handle") as cocoa::base::id;
-        let _: () = msg_send![ns_win, setLevel: level];
-    });
+            .expect("Failed to get native window handle")
+            as *const objc2_app_kit::NSWindow;
+
+        (*ns_win).setLevel(level);
+    })
 }
 
 pub fn get_ns_window_number(ns_window: *mut c_void) -> isize {
     let ns_window = ns_window as *const objc2_app_kit::NSWindow;
 
     unsafe { (*ns_window).windowNumber() }
-}
-
-#[link(name = "CoreGraphics", kind = "framework")]
-extern "C" {
-    pub fn CGRectMakeWithDictionaryRepresentation(
-        dict: CFDictionaryRef,
-        rect: *mut CGRect,
-    ) -> boolean_t;
 }
 
 /// Makes the background of the WKWebView layer transparent.
