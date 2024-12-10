@@ -20,6 +20,7 @@ pub enum CapWindowId {
     Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
+    CaptureAreaSelection,
     Camera,
     InProgressRecording,
     Upgrade,
@@ -35,6 +36,7 @@ impl FromStr for CapWindowId {
             "settings" => Self::Settings,
             "camera" => Self::Camera,
             "window-capture-occluder" => Self::WindowCaptureOccluder,
+            "capture-area-select" => Self::CaptureAreaSelection,
             "in-progress-recording" => Self::InProgressRecording,
             "prev-recordings" => Self::PrevRecordings,
             "upgrade" => Self::Upgrade,
@@ -54,6 +56,7 @@ impl std::fmt::Display for CapWindowId {
             Self::Settings => write!(f, "settings"),
             Self::Camera => write!(f, "camera"),
             Self::WindowCaptureOccluder => write!(f, "window-capture-occluder"),
+            Self::CaptureAreaSelection => write!(f, "capture-area-select"),
             Self::InProgressRecording => write!(f, "in-progress-recording"),
             Self::PrevRecordings => write!(f, "prev-recordings"),
             Self::Upgrade => write!(f, "upgrade"),
@@ -95,7 +98,10 @@ impl CapWindowId {
             Self::Editor { .. } => Some(Some(LogicalPosition::new(20.0, 40.0))),
             Self::Setup => Some(Some(LogicalPosition::new(14.0, 24.0))),
             Self::InProgressRecording => Some(Some(LogicalPosition::new(-100.0, -100.0))),
-            Self::Camera | Self::WindowCaptureOccluder | Self::PrevRecordings => None,
+            Self::Camera
+            | Self::WindowCaptureOccluder
+            | Self::CaptureAreaSelection
+            | Self::PrevRecordings => None,
             _ => Some(None),
         }
     }
@@ -109,6 +115,7 @@ pub enum ShowCapWindow {
     Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
+    CaptureAreaSelection {},
     Camera { ws_port: u16 },
     InProgressRecording { position: Option<(f64, f64)> },
     Upgrade,
@@ -222,12 +229,33 @@ impl ShowCapWindow {
                 window.set_ignore_cursor_events(true).unwrap();
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(
-                        window.as_ref().window(),
-                        objc2_app_kit::NSScreenSaverWindowLevel as u32,
-                    );
-                }
+                crate::platform::set_window_level(
+                    window.as_ref().window(),
+                    objc2_app_kit::NSScreenSaverWindowLevel as u32,
+                );
+
+                window
+            }
+            Self::CaptureAreaSelection { .. } => {
+                let mut window_builder = self
+                    .window_builder(app, "/capture-area-select")
+                    .maximized(false)
+                    .resizable(false)
+                    .fullscreen(false)
+                    .shadow(false)
+                    .always_on_top(true)
+                    .content_protected(true)
+                    .skip_taskbar(true)
+                    .transparent(true);
+                //
+
+                let window = window_builder.build()?;
+
+                #[cfg(target_os = "macos")]
+                crate::platform::set_window_level(
+                    window.as_ref().window(),
+                    objc2_app_kit::NSScreenSaverWindowLevel as u32,
+                );
 
                 window
             }
@@ -364,6 +392,7 @@ impl ShowCapWindow {
             },
             ShowCapWindow::PrevRecordings => CapWindowId::PrevRecordings,
             ShowCapWindow::WindowCaptureOccluder => CapWindowId::WindowCaptureOccluder,
+            ShowCapWindow::CaptureAreaSelection { .. } => CapWindowId::CaptureAreaSelection,
             ShowCapWindow::Camera { .. } => CapWindowId::Camera,
             ShowCapWindow::InProgressRecording { .. } => CapWindowId::InProgressRecording,
             ShowCapWindow::Upgrade => CapWindowId::Upgrade,

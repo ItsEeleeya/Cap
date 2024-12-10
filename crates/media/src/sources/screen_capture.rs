@@ -37,10 +37,17 @@ pub struct CaptureScreen {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CaptureArea {
+    pub screen: CaptureScreen,
+    pub bounds: Bounds,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", tag = "variant")]
 pub enum ScreenCaptureTarget {
     Window(CaptureWindow),
     Screen(CaptureScreen),
+    Area(CaptureArea),
 }
 
 impl PartialEq<Target> for ScreenCaptureTarget {
@@ -52,8 +59,12 @@ impl PartialEq<Target> for ScreenCaptureTarget {
             (ScreenCaptureTarget::Screen(capture_screen), Target::Display(display)) => {
                 display.id == capture_screen.id
             }
+            (ScreenCaptureTarget::Area(capture_area), Target::Display(display)) => {
+                display.id == capture_area.screen.id
+            }
             (&ScreenCaptureTarget::Window(_), &scap::Target::Display(_))
-            | (&ScreenCaptureTarget::Screen(_), &scap::Target::Window(_)) => todo!(),
+            | (&ScreenCaptureTarget::Screen(_), &scap::Target::Window(_))
+            | (&ScreenCaptureTarget::Area(_), &scap::Target::Window(_)) => todo!(),
         }
     }
 }
@@ -115,6 +126,7 @@ impl<T> ScreenCaptureSource<T> {
             ScreenCaptureTarget::Screen(capture_screen) => {
                 platform::monitor_bounds(capture_screen.id)
             }
+            ScreenCaptureTarget::Area(capture_area) => capture_area.bounds,
         }
     }
 
@@ -142,14 +154,31 @@ impl<T> ScreenCaptureSource<T> {
                 },
             }),
             ScreenCaptureTarget::Screen(_) => None,
+            ScreenCaptureTarget::Area(capture_area) => Some(Area {
+                size: Size {
+                    width: capture_area.bounds.width,
+                    height: capture_area.bounds.height,
+                },
+                origin: Point {
+                    x: capture_area.bounds.x,
+                    y: capture_area.bounds.y,
+                },
+            }),
         };
 
         let target = match &self.target {
-            ScreenCaptureTarget::Window(w) => None,
+            ScreenCaptureTarget::Window(_) => None,
             ScreenCaptureTarget::Screen(capture_screen) => targets
                 .iter()
                 .find(|t| match t {
                     Target::Display(display) => display.id == capture_screen.id,
+                    _ => false,
+                })
+                .cloned(),
+            ScreenCaptureTarget::Area(capture_area) => targets
+                .iter()
+                .find(|t| match t {
+                    Target::Display(display) => display.id == capture_area.screen.id,
                     _ => false,
                 })
                 .cloned(),
