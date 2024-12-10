@@ -238,8 +238,13 @@ impl ShowCapWindow {
                 window
             }
             Self::CaptureAreaSelection { capture_area } => {
+                // TODO(Ilya): Respect the selected screen
+                let target_monitor = app
+                    .primary_monitor()
+                    .expect("Failed to get primary monitor");
+
                 let mut window_builder = self
-                    .window_builder(app, "/capture-area-select")
+                    .window_builder(app, "/capture-area-selection")
                     .maximized(false)
                     .resizable(false)
                     .fullscreen(false)
@@ -248,15 +253,26 @@ impl ShowCapWindow {
                     .content_protected(true)
                     .skip_taskbar(true)
                     .transparent(true);
-                //
+
+                if let Some(target) = target_monitor {
+                    let size = target.size();
+                    let scale_factor = target.scale_factor();
+                    let pos = target.position();
+                    window_builder = window_builder
+                        .inner_size(
+                            (size.width as f64) / scale_factor,
+                            (size.height as f64) / scale_factor,
+                        )
+                        .position(pos.x as f64, pos.y as f64);
+                }
 
                 let window = window_builder.build()?;
 
-                #[cfg(target_os = "macos")]
-                crate::platform::set_window_level(
-                    window.as_ref().window(),
-                    objc2_app_kit::NSScreenSaverWindowLevel,
-                );
+                // #[cfg(target_os = "macos")]
+                // crate::platform::set_window_level(
+                //     window.as_ref().window(),
+                //     objc2_app_kit::NSScreenSaverWindowLevel,
+                // );
 
                 window
             }

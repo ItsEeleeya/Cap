@@ -268,6 +268,7 @@ import { type as ostype } from "@tauri-apps/plugin-os";
 import { checkIsUpgradedAndUpdate } from "~/utils/plans";
 import { apiClient, protectedHeaders } from "~/utils/web-api";
 import { Transition } from "solid-transition-group";
+import { availableMonitors } from "@tauri-apps/api/window";
 
 let hasChecked = false;
 function createUpdateCheck() {
@@ -315,24 +316,24 @@ function TargetSelects(props: {
     //   captureTarget: { variant: "area", screen: selectedScreen()!, bounds: },
     // });
 
-    // availableMonitors().then(monitors => {
-    //   console.log(`Monitors: ${JSON.stringify(monitors)}`);
-    // });
+    availableMonitors().then(monitors => {
+      console.log(`Monitors: ${JSON.stringify(monitors)}`);
+    });
 
-    // commands.showWindow({
-    //   CaptureAreaSelection: {
-    //     // capture_area: {
-    //     //   screen: selectedScreen()!!,
-    //     //   // TODO(Ilya): Store last selected area
-    //     //   bounds: {
-    //     //     x: 0,
-    //     //     y: 0,
-    //     //     width: 300,
-    //     //     height: 300,
-    //     //   }
-    //     // }
-    //   }
-    // });
+    commands.showWindow({
+      CaptureAreaSelection: {
+        capture_area: {
+          screen: selectedScreen()!!,
+          // TODO(Ilya): Store last selected area
+          bounds: {
+            x: 0,
+            y: 0,
+            width: 300,
+            height: 300,
+          }
+        }
+      }
+    });
   }
 
   let shouldAnimateAreaSelect = false;
