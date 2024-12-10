@@ -2,6 +2,7 @@
 
 use crate::{fake_window, general_settings::AppTheme};
 use cap_flags::FLAGS;
+use cap_media::sources::CaptureArea;
 use serde::Deserialize;
 use specta::Type;
 use std::{path::PathBuf, str::FromStr};
@@ -115,7 +116,7 @@ pub enum ShowCapWindow {
     Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
-    CaptureAreaSelection {},
+    CaptureAreaSelection { capture_area: CaptureArea },
     Camera { ws_port: u16 },
     InProgressRecording { position: Option<(f64, f64)> },
     Upgrade,
@@ -231,12 +232,12 @@ impl ShowCapWindow {
                 #[cfg(target_os = "macos")]
                 crate::platform::set_window_level(
                     window.as_ref().window(),
-                    objc2_app_kit::NSScreenSaverWindowLevel as u32,
+                    objc2_app_kit::NSScreenSaverWindowLevel,
                 );
 
                 window
             }
-            Self::CaptureAreaSelection { .. } => {
+            Self::CaptureAreaSelection { capture_area } => {
                 let mut window_builder = self
                     .window_builder(app, "/capture-area-select")
                     .maximized(false)
@@ -254,7 +255,7 @@ impl ShowCapWindow {
                 #[cfg(target_os = "macos")]
                 crate::platform::set_window_level(
                     window.as_ref().window(),
-                    objc2_app_kit::NSScreenSaverWindowLevel as u32,
+                    objc2_app_kit::NSScreenSaverWindowLevel,
                 );
 
                 window
