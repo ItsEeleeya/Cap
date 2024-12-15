@@ -3,14 +3,11 @@ import { trackDeep } from "@solid-primitives/deep";
 import { throttle } from "@solid-primitives/scheduled";
 import { useSearchParams } from "@solidjs/router";
 import {
-  For,
   Match,
   Show,
   Switch,
-  batch,
   createEffect,
   createMemo,
-  createRoot,
   createSignal,
   on,
   onMount,
@@ -19,7 +16,6 @@ import { createStore } from "solid-js/store";
 import { createMutation } from "@tanstack/solid-query";
 import {
   createEventListener,
-  createEventListenerMap,
 } from "@solid-primitives/event-listener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
@@ -41,6 +37,7 @@ import { Header } from "./Header";
 import { Player } from "./Player";
 import { ConfigSidebar } from "./ConfigSidebar";
 import { Timeline } from "./Timeline";
+import Cropper from "~/components/Cropper";
 
 export function Editor() {
   const [params] = useSearchParams<{ id: string }>();
@@ -318,26 +315,6 @@ function Dialogs() {
 
                 const display = editorInstance.recordings.segments[0].display;
 
-                const styles = createMemo(() => {
-                  return {
-                    left: `${(crop.position.x / display.width) * 100}%`,
-                    top: `${(crop.position.y / display.height) * 100}%`,
-                    right: `calc(${
-                      ((display.width - crop.size.x - crop.position.x) /
-                        display.width) *
-                      100
-                    }%)`,
-                    bottom: `calc(${
-                      ((display.height - crop.size.y - crop.position.y) /
-                        display.height) *
-                      100
-                    }%)`,
-                  };
-                });
-
-                let cropAreaRef!: HTMLDivElement;
-                let cropTargetRef!: HTMLDivElement;
-
                 return (
                   <>
                     <Dialog.Header>
@@ -386,224 +363,17 @@ function Dialogs() {
                     </Dialog.Header>
                     <Dialog.Content>
                       <div class="flex flex-row justify-center">
-                        <div class="relative bg-blue-200" ref={cropAreaRef}>
+                        <div class="relative bg-blue-200">
                           <div class="divide-black-transparent-10 overflow-hidden rounded-lg">
-                            <img
-                              class="shadow pointer-events-none max-h-[70vh]"
-                              alt="screenshot"
-                              src={convertFileSrc(
-                                `${editorInstance.path}/screenshots/display.jpg`
-                              )}
-                            />
-                          </div>
-                          <div
-                            class="bg-white-transparent-20 absolute cursor-move"
-                            ref={cropTargetRef}
-                            style={styles()}
-                            onMouseDown={(downEvent) => {
-                              const original = {
-                                position: { ...crop.position },
-                                size: { ...crop.size },
-                              };
-
-                              createRoot((dispose) => {
-                                createEventListenerMap(window, {
-                                  mouseup: () => dispose(),
-                                  mousemove: (moveEvent) => {
-                                    const diff = {
-                                      x:
-                                        ((moveEvent.clientX -
-                                          downEvent.clientX) /
-                                          cropAreaRef.clientWidth) *
-                                        display.width,
-                                      y:
-                                        ((moveEvent.clientY -
-                                          downEvent.clientY) /
-                                          cropAreaRef.clientHeight) *
-                                        display.height,
-                                    };
-
-                                    const x = Math.floor(
-                                      (() => {
-                                        if (original.position.x + diff.x < 0)
-                                          return 0;
-                                        if (
-                                          original.position.x + diff.x >
-                                          display.width - crop.size.x
-                                        )
-                                          return display.width - crop.size.x;
-
-                                        return original.position.x + diff.x;
-                                      })()
-                                    );
-
-                                    const y = Math.floor(
-                                      (() => {
-                                        if (original.position.y + diff.y < 0)
-                                          return 0;
-                                        if (
-                                          original.position.y + diff.y >
-                                          display.height - crop.size.y
-                                        )
-                                          return display.height - crop.size.y;
-
-                                        return original.position.y + diff.y;
-                                      })()
-                                    );
-
-                                    setCrop("position", { x, y });
-                                  },
-                                });
-                              });
-                            }}
-                          >
-                            <For
-                              each={Array.from({ length: 4 }, (_, i) => ({
-                                x: i < 2 ? ("l" as const) : ("r" as const),
-                                y:
-                                  i % 2 === 0 ? ("t" as const) : ("b" as const),
-                              }))}
-                            >
-                              {(pos) => {
-                                const behaviours = {
-                                  x:
-                                    pos.x === "l"
-                                      ? ("both" as const)
-                                      : ("resize" as const),
-                                  y:
-                                    pos.y === "t"
-                                      ? ("both" as const)
-                                      : ("resize" as const),
-                                };
-
-                                return (
-                                  <button
-                                    type="button"
-                                    class="absolute"
-                                    style={{
-                                      ...(pos.x === "l"
-                                        ? { left: "0px" }
-                                        : { right: "0px" }),
-                                      ...(pos.y === "t"
-                                        ? { top: "0px" }
-                                        : { bottom: "0px" }),
-                                    }}
-                                    onMouseDown={(downEvent) => {
-                                      downEvent.stopPropagation();
-
-                                      const original = {
-                                        position: { ...crop.position },
-                                        size: { ...crop.size },
-                                      };
-
-                                      const MIN_SIZE = 100;
-
-                                      createRoot((dispose) => {
-                                        createEventListenerMap(window, {
-                                          mouseup: () => dispose(),
-                                          mousemove: (moveEvent) => {
-                                            batch(() => {
-                                              const diff = {
-                                                x:
-                                                  ((moveEvent.clientX -
-                                                    downEvent.clientX) /
-                                                    cropAreaRef.clientWidth) *
-                                                  display.width,
-                                                y:
-                                                  ((moveEvent.clientY -
-                                                    downEvent.clientY) /
-                                                    cropAreaRef.clientHeight) *
-                                                  display.height,
-                                              };
-
-                                              if (behaviours.x === "resize") {
-                                                setCrop(
-                                                  "size",
-                                                  "x",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.size.x + diff.x,
-                                                      MIN_SIZE,
-                                                      display.width -
-                                                        crop.position.x
-                                                    )
-                                                  )
-                                                );
-                                              } else {
-                                                setCrop(
-                                                  "position",
-                                                  "x",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.position.x +
-                                                        diff.x,
-                                                      0,
-                                                      display.width - MIN_SIZE
-                                                    )
-                                                  )
-                                                );
-                                                setCrop(
-                                                  "size",
-                                                  "x",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.size.x - diff.x,
-                                                      MIN_SIZE,
-                                                      display.width
-                                                    )
-                                                  )
-                                                );
-                                              }
-
-                                              if (behaviours.y === "resize") {
-                                                setCrop(
-                                                  "size",
-                                                  "y",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.size.y + diff.y,
-                                                      MIN_SIZE,
-                                                      display.height -
-                                                        crop.position.y
-                                                    )
-                                                  )
-                                                );
-                                              } else {
-                                                setCrop(
-                                                  "position",
-                                                  "y",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.position.y +
-                                                        diff.y,
-                                                      0,
-                                                      display.height - MIN_SIZE
-                                                    )
-                                                  )
-                                                );
-                                                setCrop(
-                                                  "size",
-                                                  "y",
-                                                  Math.floor(
-                                                    clamp(
-                                                      original.size.y - diff.y,
-                                                      MIN_SIZE,
-                                                      display.height
-                                                    )
-                                                  )
-                                                );
-                                              }
-                                            });
-                                          },
-                                        });
-                                      });
-                                    }}
-                                  >
-                                    <div class="size-[1rem] bg-gray-500 border border-gray-50 rounded-full absolute -top-[0.5rem] -left-[0.5rem]" />
-                                  </button>
-                                );
-                              }}
-                            </For>
+                            <Cropper cropStore={[crop, setCrop]} mappedSize={{ x: display.width, y: display.height }} >
+                              <img
+                                class="shadow pointer-events-none max-h-[70vh]"
+                                alt="screenshot"
+                                src={convertFileSrc(
+                                  `${editorInstance.path}/screenshots/display.jpg`
+                                )}
+                              />
+                            </Cropper>
                           </div>
                         </div>
                       </div>

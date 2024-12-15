@@ -1,11 +1,11 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
-import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, createEffect } from "solid-js";
+import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, ParentProps } from "solid-js";
 import { createStore, SetStoreFunction } from "solid-js/store";
 import { Crop, XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
 
-export type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
-export type HandleSide = Partial<{
+type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
+type HandleSide = Partial<{
   x: "l" | "r" | "c", y: "t" | "b" | "c", cursor: string
 }>;
 
@@ -18,6 +18,7 @@ export function createCropStore(initial: Crop = {
 
 type Props = {
   cropStore: [crop: Crop, setCrop: SetStoreFunction<Crop>];
+  mappedSize?: XY<number>; // Virtual size (like display or image size)
   initialSize?: XY<number>;
   minSize?: XY<number>;
 };
@@ -30,14 +31,15 @@ function handleToDirection(handle: HandleSide): Direction {
   return (directionY + directionX) as Direction;
 }
 
-export default function Cropper(props: Props) {
-  const minSize: XY<number> = props.minSize || { x: 100, y: 50 };
+export default function Cropper(props: ParentProps<Props>) {
+  const minSize: XY<number> = props.minSize || { x: 50, y: 50 };
   const [crop, setCrop] = props.cropStore;
 
   let cropAreaRef: HTMLDivElement | null = null;
   let cropTargetRef: HTMLDivElement | null = null;
 
-  const [containerSize, setContainerSize] = createSignal<XY<number>>({ x: 1000, y: 100 });
+  const [containerSize, setContainerSize] = createSignal<XY<number>>({ x: 1000, y: 1000 });
+  const effectiveMappedSize = createMemo(() => props.mappedSize || containerSize());
 
   onMount(() => {
     if (!cropAreaRef || !cropTargetRef) {
@@ -46,8 +48,6 @@ export default function Cropper(props: Props) {
     }
 
     const areaRect = cropAreaRef.getBoundingClientRect();
-    console.log(`target client rect: ${JSON.stringify(areaRect)}`);
-    
     setContainerSize({ x: areaRect.width, y: areaRect.height });
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -57,31 +57,33 @@ export default function Cropper(props: Props) {
           setContainerSize({ x: width, y: height });
         }
       }
-    })
+    });
     resizeObserver.observe(cropAreaRef);
     onCleanup(() => resizeObserver.disconnect());
 
     if (props.initialSize) {
       const initial = props.initialSize!;
+      const mappedSize = effectiveMappedSize();
       batch(() => {
         setCrop("size", {
-          x: clamp(initial.x, minSize.x, areaRect.width),
-          y: clamp(initial.y, minSize.y, areaRect.height),
+          x: clamp(initial.x, minSize.x, mappedSize.x),
+          y: clamp(initial.y, minSize.y, mappedSize.y),
         });
         setCrop("position", {
-          x: (areaRect.width - initial.x) / 2,
-          y: (areaRect.height - initial.y) / 2,
+          x: (mappedSize.x - initial.x) / 2,
+          y: (mappedSize.y - initial.y) / 2,
         });
       });
     } else {
+      const mappedSize = effectiveMappedSize();
       batch(() => {
         setCrop("size", {
-          x: areaRect.width / 2,
-          y: areaRect.height / 2,
+          x: mappedSize.x / 2,
+          y: mappedSize.y / 2,
         });
         setCrop("position", {
-          x: areaRect.width / 4,
-          y: areaRect.height / 4,
+          x: mappedSize.x / 4,
+          y: mappedSize.y / 4,
         });
       });
     }
@@ -91,36 +93,41 @@ export default function Cropper(props: Props) {
   const [isResizing, setIsResizing] = createSignal(false);
   const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
 
-  const styles = createMemo<JSX.CSSProperties>(() => ({
-    left: `${(crop.position.x / containerSize().x) * 100}%`,
-    top: `${(crop.position.y / containerSize().y) * 100}%`,
-    width: `${(crop.size.x / containerSize().x) * 100}%`,
-    height: `${(crop.size.y / containerSize().y) * 100}%`,
-    cursor: isDragging() ? "grabbing" : "grab",
-  }));
+  const styles = createMemo<JSX.CSSProperties>(() => {
+    const mappedSize = effectiveMappedSize();
+    const container = containerSize();
+
+    return {
+      left: `${(crop.position.x / mappedSize.x) * 100}%`,
+      top: `${(crop.position.y / mappedSize.y) * 100}%`,
+      width: `${(crop.size.x / mappedSize.x) * 100}%`,
+      height: `${(crop.size.y / mappedSize.y) * 100}%`,
+      cursor: isDragging() ? "grabbing" : "grab",
+    };
+  });
 
   const handleMouseMove = (e: MouseEvent) => batch(() => {
-    const areaSize = containerSize();
+    const mappedSize = effectiveMappedSize();
 
     if (isDragging()) {
       setCrop("position", ({
-        x: clamp(crop.position.x + e.movementX, 0, areaSize.x - crop.size.x),
-        y: clamp(crop.position.y + e.movementY, 0, areaSize.y - crop.size.y),
+        x: clamp(crop.position.x + (e.movementX / containerSize().x) * mappedSize.x, 0, mappedSize.x - crop.size.x),
+        y: clamp(crop.position.y + (e.movementY / containerSize().y) * mappedSize.y, 0, mappedSize.y - crop.size.y),
       }));
     } else if (isResizing() && resizeDirection()) {
       const dir = resizeDirection()!;
       const { x: pos_x, y: pos_y } = crop.position;
       let newSize = { ...crop.size };
-  
-      if (dir.includes("e")) newSize.x = clamp(newSize.x + e.movementX, minSize.x, areaSize.x - pos_x);
-      if (dir.includes("s")) newSize.y = clamp(newSize.y + e.movementY, minSize.y, areaSize.y - pos_y);
+
+      if (dir.includes("e")) newSize.x = clamp(newSize.x + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - pos_x);
+      if (dir.includes("s")) newSize.y = clamp(newSize.y + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - pos_y);
       if (dir.includes("w")) {
-        const newWidth = clamp(newSize.x - e.movementX, minSize.x, pos_x + newSize.x);
+        const newWidth = clamp(newSize.x - (e.movementX / containerSize().x) * mappedSize.x, minSize.x, pos_x + newSize.x);
         setCrop("position", { x: pos_x + (newSize.x - newWidth) });
         newSize.x = newWidth;
       }
       if (dir.includes("n")) {
-        const newHeight = clamp(newSize.y - e.movementY, minSize.y, pos_y + newSize.y);
+        const newHeight = clamp(newSize.y - (e.movementY / containerSize().y) * mappedSize.y, minSize.y, pos_y + newSize.y);
         setCrop("position", { y: pos_y + (newSize.y - newHeight) });
         newSize.y = newHeight;
       }
@@ -141,6 +148,9 @@ export default function Cropper(props: Props) {
 
   return (
     <div ref={(el) => (cropAreaRef = el)} class="relative w-full h-full">
+      <div class="-z-10">
+        {props.children}
+      </div>
       <AreaOccluder position={crop.position} size={crop.size} containerSize={containerSize()} />
       <div
         class="bg-transparent absolute cursor-grab"
@@ -153,22 +163,22 @@ export default function Cropper(props: Props) {
           };
 
           createRoot((dispose) => {
-            const areaSize = containerSize();
+            const mappedSize = effectiveMappedSize();
             createEventListenerMap(window, {
               mouseup: () => {
                 setIsDragging(false);
-                dispose()
+                dispose();
               },
               mousedown: () => setIsDragging(true),
               mousemove: (moveEvent) => {
                 const diff = {
-                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * areaSize.x,
-                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * areaSize.y,
+                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * mappedSize.x,
+                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * mappedSize.y,
                 };
 
                 setCrop("position", {
-                  x: clamp(original.position.x + diff.x, 0, areaSize.x - crop.size.x),
-                  y: clamp(original.position.y + diff.y, 0, areaSize.y - crop.size.y),
+                  x: clamp(original.position.x + diff.x, 0, mappedSize.x - crop.size.x),
+                  y: clamp(original.position.y + diff.y, 0, mappedSize.y - crop.size.y),
                 });
               },
             });
