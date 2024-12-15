@@ -1,81 +1,138 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
-import { createSignal, For, createMemo, createRoot, batch, onMount, JSX } from "solid-js";
-import { createStore } from "solid-js/store";
+import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, createEffect } from "solid-js";
+import { createStore, SetStoreFunction } from "solid-js/store";
 import { XY } from "~/utils/tauri";
-import Occluder from "./Occluder";
+import AreaOccluder from "./AreaOccluder";
+
+export type Size = { width: number, height: number };
+
+export type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
+export type HandleSide = Partial<{
+  x: "l" | "r" | "c", y: "t" | "b" | "c", cursor: string
+}>;
+export type CropArea = { position: XY<number>; size: Size };
+
+export function createCropAreaStore(initial: CropArea = {
+  position: { x: 0, y: 0 },
+  size: { width: 100, height: 100 }
+}): [get: CropArea, set: SetStoreFunction<CropArea>] {
+  return createStore<CropArea>(initial);
+}
+
+type Props = {
+  cropStore: [crop: CropArea, setCrop: SetStoreFunction<CropArea>];
+  initialSize?: Size;
+  minSize?: Size;
+};
 
 const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
-export default function Cropper() {
-  const [crop, setCrop] = createStore<{ position: XY<number>; size: XY<number> }>({
-    position: { x: 0, y: 0 },
-    size: { x: 100, y: 100 },
-  });
+function handleToDirection(handle: HandleSide): Direction {
+  const directionX = handle.x === "l" ? "w" : handle.x === "r" ? "e" : "";
+  const directionY = handle.y === "t" ? "n" : handle.y === "b" ? "s" : "";
+  return (directionY + directionX) as Direction;
+}
 
-  const size = {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  };
+export default function Cropper(props: Props) {
+  const minSize = props.minSize || { width: 100, height: 50 };
+  const [crop, setCrop] = props.cropStore;
 
   let cropAreaRef: HTMLDivElement | null = null;
   let cropTargetRef: HTMLDivElement | null = null;
 
-  onMount(() => {
-    if (!cropAreaRef || !cropTargetRef) console.error("Refs are not properly set");
+  const [containerSize, setContainerSize] = createSignal<Size>({
+    width: window.innerWidth,
+    height: window.innerHeight,
   });
 
-  const MIN_SIZE = 100;
+  onMount(() => {
+    if (!cropAreaRef || !cropTargetRef) {
+      console.error("Refs are not properly set");
+      return;
+    }
 
-  type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
-  type HandleSide = Partial<{
-    x: "l" | "r" | "c", y: "t" | "b" | "c", cursor: string
-  }>;
+    const areaRect = cropAreaRef.getBoundingClientRect();
+    console.log(`target client rect: ${JSON.stringify(areaRect)}`);
+    
+    setContainerSize({ width: areaRect.width, height: areaRect.height });
 
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === cropAreaRef) {
+          const { width, height } = entry.contentRect;
+          setContainerSize({ width, height });
+        }
+      }
+    })
+    resizeObserver.observe(cropAreaRef);
+    onCleanup(() => resizeObserver.disconnect());
+
+    if (props.initialSize) {
+      const initial = props.initialSize!;
+      batch(() => {
+        setCrop("size", {
+          width: clamp(initial.width, minSize.width, areaRect.width),
+          height: clamp(initial.height, minSize.height, areaRect.height),
+        });
+        setCrop("position", {
+          x: (areaRect.width - initial.width) / 2,
+          y: (areaRect.height - initial.height) / 2,
+        });
+      });
+    } else {
+      batch(() => {
+        setCrop("size", {
+          width: areaRect.width / 2,
+          height: areaRect.height / 2,
+        });
+        setCrop("position", {
+          x: areaRect.width / 4,
+          y: areaRect.height / 4,
+        });
+      });
+    }
+  });
+  
   const [isDragging, setIsDragging] = createSignal(false);
   const [isResizing, setIsResizing] = createSignal(false);
   const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
 
   const styles = createMemo<JSX.CSSProperties>(() => ({
-    left: `${(crop.position.x / size.width) * 100}%`,
-    top: `${(crop.position.y / size.height) * 100}%`,
-    width: `${(crop.size.x / size.width) * 100}%`,
-    height: `${(crop.size.y / size.height) * 100}%`,
+    left: `${(crop.position.x / containerSize().width) * 100}%`,
+    top: `${(crop.position.y / containerSize().height) * 100}%`,
+    width: `${(crop.size.width / containerSize().width) * 100}%`,
+    height: `${(crop.size.height / containerSize().height) * 100}%`,
     cursor: isDragging() ? "grabbing" : "grab",
   }));
 
-  function handleToDirection(handle: HandleSide): Direction {
-    const directionX = handle.x === "l" ? "w" : handle.x === "r" ? "e" : "";
-    const directionY = handle.y === "t" ? "n" : handle.y === "b" ? "s" : "";
-    return (directionY + directionX) as Direction;
-  }
+  const handleMouseMove = (e: MouseEvent) => batch(() => {
+    const areaSize = containerSize();
 
-  function handleMouseMove(e: MouseEvent) {
     if (isDragging()) {
       setCrop("position", ({
-        x: clamp(crop.position.x + e.movementX, 0, size.width - crop.size.x),
-        y: clamp(crop.position.y + e.movementY, 0, size.height - crop.size.y),
+        x: clamp(crop.position.x + e.movementX, 0, areaSize.width - crop.size.width),
+        y: clamp(crop.position.y + e.movementY, 0, areaSize.height - crop.size.height),
       }));
     } else if (isResizing() && resizeDirection()) {
       const dir = resizeDirection()!;
       const { x: pos_x, y: pos_y } = crop.position;
       let newSize = { ...crop.size };
-
-      if (dir.includes("e")) newSize.x = clamp(newSize.x + e.movementX, MIN_SIZE, window.innerWidth - pos_x);
-      if (dir.includes("s")) newSize.y = clamp(newSize.y + e.movementY, MIN_SIZE, window.innerHeight - pos_y);
+  
+      if (dir.includes("e")) newSize.width = clamp(newSize.width + e.movementX, minSize.width, areaSize.width - pos_x);
+      if (dir.includes("s")) newSize.height = clamp(newSize.height + e.movementY, minSize.height, areaSize.height - pos_y);
       if (dir.includes("w")) {
-        const newWidth = clamp(newSize.x - e.movementX, MIN_SIZE, pos_x + newSize.x);
-        setCrop("position", { x: pos_x + (newSize.x - newWidth) });
-        newSize.x = newWidth;
+        const newWidth = clamp(newSize.width - e.movementX, minSize.width, pos_x + newSize.width);
+        setCrop("position", { x: pos_x + (newSize.width - newWidth) });
+        newSize.width = newWidth;
       }
       if (dir.includes("n")) {
-        const newHeight = clamp(newSize.y - e.movementY, MIN_SIZE, pos_y + newSize.y);
-        setCrop("position", { y: pos_y + (newSize.y - newHeight) });
-        newSize.y = newHeight;
+        const newHeight = clamp(newSize.height - e.movementY, minSize.height, pos_y + newSize.height);
+        setCrop("position", { y: pos_y + (newSize.height - newHeight) });
+        newSize.height = newHeight;
       }
-
       setCrop("size", newSize);
     }
-  }
+  });
 
   onMount(() => {
     createEventListenerMap(window, {
@@ -90,7 +147,7 @@ export default function Cropper() {
 
   return (
     <div ref={(el) => (cropAreaRef = el)} class="relative w-full h-full">
-      <Occluder position={crop.position} size={crop.size} />
+      <AreaOccluder position={crop.position} size={crop.size} containerSize={containerSize()} />
       <div
         class="bg-transparent absolute cursor-grab"
         ref={(el) => (cropTargetRef = el)}
@@ -102,6 +159,7 @@ export default function Cropper() {
           };
 
           createRoot((dispose) => {
+            const areaSize = containerSize();
             createEventListenerMap(window, {
               mouseup: () => {
                 setIsDragging(false);
@@ -110,20 +168,20 @@ export default function Cropper() {
               mousedown: () => setIsDragging(true),
               mousemove: (moveEvent) => {
                 const diff = {
-                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * size.width,
-                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * size.height,
+                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * areaSize.width,
+                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * areaSize.height,
                 };
 
                 setCrop("position", {
-                  x: clamp(original.position.x + diff.x, 0, size.width - crop.size.x),
-                  y: clamp(original.position.y + diff.y, 0, size.height - crop.size.y),
+                  x: clamp(original.position.x + diff.x, 0, areaSize.width - crop.size.width),
+                  y: clamp(original.position.y + diff.y, 0, areaSize.height - crop.size.height),
                 });
               },
             });
           });
         }}
       >
-        <div class="w-full h-full border border-dashed border-black-transparent-10 p-2" />
+        <div class="w-full h-full border border-dashed border-black-transparent-40 p-2" />
         {/* Resize handles */}
         <For
           each={[
@@ -142,10 +200,10 @@ export default function Cropper() {
 
             return (
               <div
-                class={`absolute ${isCorner ? "w-[24px] h-[24px] z-10" : "w-[20px] h-[20px]"} flex items-center justify-center`}
+                class={`absolute ${isCorner ? "w-[26px] h-[26px] z-10" : "w-[24px] h-[24px]"} flex items-center justify-center`}
                 style={{
-                  ...(handle.x === "l" ? { left: "-10px" } : handle.x === "r" ? { right: "-10px" } : { left: "50%", transform: "translateX(-50%)" }),
-                  ...(handle.y === "t" ? { top: "-10px" } : handle.y === "b" ? { bottom: "-10px" } : { top: "50%", transform: "translateY(-50%)" }),
+                  ...(handle.x === "l" ? { left: "-12px" } : handle.x === "r" ? { right: "-12px" } : { left: "50%", transform: "translateX(-50%)" }),
+                  ...(handle.y === "t" ? { top: "-12px" } : handle.y === "b" ? { bottom: "-12px" } : { top: "50%", transform: "translateY(-50%)" }),
                   cursor: handle.cursor,
                 }}
                 onMouseDown={(event) => {

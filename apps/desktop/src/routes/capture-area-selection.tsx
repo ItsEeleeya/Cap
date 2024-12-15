@@ -1,7 +1,11 @@
-import Cropper from "~/components/Cropper";
+import Cropper, { createCropAreaStore } from "~/components/Cropper";
 
 export default function () {
-  return <div class="w-screen h-screen">
-    <Cropper />
+  const [crop, setCrop] = createCropAreaStore();
+
+  return <div class="w-[80%] h-screen overflow-hidden">
+    <Cropper
+      cropStore={[crop, setCrop]}
+    />
   </div>
 }

@@ -254,7 +254,6 @@ impl ShowCapWindow {
                     .skip_taskbar(true)
                     .closable(true)
                     .decorations(true)
-                    .shadow(true)
                     .transparent(true);
 
                 if let Some(target) = target_monitor {

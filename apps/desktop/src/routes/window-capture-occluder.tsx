@@ -1,6 +1,6 @@
 import { Show, Suspense } from "solid-js";
 import { createCurrentRecordingQuery } from "~/utils/queries";
-import Occluder from "~/components/Occluder";
+import AreaOccluder from "~/components/Occluder";
 
 export default function () {
   const currentRecording = createCurrentRecordingQuery();
@@ -15,7 +15,7 @@ export default function () {
         }
       >
         {(bounds) => (
-          <Occluder
+          <AreaOccluder
             position={
               { x: bounds().x, y: bounds().y }
             }
