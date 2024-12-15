@@ -1,10 +1,9 @@
 import { XY } from "~/utils/tauri";
-import { Size } from "./Cropper";
 
 export default function AreaOccluder(props: {
   position: XY<number>;
-  size: Size;
-  containerSize: Size;
+  size: XY<number>;
+  containerSize: XY<number>;
 }) {
   const { position, size, containerSize } = props;
 
@@ -26,7 +25,7 @@ export default function AreaOccluder(props: {
         style={{
           top: `${position.y}px`,
           left: 0,
-          height: `${size.height}px`,
+          height: `${size.y}px`,
           width: `${position.x}px`,
         }}
       />
@@ -35,9 +34,9 @@ export default function AreaOccluder(props: {
         class="bg-[#0000008F] absolute"
         style={{
           top: `${position.y}px`,
-          left: `${position.x + size.width}px`,
-          height: `${size.height}px`,
-          width: `${containerSize.width - (position.x + size.width)}px`,
+          left: `${position.x + size.x}px`,
+          height: `${size.y}px`,
+          width: `${containerSize.x - (position.x + size.x)}px`,
         }}
       />
       {/* Bottom Overlay */}
@@ -46,8 +45,8 @@ export default function AreaOccluder(props: {
         style={{
           left: 0,
           right: 0,
-          top: `${position.y + size.height}px`,
-          height: `${containerSize.height - (position.y + size.height)}px`,
+          top: `${position.y + size.y}px`,
+          height: `${containerSize.y - (position.y + size.y)}px`,
         }}
       />
     </>

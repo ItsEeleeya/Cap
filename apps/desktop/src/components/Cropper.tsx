@@ -1,28 +1,25 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
 import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, createEffect } from "solid-js";
 import { createStore, SetStoreFunction } from "solid-js/store";
-import { XY } from "~/utils/tauri";
+import { Crop, XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
-
-export type Size = { width: number, height: number };
 
 export type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
 export type HandleSide = Partial<{
   x: "l" | "r" | "c", y: "t" | "b" | "c", cursor: string
 }>;
-export type CropArea = { position: XY<number>; size: Size };
 
-export function createCropAreaStore(initial: CropArea = {
+export function createCropStore(initial: Crop = {
   position: { x: 0, y: 0 },
-  size: { width: 100, height: 100 }
-}): [get: CropArea, set: SetStoreFunction<CropArea>] {
-  return createStore<CropArea>(initial);
+  size: { x: 100, y: 100 }
+}): [get: Crop, set: SetStoreFunction<Crop>] {
+  return createStore<Crop>(initial);
 }
 
 type Props = {
-  cropStore: [crop: CropArea, setCrop: SetStoreFunction<CropArea>];
-  initialSize?: Size;
-  minSize?: Size;
+  cropStore: [crop: Crop, setCrop: SetStoreFunction<Crop>];
+  initialSize?: XY<number>;
+  minSize?: XY<number>;
 };
 
 const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
@@ -34,16 +31,13 @@ function handleToDirection(handle: HandleSide): Direction {
 }
 
 export default function Cropper(props: Props) {
-  const minSize = props.minSize || { width: 100, height: 50 };
+  const minSize: XY<number> = props.minSize || { x: 100, y: 50 };
   const [crop, setCrop] = props.cropStore;
 
   let cropAreaRef: HTMLDivElement | null = null;
   let cropTargetRef: HTMLDivElement | null = null;
 
-  const [containerSize, setContainerSize] = createSignal<Size>({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const [containerSize, setContainerSize] = createSignal<XY<number>>({ x: 1000, y: 100 });
 
   onMount(() => {
     if (!cropAreaRef || !cropTargetRef) {
@@ -54,13 +48,13 @@ export default function Cropper(props: Props) {
     const areaRect = cropAreaRef.getBoundingClientRect();
     console.log(`target client rect: ${JSON.stringify(areaRect)}`);
     
-    setContainerSize({ width: areaRect.width, height: areaRect.height });
+    setContainerSize({ x: areaRect.width, y: areaRect.height });
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === cropAreaRef) {
           const { width, height } = entry.contentRect;
-          setContainerSize({ width, height });
+          setContainerSize({ x: width, y: height });
         }
       }
     })
@@ -71,19 +65,19 @@ export default function Cropper(props: Props) {
       const initial = props.initialSize!;
       batch(() => {
         setCrop("size", {
-          width: clamp(initial.width, minSize.width, areaRect.width),
-          height: clamp(initial.height, minSize.height, areaRect.height),
+          x: clamp(initial.x, minSize.x, areaRect.width),
+          y: clamp(initial.y, minSize.y, areaRect.height),
         });
         setCrop("position", {
-          x: (areaRect.width - initial.width) / 2,
-          y: (areaRect.height - initial.height) / 2,
+          x: (areaRect.width - initial.x) / 2,
+          y: (areaRect.height - initial.y) / 2,
         });
       });
     } else {
       batch(() => {
         setCrop("size", {
-          width: areaRect.width / 2,
-          height: areaRect.height / 2,
+          x: areaRect.width / 2,
+          y: areaRect.height / 2,
         });
         setCrop("position", {
           x: areaRect.width / 4,
@@ -92,16 +86,16 @@ export default function Cropper(props: Props) {
       });
     }
   });
-  
+
   const [isDragging, setIsDragging] = createSignal(false);
   const [isResizing, setIsResizing] = createSignal(false);
   const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
 
   const styles = createMemo<JSX.CSSProperties>(() => ({
-    left: `${(crop.position.x / containerSize().width) * 100}%`,
-    top: `${(crop.position.y / containerSize().height) * 100}%`,
-    width: `${(crop.size.width / containerSize().width) * 100}%`,
-    height: `${(crop.size.height / containerSize().height) * 100}%`,
+    left: `${(crop.position.x / containerSize().x) * 100}%`,
+    top: `${(crop.position.y / containerSize().y) * 100}%`,
+    width: `${(crop.size.x / containerSize().x) * 100}%`,
+    height: `${(crop.size.y / containerSize().y) * 100}%`,
     cursor: isDragging() ? "grabbing" : "grab",
   }));
 
@@ -110,25 +104,25 @@ export default function Cropper(props: Props) {
 
     if (isDragging()) {
       setCrop("position", ({
-        x: clamp(crop.position.x + e.movementX, 0, areaSize.width - crop.size.width),
-        y: clamp(crop.position.y + e.movementY, 0, areaSize.height - crop.size.height),
+        x: clamp(crop.position.x + e.movementX, 0, areaSize.x - crop.size.x),
+        y: clamp(crop.position.y + e.movementY, 0, areaSize.y - crop.size.y),
       }));
     } else if (isResizing() && resizeDirection()) {
       const dir = resizeDirection()!;
       const { x: pos_x, y: pos_y } = crop.position;
       let newSize = { ...crop.size };
   
-      if (dir.includes("e")) newSize.width = clamp(newSize.width + e.movementX, minSize.width, areaSize.width - pos_x);
-      if (dir.includes("s")) newSize.height = clamp(newSize.height + e.movementY, minSize.height, areaSize.height - pos_y);
+      if (dir.includes("e")) newSize.x = clamp(newSize.x + e.movementX, minSize.x, areaSize.x - pos_x);
+      if (dir.includes("s")) newSize.y = clamp(newSize.y + e.movementY, minSize.y, areaSize.y - pos_y);
       if (dir.includes("w")) {
-        const newWidth = clamp(newSize.width - e.movementX, minSize.width, pos_x + newSize.width);
-        setCrop("position", { x: pos_x + (newSize.width - newWidth) });
-        newSize.width = newWidth;
+        const newWidth = clamp(newSize.x - e.movementX, minSize.x, pos_x + newSize.x);
+        setCrop("position", { x: pos_x + (newSize.x - newWidth) });
+        newSize.x = newWidth;
       }
       if (dir.includes("n")) {
-        const newHeight = clamp(newSize.height - e.movementY, minSize.height, pos_y + newSize.height);
-        setCrop("position", { y: pos_y + (newSize.height - newHeight) });
-        newSize.height = newHeight;
+        const newHeight = clamp(newSize.y - e.movementY, minSize.y, pos_y + newSize.y);
+        setCrop("position", { y: pos_y + (newSize.y - newHeight) });
+        newSize.y = newHeight;
       }
       setCrop("size", newSize);
     }
@@ -168,13 +162,13 @@ export default function Cropper(props: Props) {
               mousedown: () => setIsDragging(true),
               mousemove: (moveEvent) => {
                 const diff = {
-                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * areaSize.width,
-                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * areaSize.height,
+                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * areaSize.x,
+                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * areaSize.y,
                 };
 
                 setCrop("position", {
-                  x: clamp(original.position.x + diff.x, 0, areaSize.width - crop.size.width),
-                  y: clamp(original.position.y + diff.y, 0, areaSize.height - crop.size.height),
+                  x: clamp(original.position.x + diff.x, 0, areaSize.x - crop.size.x),
+                  y: clamp(original.position.y + diff.y, 0, areaSize.y - crop.size.y),
                 });
               },
             });
