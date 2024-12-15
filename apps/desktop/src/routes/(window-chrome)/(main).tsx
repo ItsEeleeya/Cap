@@ -353,7 +353,7 @@ function TargetSelects(props: {
                 { transform: 'scale(0.5)', opacity: 0, width: '0px', height: '0px' },
                 { transform: 'scale(1)', opacity: 1, width: '2rem', height: '2rem' },
               ], {
-                duration: 350,
+                duration: 400,
                 easing: 'ease-in-out'
               }).finished.then(done);
               shouldAnimateAreaSelect = true;
@@ -393,7 +393,7 @@ function TargetSelects(props: {
         </Tooltip.Portal>
       </Tooltip.Root>
 
-      <div class={`flex flex-row items-center rounded-[0.5rem] relative border h-8 transition-all duration-300 ${isAreaSelectVisible() ? "ml-[2.4rem]" : ""}`}>
+      <div class={`flex flex-row items-center rounded-[0.5rem] relative border h-8 transition-all duration-500 ${isAreaSelectVisible() ? "ml-[2.4rem]" : ""}`}>
         <div
           class="w-1/2 absolute flex p-px inset-0 transition-transform peer-focus-visible:outline outline-2 outline-blue-300 outline-offset-2 rounded-[0.6rem] overflow-hidden"
           style={{

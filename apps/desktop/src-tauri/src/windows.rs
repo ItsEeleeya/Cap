@@ -246,12 +246,15 @@ impl ShowCapWindow {
                 let mut window_builder = self
                     .window_builder(app, "/capture-area-selection")
                     .maximized(false)
-                    .resizable(false)
+                    // .resizable(false)
                     .fullscreen(false)
                     .shadow(false)
-                    .always_on_top(true)
+                    // .always_on_top(true)
                     .content_protected(true)
                     .skip_taskbar(true)
+                    .closable(true)
+                    .decorations(true)
+                    .shadow(true)
                     .transparent(true);
 
                 if let Some(target) = target_monitor {
