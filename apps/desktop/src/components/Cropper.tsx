@@ -1,5 +1,5 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
-import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, ParentProps } from "solid-js";
+import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, ParentProps, Show } from "solid-js";
 import { createStore, SetStoreFunction } from "solid-js/store";
 import { Crop, XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
@@ -25,7 +25,9 @@ export function cropFloor({ position, size }: Crop): Crop {
 
 type Props = {
   cropStore: [crop: Crop, setCrop: SetStoreFunction<Crop>];
+  gridLines?: boolean;
   mappedSize?: XY<number>; // Virtual size (like display or image size)
+  aspectRatio?: number; // New prop for the aspect ratio
   initialSize?: XY<number>;
   minSize?: XY<number>;
 };
@@ -40,6 +42,7 @@ function handleToDirection(handle: HandleSide): Direction {
 
 export default function Cropper(props: ParentProps<Props>) {
   const minSize: XY<number> = props.minSize || { x: 50, y: 50 };
+
   const [crop, setCrop] = props.cropStore;
 
   let cropAreaRef: HTMLDivElement | null = null;
@@ -53,10 +56,10 @@ export default function Cropper(props: ParentProps<Props>) {
       console.error("Refs are not properly set");
       return;
     }
-
+  
     const areaRect = cropAreaRef.getBoundingClientRect();
     setContainerSize({ x: areaRect.width, y: areaRect.height });
-
+  
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === cropAreaRef) {
@@ -67,30 +70,39 @@ export default function Cropper(props: ParentProps<Props>) {
     });
     resizeObserver.observe(cropAreaRef);
     onCleanup(() => resizeObserver.disconnect());
-
+  
+    const mappedSize = effectiveMappedSize();
     if (props.initialSize) {
       const initial = props.initialSize!;
-      const mappedSize = effectiveMappedSize();
+      const ratio = props.aspectRatio;
+      let width = clamp(initial.x, minSize.x, mappedSize.x);
+      let height = clamp(initial.y, minSize.y, mappedSize.y);
+      if (ratio) {
+        if (width / height > ratio) width = height * ratio;
+        else height = width / ratio;
+      }
+  
       batch(() => {
-        setCrop("size", {
-          x: clamp(initial.x, minSize.x, mappedSize.x),
-          y: clamp(initial.y, minSize.y, mappedSize.y),
-        });
+        setCrop("size", { x: width, y: height });
         setCrop("position", {
-          x: (mappedSize.x - initial.x) / 2,
-          y: (mappedSize.y - initial.y) / 2,
+          x: (mappedSize.x - width) / 2,
+          y: (mappedSize.y - height) / 2,
         });
       });
     } else {
-      const mappedSize = effectiveMappedSize();
+      const ratio = props.aspectRatio;
+      let width = mappedSize.x / 2;
+      let height = mappedSize.y / 2;
+      if (ratio) {
+        if (width / height > ratio) width = height * ratio;
+        else height = width / ratio;
+      }
+  
       batch(() => {
-        setCrop("size", {
-          x: mappedSize.x / 2,
-          y: mappedSize.y / 2,
-        });
+        setCrop("size", { x: width, y: height });
         setCrop("position", {
-          x: mappedSize.x / 4,
-          y: mappedSize.y / 4,
+          x: (mappedSize.x - width) / 2,
+          y: (mappedSize.y - height) / 2,
         });
       });
     }
@@ -206,7 +218,7 @@ export default function Cropper(props: ParentProps<Props>) {
           });
         }}
       >
-        <div class="w-full h-full border border-dashed border-black-transparent-40 p-2" />
+        <div class="absolute w-full h-full border border-dashed border-black-transparent-40" />
         {/* Resize handles */}
         <For
           each={[
