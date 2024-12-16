@@ -19,7 +19,7 @@ pub enum CapWindowId {
     Main,
     Settings,
     Editor { project_id: String },
-    PrevRecordings,
+    RecordingsOverlay,
     WindowCaptureOccluder,
     CaptureAreaSelection,
     Camera,
@@ -39,7 +39,7 @@ impl FromStr for CapWindowId {
             "window-capture-occluder" => Self::WindowCaptureOccluder,
             "capture-area-select" => Self::CaptureAreaSelection,
             "in-progress-recording" => Self::InProgressRecording,
-            "prev-recordings" => Self::PrevRecordings,
+            "recordings-overlay" => Self::RecordingsOverlay,
             "upgrade" => Self::Upgrade,
             s if s.starts_with("editor-") => Self::Editor {
                 project_id: s.replace("editor-", ""),
@@ -59,7 +59,7 @@ impl std::fmt::Display for CapWindowId {
             Self::WindowCaptureOccluder => write!(f, "window-capture-occluder"),
             Self::CaptureAreaSelection => write!(f, "capture-area-select"),
             Self::InProgressRecording => write!(f, "in-progress-recording"),
-            Self::PrevRecordings => write!(f, "prev-recordings"),
+            Self::RecordingsOverlay => write!(f, "recordings-overlay"),
             Self::Upgrade => write!(f, "upgrade"),
             Self::Editor { project_id } => write!(f, "editor-{}", project_id),
         }
@@ -102,9 +102,18 @@ impl CapWindowId {
             Self::Camera
             | Self::WindowCaptureOccluder
             | Self::CaptureAreaSelection
-            | Self::PrevRecordings => None,
+            | Self::RecordingsOverlay => None,
             _ => Some(None),
         }
+    }
+    pub fn min_size(&self) -> Option<(f64, f64)> {
+        Some(match self {
+            Self::Setup => (600.0, 600.0),
+            Self::Main => (300.0, 360.0),
+            Self::Settings => (600.0, 450.0),
+            Self::Camera => (460.0, 920.0),
+            _ => return None,
+        })
     }
 }
 
@@ -138,7 +147,6 @@ impl ShowCapWindow {
         let window = match self {
             Self::Setup => self
                 .window_builder(app, "/setup")
-                .inner_size(600.0, 600.0)
                 .resizable(false)
                 .maximized(false)
                 .center()
@@ -148,7 +156,6 @@ impl ShowCapWindow {
                 .build()?,
             Self::Main => self
                 .window_builder(app, "/")
-                .inner_size(300.0, 360.0)
                 .resizable(false)
                 .maximized(false)
                 .maximizable(false)
@@ -158,7 +165,6 @@ impl ShowCapWindow {
                     app,
                     format!("/settings/{}", page.clone().unwrap_or_default()),
                 )
-                .min_inner_size(600.0, 450.0)
                 .resizable(true)
                 .maximized(false)
                 .build()?,
@@ -188,8 +194,6 @@ impl ShowCapWindow {
                     .always_on_top(true)
                     .content_protected(true)
                     .visible_on_all_workspaces(true)
-                    .min_inner_size(WINDOW_SIZE, WINDOW_SIZE * 2.0)
-                    .inner_size(WINDOW_SIZE, WINDOW_SIZE * 2.0)
                     .skip_taskbar(true)
                     .position(
                         100.0,
@@ -306,7 +310,7 @@ impl ShowCapWindow {
             }
             Self::PrevRecordings => {
                 let window = self
-                    .window_builder(app, "/prev-recordings")
+                    .window_builder(app, "/recordings-overlay")
                     .maximized(false)
                     .resizable(false)
                     .fullscreen(false)
@@ -382,6 +386,12 @@ impl ShowCapWindow {
             .accept_first_mouse(true)
             .shadow(true);
 
+        if let Some(min) = id.min_size() {
+            builder = builder
+                .inner_size(min.0, min.1)
+                .min_inner_size(min.0, min.1);
+        }
+
         #[cfg(target_os = "macos")]
         {
             if id.traffic_lights_position().is_some() {
@@ -409,7 +419,7 @@ impl ShowCapWindow {
             ShowCapWindow::Editor { project_id } => CapWindowId::Editor {
                 project_id: project_id.clone(),
             },
-            ShowCapWindow::PrevRecordings => CapWindowId::PrevRecordings,
+            ShowCapWindow::PrevRecordings => CapWindowId::RecordingsOverlay,
             ShowCapWindow::WindowCaptureOccluder => CapWindowId::WindowCaptureOccluder,
             ShowCapWindow::CaptureAreaSelection { .. } => CapWindowId::CaptureAreaSelection,
             ShowCapWindow::Camera { .. } => CapWindowId::Camera,

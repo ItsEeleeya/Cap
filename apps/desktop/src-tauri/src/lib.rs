@@ -32,10 +32,9 @@ use cap_recording::RecordingOptions;
 use cap_rendering::ProjectRecordings;
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{Clipboard, ClipboardContext};
-// use display::{list_capture_windows, Bounds, CaptureTarget, FPS};
-use cap_export::is_valid_mp4;
 use general_settings::GeneralSettingsStore;
 use mp4::Mp4Reader;
+// use display::{list_capture_windows, Bounds, CaptureTarget, FPS};
 use notifications::NotificationType;
 use png::{ColorType, Encoder};
 use scap::capturer::Capturer;
@@ -374,6 +373,7 @@ pub struct NewNotification {
     is_error: bool,
 }
 
+type ArcLock<T> = Arc<RwLock<T>>;
 type MutableState<'a, T> = State<'a, Arc<RwLock<T>>>;
 
 #[tauri::command]
@@ -500,7 +500,7 @@ async fn create_screenshot(
             decoder.format(),
             decoder.width(),
             decoder.height(),
-            ffmpeg::format::Pixel::RGB24,
+            ffmpeg::format::Pixel::YUV420P,
             size.map_or(decoder.width(), |s| s.0),
             size.map_or(decoder.height(), |s| s.1),
             ffmpeg::software::scaling::flag::Flags::BILINEAR,
@@ -749,6 +749,20 @@ async fn copy_file_to_path(app: AppHandle, src: String, dst: String) -> Result<(
     );
 
     Err(last_error.unwrap_or_else(|| "Maximum retry attempts exceeded".to_string()))
+}
+
+/// Validates if a file at the given path is a valid MP4 file
+pub fn is_valid_mp4(path: &std::path::Path) -> bool {
+    if let Ok(file) = std::fs::File::open(path) {
+        let file_size = match file.metadata() {
+            Ok(metadata) => metadata.len(),
+            Err(_) => return false,
+        };
+        let reader = std::io::BufReader::new(file);
+        Mp4Reader::read_header(reader, file_size).is_ok()
+    } else {
+        false
+    }
 }
 
 #[tauri::command]
@@ -1006,7 +1020,7 @@ fn close_previous_recordings_window(app: AppHandle) {
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::ManagerExt;
-        if let Ok(panel) = app.get_webview_panel(&CapWindowId::PrevRecordings.label()) {
+        if let Ok(panel) = app.get_webview_panel(&CapWindowId::RecordingsOverlay.label()) {
             panel.released_when_closed(true);
             panel.close();
         }
@@ -1019,7 +1033,7 @@ fn focus_captures_panel(app: AppHandle) {
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::ManagerExt;
-        if let Ok(panel) = app.get_webview_panel(&CapWindowId::PrevRecordings.label()) {
+        if let Ok(panel) = app.get_webview_panel(&CapWindowId::RecordingsOverlay.label()) {
             panel.make_key_window();
         }
     }
@@ -1190,7 +1204,7 @@ async fn upload_exported_video(
             RecordingMetaChanged { id: video_id }.emit(&app).ok();
 
             let _ = app
-                .state::<MutableState<'_, ClipboardContext>>()
+                .state::<ArcLock<ClipboardContext>>()
                 .write()
                 .await
                 .set_text(uploaded_video.link.clone());
@@ -1908,7 +1922,7 @@ pub async fn run() {
                     CapWindowId::Setup.label().as_str(),
                     CapWindowId::WindowCaptureOccluder.label().as_str(),
                     CapWindowId::Camera.label().as_str(),
-                    CapWindowId::PrevRecordings.label().as_str(),
+                    CapWindowId::RecordingsOverlay.label().as_str(),
                     CapWindowId::InProgressRecording.label().as_str(),
                     CapWindowId::CaptureAreaSelection.label().as_str(),
                 ])
@@ -1972,7 +1986,6 @@ pub async fn run() {
                 )));
             }
 
-            // Add this line to check notification permissions on startup
             tokio::spawn(check_notification_permissions(app.clone()));
 
             println!("Checking startup completion and permissions...");

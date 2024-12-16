@@ -772,6 +772,7 @@ dependencies = [
  "cap-project",
  "cap-rendering",
  "cap-utils",
+ "futures",
  "image 0.25.5",
  "mp4",
  "tempfile",
@@ -1727,7 +1728,7 @@ dependencies = [
 
 [[package]]
 name = "desktop"
-version = "0.3.4"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "axum",
