@@ -5,7 +5,7 @@ export default function AreaOccluder(props: {
   size: XY<number>;
   containerSize: XY<number>;
 }) {
-  const { position, size, containerSize } = props;
+  console.log(`Values: ${JSON.stringify(props)}`);
 
   return (
     <>
@@ -16,27 +16,27 @@ export default function AreaOccluder(props: {
           left: 0,
           right: 0,
           top: 0,
-          height: `${position.y}px`,
+          height: `${props.position.y}px`,
         }}
       />
       {/* Left Overlay */}
       <div
         class="bg-[#0000008F] absolute"
         style={{
-          top: `${position.y}px`,
+          top: `${props.position.y}px`,
           left: 0,
-          height: `${size.y}px`,
-          width: `${position.x}px`,
+          height: `${props.size.y}px`,
+          width: `${props.position.x}px`,
         }}
       />
       {/* Right Overlay */}
       <div
         class="bg-[#0000008F] absolute"
         style={{
-          top: `${position.y}px`,
-          left: `${position.x + size.x}px`,
-          height: `${size.y}px`,
-          width: `${containerSize.x - (position.x + size.x)}px`,
+          top: `${props.position.y}px`,
+          left: `${props.position.x + props.size.x}px`,
+          height: `${props.size.y}px`,
+          width: `${props.containerSize.x - (props.position.x + props.size.x)}px`,
         }}
       />
       {/* Bottom Overlay */}
@@ -45,8 +45,8 @@ export default function AreaOccluder(props: {
         style={{
           left: 0,
           right: 0,
-          top: `${position.y + size.y}px`,
-          height: `${containerSize.y - (position.y + size.y)}px`,
+          top: `${props.position.y + props.size.y}px`,
+          height: `${props.containerSize.y - (props.position.y + props.size.y)}px`,
         }}
       />
     </>

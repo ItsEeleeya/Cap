@@ -93,9 +93,23 @@ export default function Cropper(props: ParentProps<Props>) {
   const [isResizing, setIsResizing] = createSignal(false);
   const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
 
-  const styles = createMemo<JSX.CSSProperties>(() => {
+  const scaledCrop = createMemo<Crop>(() => {
     const mappedSize = effectiveMappedSize();
     const container = containerSize();
+    return {
+      position: {
+        x: (crop.position.x / mappedSize.x) * container.x,
+        y: (crop.position.y / mappedSize.y) * container.y,
+      },
+      size: {
+        x: (crop.size.x / mappedSize.x) * container.x,
+        y: (crop.size.y / mappedSize.y) * container.y,
+      },
+    };
+  });
+
+  const styles = createMemo<JSX.CSSProperties>(() => {
+    const mappedSize = effectiveMappedSize();
 
     return {
       left: `${(crop.position.x / mappedSize.x) * 100}%`,
@@ -147,11 +161,11 @@ export default function Cropper(props: ParentProps<Props>) {
   });
 
   return (
-    <div ref={(el) => (cropAreaRef = el)} class="relative w-full h-full">
+    <div ref={(el) => (cropAreaRef = el)} class="relative w-full h-full overflow-hidden">
       <div class="-z-10">
         {props.children}
       </div>
-      <AreaOccluder position={crop.position} size={crop.size} containerSize={containerSize()} />
+      <AreaOccluder position={scaledCrop().position} size={scaledCrop().size} containerSize={containerSize()} />
       <div
         class="bg-transparent absolute cursor-grab"
         ref={(el) => (cropTargetRef = el)}

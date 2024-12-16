@@ -365,7 +365,11 @@ function Dialogs() {
                       <div class="flex flex-row justify-center">
                         <div class="relative bg-blue-200">
                           <div class="divide-black-transparent-10 overflow-hidden rounded-lg">
-                            <Cropper cropStore={[crop, setCrop]} mappedSize={{ x: display.width, y: display.height }} >
+                            <Cropper
+                              cropStore={[crop, setCrop]}
+                              minSize={{ x: 100, y: 100 }}
+                              mappedSize={{ x: display.width, y: display.height }}
+                            >
                               <img
                                 class="shadow pointer-events-none max-h-[70vh]"
                                 alt="screenshot"
