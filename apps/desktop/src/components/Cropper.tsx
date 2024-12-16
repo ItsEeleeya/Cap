@@ -141,7 +141,7 @@ export default function Cropper(props: ParentProps<Props>) {
 
   const handleMouseMove = (e: MouseEvent) => batch(() => {
     const mappedSize = effectiveMappedSize();
-
+  
     if (isDragging()) {
       setCrop("position", ({
         x: clamp(crop.position.x + (e.movementX / containerSize().x) * mappedSize.x, 0, mappedSize.x - crop.size.x),
@@ -149,22 +149,72 @@ export default function Cropper(props: ParentProps<Props>) {
       }));
     } else if (isResizing() && resizeDirection()) {
       const dir = resizeDirection()!;
-      const { x: pos_x, y: pos_y } = crop.position;
-      let newSize = { ...crop.size };
-
-      if (dir.includes("e")) newSize.x = clamp(newSize.x + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - pos_x);
-      if (dir.includes("s")) newSize.y = clamp(newSize.y + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - pos_y);
+      const { x: posX, y: posY } = crop.position;
+      let { x: newWidth, y: newHeight } = crop.size;
+  
+      // Clamp mouse position within container bounds
+      const clampedMouseX = clamp(e.clientX, cropAreaRef!.getBoundingClientRect().left, cropAreaRef!.getBoundingClientRect().right);
+      const clampedMouseY = clamp(e.clientY, cropAreaRef!.getBoundingClientRect().top, cropAreaRef!.getBoundingClientRect().bottom);
+  
+      const applyAspectRatio = (box: { x: number; y: number }, origin: [number, number], grow: "width" | "height") => {
+        const ratio = props.aspectRatio!;
+        if (grow === "height") {
+          box.y = box.x / ratio;
+        } else {
+          box.x = box.y * ratio;
+        }
+        return box;
+      };
+  
+      const origin: [number, number] = [0, 0];
+      if (dir.includes("w")) origin[0] = 1;
+      if (dir.includes("n")) origin[1] = 1;
+  
+      if (dir.includes("e")) {
+        newWidth = clamp(newWidth + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - posX);
+      }
+      if (dir.includes("s")) {
+        newHeight = clamp(newHeight + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - posY);
+      }
       if (dir.includes("w")) {
-        const newWidth = clamp(newSize.x - (e.movementX / containerSize().x) * mappedSize.x, minSize.x, pos_x + newSize.x);
-        setCrop("position", { x: pos_x + (newSize.x - newWidth) });
-        newSize.x = newWidth;
+        const deltaWidth = (e.movementX / containerSize().x) * mappedSize.x;
+        const adjustedWidth = clamp(newWidth - deltaWidth, minSize.x, posX + newWidth);
+        const diff = newWidth - adjustedWidth;
+        newWidth = adjustedWidth;
+        setCrop("position", { x: posX + diff });
       }
       if (dir.includes("n")) {
-        const newHeight = clamp(newSize.y - (e.movementY / containerSize().y) * mappedSize.y, minSize.y, pos_y + newSize.y);
-        setCrop("position", { y: pos_y + (newSize.y - newHeight) });
-        newSize.y = newHeight;
+        const deltaHeight = (e.movementY / containerSize().y) * mappedSize.y;
+        const adjustedHeight = clamp(newHeight - deltaHeight, minSize.y, posY + newHeight);
+        const diff = newHeight - adjustedHeight;
+        newHeight = adjustedHeight;
+        setCrop("position", { y: posY + diff });
       }
-      setCrop("size", newSize);
+  
+      if (props.aspectRatio) {
+        const grow = dir.includes("n") || dir.includes("s") ? "height" : "width";
+        const box = { x: newWidth, y: newHeight };
+        const adjustedBox = applyAspectRatio(box, origin, grow);
+  
+        newWidth = adjustedBox.x;
+        newHeight = adjustedBox.y;
+  
+        // Reposition if the origin changes due to aspect ratio constraints
+        if (origin[0] === 1) {
+          setCrop("position", { x: posX + (crop.size.x - newWidth) });
+        }
+        if (origin[1] === 1) {
+          setCrop("position", { y: posY + (crop.size.y - newHeight) });
+        }
+      }
+  
+      // Ensure the selection remains within container boundaries
+      const maxWidth = mappedSize.x - posX;
+      const maxHeight = mappedSize.y - posY;
+      newWidth = clamp(newWidth, minSize.x, maxWidth);
+      newHeight = clamp(newHeight, minSize.y, maxHeight);
+  
+      setCrop("size", { x: newWidth, y: newHeight });
     }
   });
 
