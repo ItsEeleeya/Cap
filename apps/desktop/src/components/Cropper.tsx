@@ -16,6 +16,13 @@ export function createCropStore(initial: Crop = {
   return createStore<Crop>(initial);
 }
 
+export function cropFloor({ position, size }: Crop): Crop {
+  return {
+    position: Object.fromEntries(Object.entries(position).map(([key, value]) => [key, Math.floor(value)])) as XY<number>,
+    size: Object.fromEntries(Object.entries(size).map(([key, value]) => [key, Math.floor(value)])) as XY<number>,
+  };
+}
+
 type Props = {
   cropStore: [crop: Crop, setCrop: SetStoreFunction<Crop>];
   mappedSize?: XY<number>; // Virtual size (like display or image size)

@@ -37,7 +37,7 @@ import { Header } from "./Header";
 import { Player } from "./Player";
 import { ConfigSidebar } from "./ConfigSidebar";
 import { Timeline } from "./Timeline";
-import Cropper from "~/components/Cropper";
+import Cropper, { cropFloor as cropToFloor } from "~/components/Cropper";
 
 export function Editor() {
   const [params] = useSearchParams<{ id: string }>();
@@ -306,12 +306,12 @@ function Dialogs() {
               })()}
             >
               {(dialog) => {
-                const { setProject: setState, editorInstance } =
-                  useEditorContext();
+                const { setProject: setState, editorInstance } = useEditorContext();
                 const [crop, setCrop] = createStore({
                   position: dialog().position,
                   size: dialog().size,
                 });
+                const cropFloor = createMemo(() => cropToFloor(crop));
 
                 const display = editorInstance.recordings.segments[0].display;
 
@@ -323,23 +323,23 @@ function Dialogs() {
                         <div class="flex flex-row items-center space-x-[0.5rem] text-gray-400">
                           <span>Size</span>
                           <div class="w-[3.25rem]">
-                            <Input value={crop.size.x} disabled />
+                            <Input value={cropFloor().size.x} disabled />
                           </div>
                           <span>x</span>
                           <div class="w-[3.25rem]">
-                            <Input value={crop.size.y} disabled />
+                            <Input value={cropFloor().size.y} disabled />
                           </div>
                         </div>
                         <div class="flex flex-row items-center space-x-[0.5rem] text-gray-400">
                           <span>Position</span>
                           <div class="w-[3.25rem]">
-                            <Input value={crop.position.x} disabled />
+                            <Input value={cropFloor().position.x} disabled />
                           </div>
                           <span>x</span>
                           <div class="w-[3.25rem]">
                             <Input
                               class="w-[3.25rem]"
-                              value={crop.position.y}
+                              value={cropFloor().position.y}
                               disabled
                             />
                           </div>
@@ -385,7 +385,7 @@ function Dialogs() {
                     <Dialog.Footer>
                       <Button
                         onClick={() => {
-                          setState("background", "crop", crop);
+                          setState("background", "crop", cropFloor());
                           setDialog((d) => ({ ...d, open: false }));
                         }}
                       >

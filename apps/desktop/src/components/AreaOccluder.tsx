@@ -5,8 +5,6 @@ export default function AreaOccluder(props: {
   size: XY<number>;
   containerSize: XY<number>;
 }) {
-  console.log(`Values: ${JSON.stringify(props)}`);
-
   return (
     <>
       {/* Top Overlay */}
