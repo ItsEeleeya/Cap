@@ -56,10 +56,10 @@ export default function Cropper(props: ParentProps<Props>) {
       console.error("Refs are not properly set");
       return;
     }
-  
+
     const areaRect = cropAreaRef.getBoundingClientRect();
     setContainerSize({ x: areaRect.width, y: areaRect.height });
-  
+
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === cropAreaRef) {
@@ -70,7 +70,7 @@ export default function Cropper(props: ParentProps<Props>) {
     });
     resizeObserver.observe(cropAreaRef);
     onCleanup(() => resizeObserver.disconnect());
-  
+
     const mappedSize = effectiveMappedSize();
     if (props.initialSize) {
       const initial = props.initialSize!;
@@ -81,7 +81,7 @@ export default function Cropper(props: ParentProps<Props>) {
         if (width / height > ratio) width = height * ratio;
         else height = width / ratio;
       }
-  
+
       batch(() => {
         setCrop("size", { x: width, y: height });
         setCrop("position", {
@@ -97,7 +97,7 @@ export default function Cropper(props: ParentProps<Props>) {
         if (width / height > ratio) width = height * ratio;
         else height = width / ratio;
       }
-  
+
       batch(() => {
         setCrop("size", { x: width, y: height });
         setCrop("position", {
@@ -109,7 +109,6 @@ export default function Cropper(props: ParentProps<Props>) {
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
-  const [isResizing, setIsResizing] = createSignal(false);
   const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
 
   const scaledCrop = createMemo<Crop>(() => {
@@ -140,93 +139,65 @@ export default function Cropper(props: ParentProps<Props>) {
   });
 
   const handleMouseMove = (e: MouseEvent) => batch(() => {
+    const dir = resizeDirection();
+    if (!dir) return;
     const mappedSize = effectiveMappedSize();
-  
-    if (isDragging()) {
-      setCrop("position", ({
-        x: clamp(crop.position.x + (e.movementX / containerSize().x) * mappedSize.x, 0, mappedSize.x - crop.size.x),
-        y: clamp(crop.position.y + (e.movementY / containerSize().y) * mappedSize.y, 0, mappedSize.y - crop.size.y),
-      }));
-    } else if (isResizing() && resizeDirection()) {
-      const dir = resizeDirection()!;
-      const { x: posX, y: posY } = crop.position;
-      let { x: newWidth, y: newHeight } = crop.size;
-  
-      // Clamp mouse position within container bounds
-      const clampedMouseX = clamp(e.clientX, cropAreaRef!.getBoundingClientRect().left, cropAreaRef!.getBoundingClientRect().right);
-      const clampedMouseY = clamp(e.clientY, cropAreaRef!.getBoundingClientRect().top, cropAreaRef!.getBoundingClientRect().bottom);
-  
-      const applyAspectRatio = (box: { x: number; y: number }, origin: [number, number], grow: "width" | "height") => {
-        const ratio = props.aspectRatio!;
-        if (grow === "height") {
-          box.y = box.x / ratio;
-        } else {
-          box.x = box.y * ratio;
-        }
-        return box;
-      };
-  
-      const origin: [number, number] = [0, 0];
-      if (dir.includes("w")) origin[0] = 1;
-      if (dir.includes("n")) origin[1] = 1;
-  
-      if (dir.includes("e")) {
-        newWidth = clamp(newWidth + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - posX);
-      }
-      if (dir.includes("s")) {
-        newHeight = clamp(newHeight + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - posY);
-      }
-      if (dir.includes("w")) {
-        const deltaWidth = (e.movementX / containerSize().x) * mappedSize.x;
-        const adjustedWidth = clamp(newWidth - deltaWidth, minSize.x, posX + newWidth);
-        const diff = newWidth - adjustedWidth;
-        newWidth = adjustedWidth;
-        setCrop("position", { x: posX + diff });
-      }
-      if (dir.includes("n")) {
-        const deltaHeight = (e.movementY / containerSize().y) * mappedSize.y;
-        const adjustedHeight = clamp(newHeight - deltaHeight, minSize.y, posY + newHeight);
-        const diff = newHeight - adjustedHeight;
-        newHeight = adjustedHeight;
-        setCrop("position", { y: posY + diff });
-      }
-  
-      if (props.aspectRatio) {
-        const grow = dir.includes("n") || dir.includes("s") ? "height" : "width";
-        const box = { x: newWidth, y: newHeight };
-        const adjustedBox = applyAspectRatio(box, origin, grow);
-  
-        newWidth = adjustedBox.x;
-        newHeight = adjustedBox.y;
-  
-        // Reposition if the origin changes due to aspect ratio constraints
-        if (origin[0] === 1) {
-          setCrop("position", { x: posX + (crop.size.x - newWidth) });
-        }
-        if (origin[1] === 1) {
-          setCrop("position", { y: posY + (crop.size.y - newHeight) });
-        }
-      }
-  
-      // Ensure the selection remains within container boundaries
-      const maxWidth = mappedSize.x - posX;
-      const maxHeight = mappedSize.y - posY;
-      newWidth = clamp(newWidth, minSize.x, maxWidth);
-      newHeight = clamp(newHeight, minSize.y, maxHeight);
-  
-      setCrop("size", { x: newWidth, y: newHeight });
-    }
-  });
+    const { x: posX, y: posY } = crop.position;
+    let { x: newWidth, y: newHeight } = crop.size;
 
-  onMount(() => {
-    createEventListenerMap(window, {
-      mousemove: handleMouseMove,
-      mouseup: () => {
-        setResizeDirection(null);
-        setIsDragging(false);
-        setIsResizing(false);
-      },
-    });
+    const origin: [number, number] = [0, 0];
+
+    if (dir.includes("w")) origin[0] = 1;
+    if (dir.includes("n")) origin[1] = 1;
+    if (dir.includes("e")) {
+      newWidth = clamp(newWidth + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - posX);
+    }
+    if (dir.includes("s")) {
+      newHeight = clamp(newHeight + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - posY);
+    }
+    if (dir.includes("w")) {
+      const deltaWidth = (e.movementX / containerSize().x) * mappedSize.x;
+      const adjustedWidth = clamp(newWidth - deltaWidth, minSize.x, posX + newWidth);
+      const diff = newWidth - adjustedWidth;
+      newWidth = adjustedWidth;
+      setCrop("position", { x: posX + diff });
+    }
+    if (dir.includes("n")) {
+      const deltaHeight = (e.movementY / containerSize().y) * mappedSize.y;
+      const adjustedHeight = clamp(newHeight - deltaHeight, minSize.y, posY + newHeight);
+      const diff = newHeight - adjustedHeight;
+      newHeight = adjustedHeight;
+      setCrop("position", { y: posY + diff });
+    }
+
+    if (props.aspectRatio) {
+      const grow = dir.includes("n") || dir.includes("s") ? "height" : "width";
+      const box = { x: newWidth, y: newHeight };
+      if (grow === "height") {
+        box.y = box.x / props.aspectRatio;
+      } else {
+        box.x = box.y * props.aspectRatio;
+      }
+
+      // Adjust position if aspect ratio impacts dimensions
+      if (origin[0] === 1) {
+        setCrop("position", { x: posX + (crop.size.x - box.x) });
+      }
+      if (origin[1] === 1) {
+        setCrop("position", { y: posY + (crop.size.y - box.y) });
+      }
+
+      newWidth = box.x;
+      newHeight = box.y;
+    }
+
+    // Ensure the selection remains within container boundaries
+    const maxWidth = mappedSize.x - posX;
+    const maxHeight = mappedSize.y - posY;
+    newWidth = clamp(newWidth, minSize.x, maxWidth);
+    newHeight = clamp(newHeight, minSize.y, maxHeight);
+
+    setCrop("size", { x: newWidth, y: newHeight });
   });
 
   return (
@@ -239,7 +210,9 @@ export default function Cropper(props: ParentProps<Props>) {
         class="bg-transparent absolute cursor-grab"
         ref={(el) => (cropTargetRef = el)}
         style={styles()}
-        onMouseDown={(downEvent) => {
+        onMouseDown={(event) => {
+          event.stopPropagation();
+          setIsDragging(true);
           const original = {
             position: { ...crop.position },
             size: { ...crop.size },
@@ -252,11 +225,10 @@ export default function Cropper(props: ParentProps<Props>) {
                 setIsDragging(false);
                 dispose();
               },
-              mousedown: () => setIsDragging(true),
               mousemove: (moveEvent) => {
                 const diff = {
-                  x: ((moveEvent.clientX - downEvent.clientX) / cropAreaRef!.clientWidth) * mappedSize.x,
-                  y: ((moveEvent.clientY - downEvent.clientY) / cropAreaRef!.clientHeight) * mappedSize.y,
+                  x: ((moveEvent.clientX - event.clientX) / cropAreaRef!.clientWidth) * mappedSize.x,
+                  y: ((moveEvent.clientY - event.clientY) / cropAreaRef!.clientHeight) * mappedSize.y,
                 };
 
                 setCrop("position", {
@@ -295,8 +267,15 @@ export default function Cropper(props: ParentProps<Props>) {
                 }}
                 onMouseDown={(event) => {
                   event.stopPropagation();
-                  setIsResizing(true);
                   setResizeDirection(handleToDirection(handle));
+
+                  createRoot((dispose) => createEventListenerMap(window, {
+                    mouseup: () => {
+                      setResizeDirection(null);
+                      dispose();
+                    },
+                    mousemove: handleMouseMove,
+                  }));
                 }}
               >
                 <div class={`${isCorner ? "w-[8px] h-[8px]" : "w-[6px] h-[6px]"} bg-[#929292] border border-[#FFFFFF] rounded-full`} />
@@ -324,10 +303,16 @@ export default function Cropper(props: ParentProps<Props>) {
               }}
               onMouseDown={(event) => {
                 event.stopPropagation();
-                setIsResizing(true);
                 setResizeDirection(
                   side.x === "l" ? "w" : side.x === "r" ? "e" : side.y === "t" ? "n" : side.y === "b" ? "s" : null
                 );
+                createRoot((dispose) => createEventListenerMap(window, {
+                  mouseup: () => {
+                    setResizeDirection(null);
+                    dispose();
+                  },
+                  mousemove: handleMouseMove,
+                }));
               }}
             />
           )}
