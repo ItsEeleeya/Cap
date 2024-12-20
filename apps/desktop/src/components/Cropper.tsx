@@ -214,7 +214,7 @@ export default function Cropper(props: ParentProps<Props>) {
           });
         }}
       >
-        <div class="absolute w-full h-full border border-dashed border-blue-transparent-20" />
+        <div class="absolute w-full h-full border border-dashed border-black-transparent-40" />
         {/* Resize handles */}
         <For
           each={[
@@ -252,7 +252,7 @@ export default function Cropper(props: ParentProps<Props>) {
                   }));
                 }}
               >
-                <div class={`${isCorner ? "w-[8px] h-[8px]" : "w-[6px] h-[6px]"} bg-blue-300 border border-[#FFFFFF] rounded-full group-hover:scale-150 transition-transform duration-150`} />
+                <div class={`${isCorner ? "w-[8px] h-[8px]" : "w-[6px] h-[6px]"} bg-[#929292] border border-[#FFFFFF] rounded-full group-hover:scale-150 transition-transform duration-150`} />
               </div>
             );
           }}
@@ -269,7 +269,7 @@ export default function Cropper(props: ParentProps<Props>) {
         >
           {(side) => (
             <div
-              class="absolute hover:bg-blue-transparent-10 transition-colors duration-300"
+              class="absolute hover:bg-black-transparent-10 transition-colors duration-300"
               style={{
                 ...(side.x === "l" ? { left: "0", width: "12px" } : side.x === "r" ? { right: "0", width: "12px" } : { left: "0", right: "0" }),
                 ...(side.y === "t" ? { top: "0", height: "12px" } : side.y === "b" ? { bottom: "0", height: "12px" } : { top: "0", bottom: "0" }),

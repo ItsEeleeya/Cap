@@ -254,10 +254,10 @@ impl ShowCapWindow {
                     .fullscreen(false)
                     .shadow(false)
                     // .always_on_top(true)
-                    .content_protected(true)
+                    // .content_protected(true)
                     .skip_taskbar(true)
                     .closable(true)
-                    .decorations(true)
+                    .decorations(false)
                     .transparent(true);
 
                 if let Some(target) = target_monitor {
@@ -273,6 +273,12 @@ impl ShowCapWindow {
                 }
 
                 let window = window_builder.build()?;
+
+                #[cfg(target_os = "macos")]
+                crate::platform::set_window_level(
+                    window.as_ref().window(),
+                    objc2_app_kit::NSScreenSaverWindowLevel,
+                );
 
                 // #[cfg(target_os = "macos")]
                 // crate::platform::set_window_level(
