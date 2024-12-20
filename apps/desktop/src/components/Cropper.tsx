@@ -1,7 +1,7 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
-import { createSignal, For, createMemo, createRoot, batch, onMount, JSX, onCleanup, ParentProps, Show } from "solid-js";
+import { createSignal, For, createMemo, createRoot, batch, onMount, type JSX, onCleanup, ParentProps, Show } from "solid-js";
 import { createStore, SetStoreFunction } from "solid-js/store";
-import { Crop, XY } from "~/utils/tauri";
+import type { Crop, XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
 
 type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
@@ -42,13 +42,12 @@ function handleToDirection(handle: HandleSide): Direction {
 
 export default function Cropper(props: ParentProps<Props>) {
   const minSize: XY<number> = props.minSize || { x: 50, y: 50 };
-
   const [crop, setCrop] = props.cropStore;
 
   let cropAreaRef: HTMLDivElement | null = null;
   let cropTargetRef: HTMLDivElement | null = null;
 
-  const [containerSize, setContainerSize] = createSignal<XY<number>>({ x: 1000, y: 1000 });
+  const [containerSize, setContainerSize] = createSignal<XY<number>>({ x: 0, y: 0 });
   const effectiveMappedSize = createMemo(() => props.mappedSize || containerSize());
 
   onMount(() => {
@@ -62,54 +61,34 @@ export default function Cropper(props: ParentProps<Props>) {
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        if (entry.target === cropAreaRef) {
-          const { width, height } = entry.contentRect;
-          setContainerSize({ x: width, y: height });
-        }
+        if (entry.target === cropAreaRef) setContainerSize({
+          x: entry.contentRect.width, y: entry.contentRect.height
+        });
       }
     });
     resizeObserver.observe(cropAreaRef);
     onCleanup(() => resizeObserver.disconnect());
 
     const mappedSize = effectiveMappedSize();
-    if (props.initialSize) {
-      const initial = props.initialSize!;
-      const ratio = props.aspectRatio;
-      let width = clamp(initial.x, minSize.x, mappedSize.x);
-      let height = clamp(initial.y, minSize.y, mappedSize.y);
-      if (ratio) {
-        if (width / height > ratio) width = height * ratio;
-        else height = width / ratio;
-      }
 
-      batch(() => {
-        setCrop("size", { x: width, y: height });
-        setCrop("position", {
-          x: (mappedSize.x - width) / 2,
-          y: (mappedSize.y - height) / 2,
-        });
-      });
-    } else {
-      const ratio = props.aspectRatio;
-      let width = mappedSize.x / 2;
-      let height = mappedSize.y / 2;
-      if (ratio) {
-        if (width / height > ratio) width = height * ratio;
-        else height = width / ratio;
-      }
-
-      batch(() => {
-        setCrop("size", { x: width, y: height });
-        setCrop("position", {
-          x: (mappedSize.x - width) / 2,
-          y: (mappedSize.y - height) / 2,
-        });
-      });
+    const initial = props.initialSize || { x: mappedSize.x / 2, y: mappedSize.y / 2 };
+    let width = clamp(initial.x, minSize.x, mappedSize.x);
+    let height = clamp(initial.y, minSize.y, mappedSize.y);
+    
+    const ratio = props.aspectRatio;
+    if (ratio) {
+      if (width / height > ratio) width = height * ratio;
+      else height = width / ratio;
     }
+
+    setCrop({
+      size: { x: width, y: height },
+      position: { x: (mappedSize.x - width) / 2, y: (mappedSize.y - height) / 2 }
+    });
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
-  const [resizeDirection, setResizeDirection] = createSignal<string | null>(null);
+  const [resizeDirection, setResizeDirection] = createSignal<Direction | null>(null);
 
   const scaledCrop = createMemo<Crop>(() => {
     const mappedSize = effectiveMappedSize();
@@ -128,7 +107,6 @@ export default function Cropper(props: ParentProps<Props>) {
 
   const styles = createMemo<JSX.CSSProperties>(() => {
     const mappedSize = effectiveMappedSize();
-
     return {
       left: `${(crop.position.x / mappedSize.x) * 100}%`,
       top: `${(crop.position.y / mappedSize.y) * 100}%`,
@@ -144,11 +122,10 @@ export default function Cropper(props: ParentProps<Props>) {
     const mappedSize = effectiveMappedSize();
     const { x: posX, y: posY } = crop.position;
     let { x: newWidth, y: newHeight } = crop.size;
+    const origin: XY<number> = { x: 0, y: 0 };
 
-    const origin: [number, number] = [0, 0];
-
-    if (dir.includes("w")) origin[0] = 1;
-    if (dir.includes("n")) origin[1] = 1;
+    if (dir.includes("w")) origin.x = 1;
+    if (dir.includes("n")) origin.y = 1;
     if (dir.includes("e")) {
       newWidth = clamp(newWidth + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - posX);
     }
@@ -158,37 +135,17 @@ export default function Cropper(props: ParentProps<Props>) {
     if (dir.includes("w")) {
       const deltaWidth = (e.movementX / containerSize().x) * mappedSize.x;
       const adjustedWidth = clamp(newWidth - deltaWidth, minSize.x, posX + newWidth);
-      const diff = newWidth - adjustedWidth;
       newWidth = adjustedWidth;
-      setCrop("position", { x: posX + diff });
     }
     if (dir.includes("n")) {
       const deltaHeight = (e.movementY / containerSize().y) * mappedSize.y;
       const adjustedHeight = clamp(newHeight - deltaHeight, minSize.y, posY + newHeight);
-      const diff = newHeight - adjustedHeight;
       newHeight = adjustedHeight;
-      setCrop("position", { y: posY + diff });
     }
 
     if (props.aspectRatio) {
-      const grow = dir.includes("n") || dir.includes("s") ? "height" : "width";
-      const box = { x: newWidth, y: newHeight };
-      if (grow === "height") {
-        box.y = box.x / props.aspectRatio;
-      } else {
-        box.x = box.y * props.aspectRatio;
-      }
-
-      // Adjust position if aspect ratio impacts dimensions
-      if (origin[0] === 1) {
-        setCrop("position", { x: posX + (crop.size.x - box.x) });
-      }
-      if (origin[1] === 1) {
-        setCrop("position", { y: posY + (crop.size.y - box.y) });
-      }
-
-      newWidth = box.x;
-      newHeight = box.y;
+      constrainToRatio(props.aspectRatio, dir, { x: newWidth, y: newHeight }, origin);
+      return;
     }
 
     // Ensure the selection remains within container boundaries
@@ -197,8 +154,25 @@ export default function Cropper(props: ParentProps<Props>) {
     newWidth = clamp(newWidth, minSize.x, maxWidth);
     newHeight = clamp(newHeight, minSize.y, maxHeight);
 
-    setCrop("size", { x: newWidth, y: newHeight });
+    resize(newWidth, newHeight, origin);
   });
+
+  function resize(newWidth: number, newHeight: number, origin: XY<number> = crop.position) {
+    const fromX = crop.position.x + (crop.size.x * origin.x);
+    const fromY = crop.position.y + (crop.size.y * origin.y);
+
+    const newPosX = fromX - (newWidth * origin.x);
+    const newPosY = fromY - (newHeight * origin.y);
+
+    setCrop("position", { x: newPosX, y: newPosY });
+    setCrop("size", { x: newWidth, y: newHeight });
+  }
+
+  function constrainToRatio(ratio: number, dir: Direction, size: XY<number>, origin: XY<number> = crop.position) {
+    const growHeight = dir.includes("n") || dir.includes("s");
+    if (growHeight) resize(size.x, size.x / ratio, origin);
+    else resize(size.y, size.y / ratio, origin);
+  };
 
   return (
     <div ref={(el) => (cropAreaRef = el)} class="relative w-full h-full overflow-hidden">
@@ -240,7 +214,7 @@ export default function Cropper(props: ParentProps<Props>) {
           });
         }}
       >
-        <div class="absolute w-full h-full border border-dashed border-black-transparent-40" />
+        <div class="absolute w-full h-full border border-dashed border-blue-transparent-20" />
         {/* Resize handles */}
         <For
           each={[
@@ -259,7 +233,7 @@ export default function Cropper(props: ParentProps<Props>) {
 
             return (
               <div
-                class={`absolute ${isCorner ? "w-[26px] h-[26px] z-10" : "w-[24px] h-[24px]"} flex items-center justify-center`}
+                class={`absolute ${isCorner ? "w-[26px] h-[26px]" : "w-[24px] h-[24px] pointer-events-none"} z-10 flex items-center justify-center group`}
                 style={{
                   ...(handle.x === "l" ? { left: "-12px" } : handle.x === "r" ? { right: "-12px" } : { left: "50%", transform: "translateX(-50%)" }),
                   ...(handle.y === "t" ? { top: "-12px" } : handle.y === "b" ? { bottom: "-12px" } : { top: "50%", transform: "translateY(-50%)" }),
@@ -278,7 +252,7 @@ export default function Cropper(props: ParentProps<Props>) {
                   }));
                 }}
               >
-                <div class={`${isCorner ? "w-[8px] h-[8px]" : "w-[6px] h-[6px]"} bg-[#929292] border border-[#FFFFFF] rounded-full`} />
+                <div class={`${isCorner ? "w-[8px] h-[8px]" : "w-[6px] h-[6px]"} bg-blue-300 border border-[#FFFFFF] rounded-full group-hover:scale-150 transition-transform duration-150`} />
               </div>
             );
           }}
@@ -295,7 +269,7 @@ export default function Cropper(props: ParentProps<Props>) {
         >
           {(side) => (
             <div
-              class="absolute"
+              class="absolute hover:bg-blue-transparent-10 transition-colors duration-300"
               style={{
                 ...(side.x === "l" ? { left: "0", width: "12px" } : side.x === "r" ? { right: "0", width: "12px" } : { left: "0", right: "0" }),
                 ...(side.y === "t" ? { top: "0", height: "12px" } : side.y === "b" ? { bottom: "0", height: "12px" } : { top: "0", bottom: "0" }),

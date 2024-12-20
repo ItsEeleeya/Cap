@@ -7,7 +7,8 @@ export default function () {
     <Cropper
       cropStore={[crop, setCrop]}
       mappedSize={{ x: window.innerWidth, y: window.innerHeight }}
-      aspectRatio={1/1}
+      // aspectRatio={1/1}
+      // initialSize={{x: 100, y: 100}}
       gridLines={true}
     />
   </div>

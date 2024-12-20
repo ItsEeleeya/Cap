@@ -1,6 +1,6 @@
 import { Show, Suspense } from "solid-js";
+import AreaOccluder from "~/components/AreaOccluder";
 import { createCurrentRecordingQuery } from "~/utils/queries";
-import AreaOccluder from "~/components/Occluder";
 
 export default function () {
   const currentRecording = createCurrentRecordingQuery();
@@ -22,6 +22,9 @@ export default function () {
             size={
               { x: bounds().width, y: bounds().height }
             }
+            containerSize={{
+              x: window.innerWidth, y: window.innerHeight
+            }}
           />
         )}
       </Show>

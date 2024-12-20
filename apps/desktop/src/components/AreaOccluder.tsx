@@ -1,4 +1,4 @@
-import { XY } from "~/utils/tauri";
+import type { XY } from "~/utils/tauri";
 
 export default function AreaOccluder(props: {
   position: XY<number>;
