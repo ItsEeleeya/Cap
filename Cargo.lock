@@ -1805,6 +1805,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-http",
+ "tauri-plugin-macos-haptics",
  "tauri-plugin-notification",
  "tauri-plugin-oauth",
  "tauri-plugin-os",
@@ -6895,6 +6896,19 @@ dependencies = [
  "tokio",
  "url",
  "urlpattern",
+]
+
+[[package]]
+name = "tauri-plugin-macos-haptics"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f523e7bb1878d974b2b81eade37a1893b1bdd3eacc3af9fd38bd4434ec72a47"
+dependencies = [
+ "cocoa 0.26.0",
+ "objc",
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

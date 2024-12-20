@@ -3,6 +3,7 @@ import { createSignal, For, createMemo, createRoot, batch, onMount, type JSX, on
 import { createStore, SetStoreFunction } from "solid-js/store";
 import type { Crop, XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
+import * as Haptics from "tauri-plugin-macos-haptics-api"
 
 type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
 type HandleSide = Partial<{
@@ -74,7 +75,7 @@ export default function Cropper(props: ParentProps<Props>) {
     const initial = props.initialSize || { x: mappedSize.x / 2, y: mappedSize.y / 2 };
     let width = clamp(initial.x, minSize.x, mappedSize.x);
     let height = clamp(initial.y, minSize.y, mappedSize.y);
-    
+
     const ratio = props.aspectRatio;
     if (ratio) {
       if (width / height > ratio) width = height * ratio;
@@ -116,6 +117,11 @@ export default function Cropper(props: ParentProps<Props>) {
     };
   });
 
+  let accumulatedChange = { x: 0, y: 0 };
+  let hitEdge = { x: false, y: false };
+  let hapticsEnabled = false;
+  Haptics.isSupported().then((supported) => hapticsEnabled = supported);
+
   const handleMouseMove = (e: MouseEvent) => batch(() => {
     const dir = resizeDirection();
     if (!dir) return;
@@ -128,19 +134,26 @@ export default function Cropper(props: ParentProps<Props>) {
     if (dir.includes("n")) origin.y = 1;
     if (dir.includes("e")) {
       newWidth = clamp(newWidth + (e.movementX / containerSize().x) * mappedSize.x, minSize.x, mappedSize.x - posX);
+      if (newWidth >= mappedSize.x - posX) hitEdge.x = true;
+      accumulatedChange.x += e.movementX;
     }
     if (dir.includes("s")) {
       newHeight = clamp(newHeight + (e.movementY / containerSize().y) * mappedSize.y, minSize.y, mappedSize.y - posY);
+      accumulatedChange.y += e.movementY;
+      if (newHeight >= mappedSize.y - posY) hitEdge.y = true;
     }
     if (dir.includes("w")) {
       const deltaWidth = (e.movementX / containerSize().x) * mappedSize.x;
       const adjustedWidth = clamp(newWidth - deltaWidth, minSize.x, posX + newWidth);
       newWidth = adjustedWidth;
+      if (newWidth <= minSize.x) hitEdge.x = true;
     }
     if (dir.includes("n")) {
       const deltaHeight = (e.movementY / containerSize().y) * mappedSize.y;
       const adjustedHeight = clamp(newHeight - deltaHeight, minSize.y, posY + newHeight);
       newHeight = adjustedHeight;
+      if (newHeight <= minSize.y) hitEdge.y = true;
+      accumulatedChange.y += e.movementY;
     }
 
     if (props.aspectRatio) {
@@ -155,6 +168,22 @@ export default function Cropper(props: ParentProps<Props>) {
     newHeight = clamp(newHeight, minSize.y, maxHeight);
 
     resize(newWidth, newHeight, origin);
+
+    if (hapticsEnabled) {
+      const totalChange = Math.abs(accumulatedChange.x) + Math.abs(accumulatedChange.y);
+      let shouldTrigger = false;
+      if (totalChange >= 100) {
+        shouldTrigger = true;
+        accumulatedChange = { x: 0, y: 0 };
+      }
+
+      if (hitEdge.x || hitEdge.y) {
+        shouldTrigger = true;
+        hitEdge = { x: false, y: false };
+      }
+
+      if (shouldTrigger) Haptics.perform(Haptics.HapticFeedbackPattern.Generic, Haptics.PerformanceTime.Now);
+    }
   });
 
   function resize(newWidth: number, newHeight: number, origin: XY<number> = crop.position) {

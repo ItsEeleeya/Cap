@@ -31,6 +31,7 @@
     "oauth:allow-start",
     "updater:default",
     "notification:default",
+    "macos-haptics:default",
     {
       "identifier": "http:default",
       "allow": [{ "url": "https://cap.so" }]

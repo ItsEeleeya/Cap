@@ -1,8 +1,11 @@
+use std::cell::RefCell;
+
 use cocoa::{
     base::{id, nil},
     foundation::NSString,
 };
 use objc::{class, msg_send, sel, sel_impl};
+use objc2_app_kit::NSHapticFeedbackManager;
 
 pub mod delegates;
 
