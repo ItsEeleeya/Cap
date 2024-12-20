@@ -53,6 +53,7 @@ use std::{
     time::Duration,
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WindowEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 use tauri_plugin_shell::ShellExt;
@@ -1909,6 +1910,7 @@ pub async fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags({
@@ -1949,6 +1951,13 @@ pub async fn run() {
             hotkeys::init(&app);
             general_settings::init(&app);
             fake_window::init(&app);
+
+            // this doesn't work in dev on mac, just a fact of deeplinks
+            app.deep_link().on_open_url(|event| {
+                // TODO: handle deep link for auth
+                dbg!(event.id());
+                dbg!(event.urls());
+            });
 
             if let Ok(Some(auth)) = AuthStore::load(&app) {
                 sentry::configure_scope(|scope| {
