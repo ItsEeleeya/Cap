@@ -160,6 +160,9 @@ async showWindow(window: ShowCapWindow) : Promise<void> {
 },
 async writeClipboardString(text: string) : Promise<null> {
     return await TAURI_INVOKE("write_clipboard_string", { text });
+},
+async performHapticFeedback(pattern: HapticPattern, time: HapticPerformanceTime) : Promise<null> {
+    return await TAURI_INVOKE("perform_haptic_feedback", { pattern, time });
 }
 }
 
@@ -240,6 +243,8 @@ export type Display = { path: string }
 export type EditorStateChanged = { playhead_position: number }
 export type Flags = { recordMouse: boolean; split: boolean; pauseResume: boolean; zoom: boolean }
 export type GeneralSettingsStore = { uploadIndividualFiles?: boolean; openEditorAfterRecording?: boolean; hideDockIcon?: boolean; autoCreateShareableLink?: boolean; enableNotifications?: boolean; disableAutoOpenLinks?: boolean; hasCompletedStartup?: boolean; theme?: AppTheme }
+export type HapticPattern = "Alignment" | "LevelChange" | "Generic"
+export type HapticPerformanceTime = "Default" | "Now" | "DrawCompleted"
 export type Hotkey = { code: string; meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }
 export type HotkeyAction = "startRecording" | "stopRecording" | "restartRecording" | "takeScreenshot"
 export type HotkeysConfiguration = { show: boolean }

@@ -1845,6 +1845,7 @@ pub async fn run() {
             global_message_dialog,
             show_window,
             write_clipboard_string,
+            platform::perform_haptic_feedback
         ])
         .events(tauri_specta::collect_events![
             RecordingOptionsChanged,

@@ -1,9 +1,9 @@
 import { createEventListenerMap } from "@solid-primitives/event-listener";
-import { createSignal, For, createMemo, createRoot, batch, onMount, type JSX, onCleanup, ParentProps, Show } from "solid-js";
+import { createSignal, For, createMemo, createRoot, batch, onMount, onCleanup, type ParentProps, type JSX } from "solid-js";
 import { createStore, SetStoreFunction } from "solid-js/store";
-import type { Crop, XY } from "~/utils/tauri";
+import { commands, type Crop, type XY } from "~/utils/tauri";
 import AreaOccluder from "./AreaOccluder";
-import * as Haptics from "tauri-plugin-macos-haptics-api"
+import { type as ostype } from "@tauri-apps/plugin-os";
 
 type Direction = "n" | "e" | "s" | "w" | "nw" | "ne" | "se" | "sw";
 type HandleSide = Partial<{
@@ -119,8 +119,7 @@ export default function Cropper(props: ParentProps<Props>) {
 
   let accumulatedChange = { x: 0, y: 0 };
   let hitEdge = { x: false, y: false };
-  let hapticsEnabled = false;
-  Haptics.isSupported().then((supported) => hapticsEnabled = supported);
+  let hapticsEnabled = ostype() === "macos";
 
   const handleMouseMove = (e: MouseEvent) => batch(() => {
     const dir = resizeDirection();
@@ -182,7 +181,7 @@ export default function Cropper(props: ParentProps<Props>) {
         hitEdge = { x: false, y: false };
       }
 
-      if (shouldTrigger) Haptics.perform(Haptics.HapticFeedbackPattern.Generic, Haptics.PerformanceTime.Now);
+      if (shouldTrigger) commands.performHapticFeedback("Generic", "Now");
     }
   });
 
