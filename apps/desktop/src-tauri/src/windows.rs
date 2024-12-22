@@ -2,12 +2,13 @@
 
 use crate::{fake_window, general_settings::AppTheme};
 use cap_flags::FLAGS;
-use cap_media::sources::CaptureArea;
+use cap_media::{platform, sources::CaptureArea};
 use serde::Deserialize;
 use specta::Type;
 use std::{path::PathBuf, str::FromStr};
 use tauri::{
-    AppHandle, LogicalPosition, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry,
+    AppHandle, LogicalPosition, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewUrl,
+    WebviewWindow, WebviewWindowBuilder, Wry,
 };
 
 const DEFAULT_TRAFFIC_LIGHTS_INSET: LogicalPosition<f64> = LogicalPosition::new(12.0, 12.0);
@@ -242,35 +243,41 @@ impl ShowCapWindow {
                 window
             }
             Self::CaptureAreaSelection { capture_area } => {
-                // TODO(Ilya): Respect the selected screen
-                let target_monitor = app
-                    .primary_monitor()
-                    .expect("Failed to get primary monitor");
-
                 let mut window_builder = self
                     .window_builder(app, "/capture-area-selection")
                     .maximized(false)
-                    // .resizable(false)
                     .fullscreen(false)
                     .shadow(false)
                     // .always_on_top(true)
                     // .content_protected(true)
                     .skip_taskbar(true)
                     .closable(true)
-                    .decorations(false)
+                    .decorations(true)
                     .transparent(true);
 
-                if let Some(target) = target_monitor {
-                    let size = target.size();
-                    let scale_factor = target.scale_factor();
-                    let pos = target.position();
-                    window_builder = window_builder
-                        .inner_size(
-                            (size.width as f64) / scale_factor,
-                            (size.height as f64) / scale_factor,
-                        )
-                        .position(pos.x as f64, pos.y as f64);
+                let screen = &capture_area.screen;
+                let screen_bounds = platform::monitor_bounds(screen.id);
+                let target_monitor = app
+                    .monitor_from_point(screen_bounds.x, screen_bounds.y)
+                    .unwrap_or(Some(monitor));
+
+                #[cfg(debug_assertions)]
+                {
+                    println!("Target bounds: {:?}", screen_bounds);
+                    println!("found monitor: {:?}", &target_monitor);
+                    println!("All monitors: {:?}", &app.available_monitors());
                 }
+
+                let target = target_monitor.unwrap(); // TODO(Ilya) bad.
+                let size = target.size();
+                let scale_factor = target.scale_factor();
+                let pos = target.position();
+                window_builder = window_builder
+                    .inner_size(
+                        (size.width as f64) / scale_factor,
+                        (size.height as f64) / scale_factor,
+                    )
+                    .position(pos.x as f64, pos.y as f64);
 
                 let window = window_builder.build()?;
 
@@ -279,7 +286,6 @@ impl ShowCapWindow {
                     window.as_ref().window(),
                     objc2_app_kit::NSScreenSaverWindowLevel,
                 );
-
                 // #[cfg(target_os = "macos")]
                 // crate::platform::set_window_level(
                 //     window.as_ref().window(),

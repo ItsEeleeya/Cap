@@ -320,6 +320,9 @@ function TargetSelects(props: {
       console.log(`Monitors: ${JSON.stringify(monitors)}`);
     });
 
+    console.log(`Selected screen: ${JSON.stringify(selectedScreen())}`);
+    
+
     commands.showWindow({
       CaptureAreaSelection: {
         capture_area: {
