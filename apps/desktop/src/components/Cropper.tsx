@@ -171,7 +171,7 @@ export default function Cropper(props: ParentProps<Props>) {
     if (hapticsEnabled) {
       const totalChange = Math.abs(accumulatedChange.x) + Math.abs(accumulatedChange.y);
       let shouldTrigger = false;
-      if (totalChange >= 100) {
+      if (totalChange >= 150) {
         shouldTrigger = true;
         accumulatedChange = { x: 0, y: 0 };
       }

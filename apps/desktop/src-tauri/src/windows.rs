@@ -2,7 +2,10 @@
 
 use crate::{fake_window, general_settings::AppTheme};
 use cap_flags::FLAGS;
-use cap_media::{platform, sources::CaptureArea};
+use cap_media::{
+    platform,
+    sources::{CaptureArea, CaptureScreen},
+};
 use serde::Deserialize;
 use specta::Type;
 use std::{path::PathBuf, str::FromStr};
@@ -122,13 +125,24 @@ impl CapWindowId {
 pub enum ShowCapWindow {
     Setup,
     Main,
-    Settings { page: Option<String> },
-    Editor { project_id: String },
+    Settings {
+        page: Option<String>,
+    },
+    Editor {
+        project_id: String,
+    },
     PrevRecordings,
     WindowCaptureOccluder,
-    CaptureAreaSelection { capture_area: CaptureArea },
-    Camera { ws_port: u16 },
-    InProgressRecording { position: Option<(f64, f64)> },
+    CaptureAreaSelection {
+        screen: CaptureScreen,
+        initial_bounds: Option<cap_media::platform::Bounds>,
+    },
+    Camera {
+        ws_port: u16,
+    },
+    InProgressRecording {
+        position: Option<(f64, f64)>,
+    },
     Upgrade,
 }
 
@@ -242,7 +256,10 @@ impl ShowCapWindow {
 
                 window
             }
-            Self::CaptureAreaSelection { capture_area } => {
+            Self::CaptureAreaSelection {
+                screen,
+                initial_bounds,
+            } => {
                 let mut window_builder = self
                     .window_builder(app, "/capture-area-selection")
                     .maximized(false)
@@ -255,7 +272,6 @@ impl ShowCapWindow {
                     .decorations(true)
                     .transparent(true);
 
-                let screen = &capture_area.screen;
                 let screen_bounds = platform::monitor_bounds(screen.id);
                 let target_monitor = app
                     .monitor_from_point(screen_bounds.x, screen_bounds.y)

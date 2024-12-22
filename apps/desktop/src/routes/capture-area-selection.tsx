@@ -1,14 +1,55 @@
-import { createMemo, Show } from "solid-js";
+import { createEffect, createMemo, Show } from "solid-js";
 import Cropper, { createCropStore, cropFloor as cropToFloor } from "~/components/Cropper";
 import { EditorButton, Input, MenuItem, MenuItemList, PopperContent } from "./editor/ui";
 import { DropdownMenu as KDropdownMenu } from "@kobalte/core/dropdown-menu";
 import { Select as KSelect } from "@kobalte/core/select";
-import { AspectRatio } from "~/utils/tauri";
+import { AspectRatio, commands } from "~/utils/tauri";
 import { ASPECT_RATIOS } from "./editor/projectConfig";
+import { createOptionsQuery } from "~/utils/queries";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 export default function () {
+  const webview = getCurrentWebviewWindow();
   const [crop, setCrop] = createCropStore();
   const cropFloor = createMemo(() => cropToFloor(crop));
+
+  const { options, setOptions } = createOptionsQuery();
+
+  createEffect(() => {
+    // if (options.data?.captureTarget.variant !== "area") webview.close();
+  });
+
+  function handleConfirm() {
+    const target = options.data?.captureTarget;
+    if (!options.data || !target || target.variant !== "screen") return;
+
+    setOptions.mutate({
+      ...options.data,
+      captureTarget: {
+        variant: "area",
+        screen: target,
+        bounds: {
+          x: crop.position.x,
+          y: crop.position.y,
+          width: crop.size.x,
+          height: crop.size.y,
+        },
+      },
+    });
+
+    // commands.setRecordingOptions({
+    //   ...options.data,
+    //   captureTarget: {
+    //     ...target,
+    //     bounds: {
+    //       x: crop.position.x,
+    //       y: crop.position.y,
+    //       width: crop.size.x,
+    //       height: crop.size.y,
+    //     },
+    //   },
+    // });
+  }
 
   return <div class="w-screen h-screen overflow-hidden">
     <div class="fixed w-full z-50 bg-red-transparent-20 flex items-center justify-center">
@@ -26,6 +67,7 @@ export default function () {
           <button
             class="py-[0.25rem] px-[0.5rem] text-blue-300 dark:text-blue-300 gap-[0.25rem] hover:bg-blue-50 flex flex-row items-center rounded-lg"
             type="button"
+            onClick={handleConfirm}
           >
             <IconCapCircleCheck />
             <span class="font-[500] text-[0.875rem]">

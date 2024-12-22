@@ -404,6 +404,7 @@ async fn set_recording_options(
     state: MutableState<'_, App>,
     options: RecordingOptions,
 ) -> Result<(), String> {
+    println!("Recording options set!: {:?}", &options);
     state
         .write()
         .await

@@ -305,36 +305,25 @@ function TargetSelects(props: {
   const [isAreaSelectVisible, setIsAreaSelectVisible] = createSignal(props.options?.captureTarget.variant === "screen");
   const [isAreaSelected, setIsAreaSelected] = createSignal(false);
 
-  const isTargetScreenOrArea = () => props.options?.captureTarget.variant === "area" || props.options?.captureTarget.variant === "screen";
+  const isTargetScreenOrArea = () => 
+    props.options?.captureTarget.variant === "area" || props.options?.captureTarget.variant === "screen";
+  
   function handleAreaSelectButtonClick() {
-    console.log(`Screen: ${JSON.stringify(selectedScreen())}`);
-    if (!isTargetScreenOrArea() || !selectedScreen()) return;
+    const targetScreen = selectedScreen();
+    
+    if (!targetScreen) return;
     // IF area not selected. create window
 
     // commands.setRecordingOptions({
     //   ...props.options,
     //   captureTarget: { variant: "area", screen: selectedScreen()!, bounds: },
-    // });
-
-    availableMonitors().then(monitors => {
-      console.log(`Monitors: ${JSON.stringify(monitors)}`);
-    });
-
-    console.log(`Selected screen: ${JSON.stringify(selectedScreen())}`);
-    
+    // });    
 
     commands.showWindow({
       CaptureAreaSelection: {
-        capture_area: {
-          screen: selectedScreen()!!,
-          // TODO(Ilya): Store last selected area
-          bounds: {
-            x: 0,
-            y: 0,
-            width: 300,
-            height: 300,
-          }
-        }
+        // TODO(Ilya): Store last selected area
+        screen: targetScreen,
+        initial_bounds: null,
       }
     });
   }
