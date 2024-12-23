@@ -25,7 +25,7 @@ pub enum CapWindowId {
     Editor { project_id: String },
     RecordingsOverlay,
     WindowCaptureOccluder,
-    CaptureAreaSelection,
+    CaptureArea,
     Camera,
     InProgressRecording,
     Upgrade,
@@ -41,7 +41,7 @@ impl FromStr for CapWindowId {
             "settings" => Self::Settings,
             "camera" => Self::Camera,
             "window-capture-occluder" => Self::WindowCaptureOccluder,
-            "capture-area-select" => Self::CaptureAreaSelection,
+            "capture-area-select" => Self::CaptureArea,
             "in-progress-recording" => Self::InProgressRecording,
             "recordings-overlay" => Self::RecordingsOverlay,
             "upgrade" => Self::Upgrade,
@@ -61,7 +61,7 @@ impl std::fmt::Display for CapWindowId {
             Self::Settings => write!(f, "settings"),
             Self::Camera => write!(f, "camera"),
             Self::WindowCaptureOccluder => write!(f, "window-capture-occluder"),
-            Self::CaptureAreaSelection => write!(f, "capture-area-select"),
+            Self::CaptureArea => write!(f, "capture-area-select"),
             Self::InProgressRecording => write!(f, "in-progress-recording"),
             Self::RecordingsOverlay => write!(f, "recordings-overlay"),
             Self::Upgrade => write!(f, "upgrade"),
@@ -105,7 +105,7 @@ impl CapWindowId {
             Self::InProgressRecording => Some(Some(LogicalPosition::new(-100.0, -100.0))),
             Self::Camera
             | Self::WindowCaptureOccluder
-            | Self::CaptureAreaSelection
+            | Self::CaptureArea
             | Self::RecordingsOverlay => None,
             _ => Some(None),
         }
@@ -125,24 +125,13 @@ impl CapWindowId {
 pub enum ShowCapWindow {
     Setup,
     Main,
-    Settings {
-        page: Option<String>,
-    },
-    Editor {
-        project_id: String,
-    },
+    Settings { page: Option<String> },
+    Editor { project_id: String },
     PrevRecordings,
     WindowCaptureOccluder,
-    CaptureAreaSelection {
-        screen: CaptureScreen,
-        initial_bounds: Option<cap_media::platform::Bounds>,
-    },
-    Camera {
-        ws_port: u16,
-    },
-    InProgressRecording {
-        position: Option<(f64, f64)>,
-    },
+    CaptureArea { screen: CaptureScreen },
+    Camera { ws_port: u16 },
+    InProgressRecording { position: Option<(f64, f64)> },
     Upgrade,
 }
 
@@ -256,12 +245,9 @@ impl ShowCapWindow {
 
                 window
             }
-            Self::CaptureAreaSelection {
-                screen,
-                initial_bounds,
-            } => {
+            Self::CaptureArea { screen } => {
                 let mut window_builder = self
-                    .window_builder(app, "/capture-area-selection")
+                    .window_builder(app, "/capture-area")
                     .maximized(false)
                     .fullscreen(false)
                     .shadow(false)
@@ -275,7 +261,9 @@ impl ShowCapWindow {
                 let screen_bounds = platform::monitor_bounds(screen.id);
                 let target_monitor = app
                     .monitor_from_point(screen_bounds.x, screen_bounds.y)
-                    .unwrap_or(Some(monitor));
+                    .ok()
+                    .flatten()
+                    .unwrap_or(monitor);
 
                 #[cfg(debug_assertions)]
                 {
@@ -284,10 +272,9 @@ impl ShowCapWindow {
                     println!("All monitors: {:?}", &app.available_monitors());
                 }
 
-                let target = target_monitor.unwrap(); // TODO(Ilya) bad.
-                let size = target.size();
-                let scale_factor = target.scale_factor();
-                let pos = target.position();
+                let size = target_monitor.size();
+                let scale_factor = target_monitor.scale_factor();
+                let pos = target_monitor.position();
                 window_builder = window_builder
                     .inner_size(
                         (size.width as f64) / scale_factor,
@@ -302,11 +289,6 @@ impl ShowCapWindow {
                     window.as_ref().window(),
                     objc2_app_kit::NSScreenSaverWindowLevel,
                 );
-                // #[cfg(target_os = "macos")]
-                // crate::platform::set_window_level(
-                //     window.as_ref().window(),
-                //     objc2_app_kit::NSScreenSaverWindowLevel,
-                // );
 
                 window
             }
@@ -449,7 +431,7 @@ impl ShowCapWindow {
             },
             ShowCapWindow::PrevRecordings => CapWindowId::RecordingsOverlay,
             ShowCapWindow::WindowCaptureOccluder => CapWindowId::WindowCaptureOccluder,
-            ShowCapWindow::CaptureAreaSelection { .. } => CapWindowId::CaptureAreaSelection,
+            ShowCapWindow::CaptureArea { .. } => CapWindowId::CaptureArea,
             ShowCapWindow::Camera { .. } => CapWindowId::Camera,
             ShowCapWindow::InProgressRecording { .. } => CapWindowId::InProgressRecording,
             ShowCapWindow::Upgrade => CapWindowId::Upgrade,
