@@ -1,9 +1,8 @@
-import { createEffect, createMemo, Show } from "solid-js";
+import { createEffect, createMemo, onMount, Show } from "solid-js";
 import Cropper, { createCropStore, cropFloor as cropToFloor } from "~/components/Cropper";
 import { EditorButton, Input, MenuItem, MenuItemList, PopperContent } from "./editor/ui";
-import { DropdownMenu as KDropdownMenu } from "@kobalte/core/dropdown-menu";
 import { Select as KSelect } from "@kobalte/core/select";
-import { AspectRatio, commands } from "~/utils/tauri";
+import type { AspectRatio } from "~/utils/tauri";
 import { ASPECT_RATIOS } from "./editor/projectConfig";
 import { createOptionsQuery } from "~/utils/queries";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -19,9 +18,16 @@ export default function () {
     // if (options.data?.captureTarget.variant !== "area") webview.close();
   });
 
+  onMount(() => webview.emitTo("main", "cap-window://capture-area/state/pending", true));
+  webview.onCloseRequested((e) => {
+    webview.emitTo("main", "cap-window://capture-area/state/pending", false);
+    webview.close();
+  });
+
   function handleConfirm() {
     const target = options.data?.captureTarget;
     if (!options.data || !target || target.variant !== "screen") return;
+    webview.emitTo("main", "cap-window://capture-area/state/pending", false);
 
     setOptions.mutate({
       ...options.data,
@@ -36,19 +42,6 @@ export default function () {
         },
       },
     });
-
-    // commands.setRecordingOptions({
-    //   ...options.data,
-    //   captureTarget: {
-    //     ...target,
-    //     bounds: {
-    //       x: crop.position.x,
-    //       y: crop.position.y,
-    //       width: crop.size.x,
-    //       height: crop.size.y,
-    //     },
-    //   },
-    // });
   }
 
   return <div class="w-screen h-screen overflow-hidden">

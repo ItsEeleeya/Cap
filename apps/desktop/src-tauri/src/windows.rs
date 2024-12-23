@@ -290,6 +290,17 @@ impl ShowCapWindow {
                     objc2_app_kit::NSScreenSaverWindowLevel,
                 );
 
+                // Hide the main window if the target monitor is the same
+                if let Some(main_window) = CapWindowId::Main.get(&app) {
+                    if let (Ok(outer_pos), Ok(outer_size)) =
+                        (main_window.outer_position(), main_window.outer_size())
+                    {
+                        if target_monitor.intersects(outer_pos, outer_size) {
+                            let _ = main_window.minimize();
+                        }
+                    };
+                }
+
                 window
             }
             Self::InProgressRecording {
@@ -515,4 +526,33 @@ fn position_traffic_lights_impl(
             );
         })
         .ok();
+}
+
+// Credits: tauri-plugin-window-state
+trait MonitorExt {
+    fn intersects(&self, position: PhysicalPosition<i32>, size: PhysicalSize<u32>) -> bool;
+}
+
+impl MonitorExt for Monitor {
+    fn intersects(&self, position: PhysicalPosition<i32>, size: PhysicalSize<u32>) -> bool {
+        let PhysicalPosition { x, y } = *self.position();
+        let PhysicalSize { width, height } = *self.size();
+
+        let left = x;
+        let right = x + width as i32;
+        let top = y;
+        let bottom = y + height as i32;
+
+        [
+            (position.x, position.y),
+            (position.x + size.width as i32, position.y),
+            (position.x, position.y + size.height as i32),
+            (
+                position.x + size.width as i32,
+                position.y + size.height as i32,
+            ),
+        ]
+        .into_iter()
+        .any(|(x, y)| x >= left && x < right && y >= top && y < bottom)
+    }
 }
