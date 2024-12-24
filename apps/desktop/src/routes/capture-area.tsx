@@ -17,18 +17,11 @@ export default function () {
   const setPendingState = (pending: boolean) =>
     webview.emitTo("main", "cap-window://capture-area/state/pending", pending);
 
-  createEffect(() => {
-    const target = options.data?.captureTarget;
-    if (!target) return;
-    // if (target.variant === "window") webview.close();
-  });
-
-  let unlistenClose: () => void | undefined;
   onMount(async () => {
     webview.emitTo("main", "cap-window://capture-area/state/pending", true);
-    unlistenClose = await webview.onCloseRequested(() => setPendingState(false));
+    const unlisten = await webview.onCloseRequested(() => setPendingState(false));
+    onCleanup(unlisten);
   });
-  onCleanup(() => unlistenClose?.());
 
   function handleConfirm() {
     const target = options.data?.captureTarget;

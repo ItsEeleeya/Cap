@@ -113,7 +113,7 @@ impl App {
 
         if matches!(
             current_recording.options.capture_target,
-            ScreenCaptureTarget::Window(_)
+            ScreenCaptureTarget::Window(_) | ScreenCaptureTarget::Area(_)
         ) {
             let _ = ShowCapWindow::WindowCaptureOccluder.show(&self.handle);
         } else {

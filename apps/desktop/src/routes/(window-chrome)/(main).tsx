@@ -305,30 +305,30 @@ function TargetSelects(props: {
     screens?.data?.[0] ?? null
   );
 
-  const isTargettingScreenOrArea = createMemo(() =>
+  const isTargetScreenOrArea = createMemo(() =>
     props.options?.captureTarget.variant === "screen" || props.options?.captureTarget.variant === "area"
   );
-  const isTargettingArea = createMemo(() =>
+  const isTargetCaptureArea = createMemo(() =>
     props.options?.captureTarget.variant === "area"
   );
-
-  const closeAreaSelection = async () => {
-    (await WebviewWindow.getByLabel("capture-area"))?.close();
-  };
 
   const [areaSelection, setAreaSelection] = createStore({
     pending: false,
     screen: selectedScreen(),
   });
 
-  let unlistenCaptureAreaWindow: () => void | undefined;
+  async function closeAreaSelection() {
+    setAreaSelection({ pending: false, screen: null });
+    (await WebviewWindow.getByLabel("capture-area"))?.close();
+  };
+
   onMount(async () => {
-    unlistenCaptureAreaWindow = await getCurrentWebviewWindow().listen<boolean>(
+    const unlistenCaptureAreaWindow = await getCurrentWebviewWindow().listen<boolean>(
       "cap-window://capture-area/state/pending",
       (event) => setAreaSelection("pending", event.payload)
     );
+    onCleanup(unlistenCaptureAreaWindow);
   });
-  onCleanup(() => unlistenCaptureAreaWindow?.());
 
   let shouldAnimateAreaSelect = false;
   createEffect(async () => {
@@ -352,7 +352,7 @@ function TargetSelects(props: {
     if (!targetScreen) return;
 
     closeAreaSelection();
-    if (isTargettingArea() && props.options) {
+    if (isTargetCaptureArea() && props.options) {
       commands.setRecordingOptions({
         ...props.options,
         captureTarget: { ...targetScreen, variant: "screen" },
@@ -360,7 +360,7 @@ function TargetSelects(props: {
       return;
     }
 
-    setAreaSelection("screen", targetScreen);
+    setAreaSelection({ pending: false, screen: targetScreen });
     commands.showWindow({
       CaptureArea: { screen: targetScreen }
     });
@@ -391,16 +391,16 @@ function TargetSelects(props: {
               }).finished.then(done)
             }
           >
-            {isTargettingScreenOrArea() && (
+            {isTargetScreenOrArea() && (
               <button
                 type="button"
-                disabled={!isTargettingScreenOrArea()}
+                disabled={!isTargetScreenOrArea()}
                 onClick={handleAreaSelectButtonClick}
                 class={cx(
                   "flex items-center justify-center flex-shrink-0 w-full h-full rounded-[0.5rem] transition-all duration-200",
                   "hover:bg-gray-200 disabled:bg-gray-100 disabled:text-gray-400",
                   "focus-visible:outline font-[200] text-[0.875rem]",
-                  isTargettingArea() ? "bg-gray-100 text-blue-400 border border-blue-200" : "bg-gray-100 text-gray-400",
+                  isTargetCaptureArea() ? "bg-gray-100 text-blue-400 border border-blue-200" : "bg-gray-100 text-gray-400",
                 )}
               >
                 <IconCapCrop class={`w-[1rem] h-[1rem] ${areaSelection.pending ? "animate-gentle-bounce duration-1000 text-gray-500" : ""}`} />
@@ -410,14 +410,14 @@ function TargetSelects(props: {
         </Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Content class="z-50 px-2 py-1 text-xs text-gray-50 bg-gray-500 rounded shadow-lg animate-in fade-in duration-100">
-            {isTargettingArea() ? "Remove selection" : areaSelection.pending ? "Selecting area..." : "Select area"}
+            {isTargetCaptureArea() ? "Remove selection" : areaSelection.pending ? "Selecting area..." : "Select area"}
             <Tooltip.Arrow class="fill-gray-500" />
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>
 
       <div
-        class={`flex flex-row items-center rounded-[0.5rem] relative border h-8 transition-all duration-500 ${isTargettingScreenOrArea() ? "ml-[2.4rem]" : ""}`}
+        class={`flex flex-row items-center rounded-[0.5rem] relative border h-8 transition-all duration-500 ${isTargetScreenOrArea() ? "ml-[2.4rem]" : ""}`}
         style={{
           "transition-timing-function": "cubic-bezier(0.785, 0.135, 0.15, 0.86)"
         }}
@@ -451,7 +451,7 @@ function TargetSelects(props: {
           }
           placeholder="Screen"
           optionsEmptyText="No screens found"
-          selected={isTargettingScreenOrArea()}
+          selected={isTargetScreenOrArea()}
         />
         <TargetSelect<CaptureWindow>
           options={windows.data ?? []}
