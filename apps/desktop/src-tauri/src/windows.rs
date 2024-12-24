@@ -41,7 +41,7 @@ impl FromStr for CapWindowId {
             "settings" => Self::Settings,
             "camera" => Self::Camera,
             "window-capture-occluder" => Self::WindowCaptureOccluder,
-            "capture-area-select" => Self::CaptureArea,
+            "capture-area" => Self::CaptureArea,
             "in-progress-recording" => Self::InProgressRecording,
             "recordings-overlay" => Self::RecordingsOverlay,
             "upgrade" => Self::Upgrade,
@@ -61,7 +61,7 @@ impl std::fmt::Display for CapWindowId {
             Self::Settings => write!(f, "settings"),
             Self::Camera => write!(f, "camera"),
             Self::WindowCaptureOccluder => write!(f, "window-capture-occluder"),
-            Self::CaptureArea => write!(f, "capture-area-select"),
+            Self::CaptureArea => write!(f, "capture-area"),
             Self::InProgressRecording => write!(f, "in-progress-recording"),
             Self::RecordingsOverlay => write!(f, "recordings-overlay"),
             Self::Upgrade => write!(f, "upgrade"),
@@ -80,6 +80,7 @@ impl CapWindowId {
             Self::Setup => "Cap Setup".to_string(),
             Self::Settings => "Cap Settings".to_string(),
             Self::WindowCaptureOccluder => "Cap Window Capture Occluder".to_string(),
+            Self::CaptureArea => "Capture Area Occluder".to_string(),
             Self::InProgressRecording => "Cap In Progress Recording".to_string(),
             Self::Editor { .. } => "Cap Editor".to_string(),
             _ => "Cap".to_string(),
@@ -284,11 +285,11 @@ impl ShowCapWindow {
 
                 let window = window_builder.build()?;
 
-                #[cfg(target_os = "macos")]
-                crate::platform::set_window_level(
-                    window.as_ref().window(),
-                    objc2_app_kit::NSScreenSaverWindowLevel,
-                );
+                // #[cfg(target_os = "macos")]
+                // crate::platform::set_window_level(
+                //     window.as_ref().window(),
+                //     objc2_app_kit::NSScreenSaverWindowLevel,
+                // );
 
                 // Hide the main window if the target monitor is the same
                 if let Some(main_window) = CapWindowId::Main.get(&app) {
