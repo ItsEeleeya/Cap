@@ -141,10 +141,13 @@ async function prepareFfmpegSidecar() {
 
   console.log(`Copying ffmpeg binary to '${ffmpegSidecarName}'...`);
 
-  await fs.copyFile(
+  await fs.rename(
     ffmpegBinaryPath,
     path.join(binariesDir, ffmpegSidecarName)
   );
+
+  console.log("Removing unzipped ffmpeg folder");
+  await fs.rm(ffmpegUnzippedPath, { recursive: true, force: true });
 }
 
 /**
@@ -268,8 +271,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("--- Preparation Failed");
+  console.error("\n--- Preparation Failed");
   console.error(err);
   console.error("---");
-  process.exit(1);
 });

@@ -1,14 +1,31 @@
 import { createEffect, createMemo, onCleanup, onMount, Show } from "solid-js";
-import Cropper, { createCropStore, cropFloor as cropToFloor } from "~/components/Cropper";
+import Cropper, { createCropStore, cropFloor as cropToFloor } from "~/components/CropperOLD";
 import { EditorButton, Input, MenuItem, MenuItemList, PopperContent } from "./editor/ui";
 import { Select as KSelect } from "@kobalte/core/select";
 import type { AspectRatio } from "~/utils/tauri";
 import { ASPECT_RATIOS } from "./editor/projectConfig";
-import { createOptionsQuery } from "~/utils/queries";
+import { createCurrentRecordingQuery, createOptionsQuery } from "~/utils/queries";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { createStore } from "solid-js/store";
+import { CanvasSelection } from "~/components/CropperTool";
 
 export default function () {
+  const { options, setOptions } = createOptionsQuery();
+  const currentRecording = createCurrentRecordingQuery();
+  return <div class="w-[600px] h-[400px]">
+      <CanvasSelection
+        // aspectRatio={1/1}
+        width={window.innerWidth}
+        height={window.innerHeight}
+        class="border border-gray-300"
+      />
+  </div>
+
+  // return <CaptureAreaCropper options={{ options, setOptions }} />
+}
+
+function CaptureAreaCropper(props: {
+  options: ReturnType<typeof createOptionsQuery>;
+}) {
   const webview = getCurrentWebviewWindow();
   const [crop, setCrop] = createCropStore();
   const cropFloor = createMemo(() => cropToFloor(crop));
