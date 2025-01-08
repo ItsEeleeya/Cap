@@ -1,52 +1,104 @@
-import type { XY } from "~/utils/tauri";
+import type { Bounds } from "~/utils/tauri";
+import { onMount, onCleanup, createEffect, type ParentProps } from "solid-js";
+import { createHiDPICanvasContext } from "~/utils/canvas";
 
-export default function AreaOccluder(props: {
-  position: XY<number>;
-  size: XY<number>;
-  containerSize: XY<number>;
-}) {
+function draw(
+  ctx: CanvasRenderingContext2D,
+  bounds: Bounds,
+  radius: number,
+  guideLines: boolean,
+) {
+  ctx.save();
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  // Background overlay
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  // Shadow
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+  ctx.shadowBlur = 200;
+  ctx.shadowOffsetY = 15;
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, radius);
+  ctx.fill();
+  ctx.restore();
+
+  // Clear bounds
+  ctx.beginPath();
+  ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, radius);
+  ctx.clip();
+  ctx.clearRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+  // Guide lines (Rule of thirds)
+  if (guideLines) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 1;
+
+    for (let i = 1; i < 3; i++) {
+      const x = bounds.x + (bounds.width * i) / 3;
+      const y = bounds.y + (bounds.height * i) / 3;
+
+      ctx.beginPath();
+      ctx.moveTo(x, bounds.y);
+      ctx.lineTo(x, bounds.y + bounds.height);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(bounds.x, y);
+      ctx.lineTo(bounds.x + bounds.width, y);
+      ctx.stroke();
+    }
+
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+export default function AreaOccluder(
+  props: ParentProps<{
+    bounds: Bounds;
+    guideLines?: boolean;
+    borderRadius?: number;
+  }>,
+) {
+  let canvasRef: HTMLCanvasElement | undefined;
+
+  onMount(() => {
+    if (!canvasRef) {
+      console.error("Canvas ref was not setup");
+      return;
+    }
+
+    const hidpiCanvas = createHiDPICanvasContext(canvasRef, (ctx) =>
+      draw(ctx, props.bounds, props.borderRadius || 0, props.guideLines || false),
+    );
+    const ctx = hidpiCanvas?.ctx;
+    if (!ctx) return;
+
+    let lastAnimationFrameId: number | undefined;
+    createEffect(() => {
+      if (lastAnimationFrameId) cancelAnimationFrame(lastAnimationFrameId);
+
+      const { x, y, width, height } = props.bounds;
+      lastAnimationFrameId = requestAnimationFrame(() =>
+        draw(ctx, { x, y, width, height }, props.borderRadius || 0, props.guideLines || false),
+      );
+    });
+
+    onCleanup(() => {
+      if (lastAnimationFrameId) cancelAnimationFrame(lastAnimationFrameId);
+      hidpiCanvas.cleanup();
+    });
+  });
+
   return (
-    <>
-      {/* Top Overlay */}
-      <div
-        class="bg-[#0000008F] absolute"
-        style={{
-          left: 0,
-          right: 0,
-          top: 0,
-          height: `${props.position.y}px`,
-        }}
-      />
-      {/* Left Overlay */}
-      <div
-        class="bg-[#0000008F] absolute"
-        style={{
-          top: `${props.position.y}px`,
-          left: 0,
-          height: `${props.size.y}px`,
-          width: `${props.position.x}px`,
-        }}
-      />
-      {/* Right Overlay */}
-      <div
-        class="bg-[#0000008F] absolute"
-        style={{
-          top: `${props.position.y}px`,
-          left: `${props.position.x + props.size.x}px`,
-          height: `${props.size.y}px`,
-          width: `${props.containerSize.x - (props.position.x + props.size.x)}px`,
-        }}
-      />
-      {/* Bottom Overlay */}
-      <div
-        class="bg-[#0000008F] absolute"
-        style={{
-          left: 0,
-          right: 0,
-          top: `${props.position.y + props.size.y}px`,
-          height: `${props.containerSize.y - (props.position.y + props.size.y)}px`,
-        }}
-      />
-    </>
+    <div class="relative *:h-full *:w-full">
+      <canvas ref={canvasRef} class="pointer-events-none absolute"/>
+      <div>{props.children}</div>
+    </div>
   );
 }
