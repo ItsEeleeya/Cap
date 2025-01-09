@@ -3,10 +3,10 @@
  * redrawing the canvas when its size changes.
  *
  * @param canvas - The HTML canvas element to create the context for.
- * @param drawOnResizeCallback - A callback function that is called whenever the canvas is resized. 
+ * @param drawOnResizeCallback - A callback function that is called whenever the canvas is resized.
  *                               It receives the 2D rendering context as an argument.
- * @returns An object containing the 2D rendering context and a cleanup function to disconnect the resize observer, 
- *          or null if the context or parent element could not be obtained.
+ * @returns An object containing the 2D rendering context and a cleanup function to disconnect the resize observer,
+ *          or null if the context could not be obtained.
  */
 export function createHiDPICanvasContext(
   canvas: HTMLCanvasElement,
@@ -19,19 +19,20 @@ export function createHiDPICanvasContext(
   if (!ctx) return null;
   polyfillCanvasContextRoundRect();
 
-  const parent = canvas.parentElement;
-  if (!parent) return null;
-  const resize = () => {
+  const scale = () => {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
-    drawOnResizeCallback(ctx);
   };
-  resize();
 
-  const observer = new ResizeObserver(() => requestAnimationFrame(resize));
+  const observer = new ResizeObserver(() =>
+    requestAnimationFrame(() => {
+      scale();
+      drawOnResizeCallback(ctx);
+    })
+  );
   observer.observe(canvas);
 
   return {
@@ -42,7 +43,7 @@ export function createHiDPICanvasContext(
 
 // TODO: May not be needed depending on the minimum macOS version.
 // https://stackoverflow.com/questions/51232811/canvas-clearrect-with-rounded-corners
-export function polyfillCanvasContextRoundRect() {
+function polyfillCanvasContextRoundRect() {
   if ("roundRect" in CanvasRenderingContext2D) return;
   CanvasRenderingContext2D.prototype.roundRect = function (
     x: number,

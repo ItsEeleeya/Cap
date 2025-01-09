@@ -207,7 +207,12 @@ export default function Cropper(props: ParentProps<Props>) {
       <div class="-z-10">
         {props.children}
       </div>
-      <AreaOccluder position={scaledCrop().position} size={scaledCrop().size} containerSize={containerSize()} />
+      <AreaOccluder bounds={{
+        x: scaledCrop().position.x,
+        y: scaledCrop().position.y,
+        width: scaledCrop().size.x,
+        height: scaledCrop().size.y,
+      }} />
       <div
         class="bg-transparent absolute cursor-grab"
         ref={(el) => (cropTargetRef = el)}
