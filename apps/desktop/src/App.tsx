@@ -9,7 +9,6 @@ import {
 } from "solid-js";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { message } from "@tauri-apps/plugin-dialog";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 import "@cap/ui-solid/main.css";
 import "unfonts.css";
@@ -72,7 +71,7 @@ function Inner() {
               <div class="flex flex-row gap-x-4">
                 <Button
                   onClick={() => {
-                    clipboard.copyText(`${e.toString()}\n\n${e.stack}`);
+                    commands.writeClipboardString(`${e.toString()}\n\n${e.stack}`);
                   }}
                 >
                   Copy Error to Clipboard
