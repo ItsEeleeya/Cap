@@ -72,7 +72,7 @@ function Inner() {
               <div class="flex flex-row gap-x-4">
                 <Button
                   onClick={() => {
-                    writeText(`${e.toString()}\n\n${e.stack}`);
+                    clipboard.copyText(`${e.toString()}\n\n${e.stack}`);
                   }}
                 >
                   Copy Error to Clipboard

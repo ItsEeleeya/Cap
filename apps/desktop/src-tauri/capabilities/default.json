@@ -40,7 +40,6 @@
         { "url": "https://cap.so" },
         { "url": "http://localhost:3000/*" }
       ]
-    },
-    "clipboard-manager:allow-write-text"
+    }
   ]
 }
