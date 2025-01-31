@@ -339,9 +339,9 @@ function TargetSelects(props: {
     screen: selectedScreen(),
   });
 
-  async function closeAreaSelection() {
+  function closeAreaSelection() {
     setAreaSelection({ pending: false, screen: null });
-    (await WebviewWindow.getByLabel("capture-area"))?.close();
+    WebviewWindow.getByLabel("capture-area").then((w) => w?.close());
   }
 
   onMount(async () => {

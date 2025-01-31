@@ -370,6 +370,7 @@ function Dialogs() {
                               x: display.width,
                               y: display.height,
                             }}
+                            snapToRatio={true}
                             showGuideLines={cropOptions.showGrid}
                           >
                             <img

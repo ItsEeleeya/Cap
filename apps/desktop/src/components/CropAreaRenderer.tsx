@@ -27,11 +27,11 @@ function drawHandles({
   const { x, y, width, height } = bounds;
   const minSizeForSideHandles = 100;
 
-  ctx.strokeStyle = selected
-    ? "rgba(255, 255, 255, 1)"
-    : highlighted
-      ? "rgba(60, 150, 280, 1)"
-      : "rgba(255, 255, 255, 0.8)";
+  ctx.strokeStyle = highlighted
+    ? "rgba(60, 150, 280, 1)"
+    : selected
+      ? "rgba(255, 255, 255, 1)"
+      : "rgba(255, 255, 255, 0.7)";
 
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -186,14 +186,13 @@ function draw(
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+  ctx.fillStyle = prefersDark ? "rgba(0, 0, 0, 0.6)" : "rgba(0, 0, 0, 0.5)";
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // Shadow
   ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-  ctx.shadowBlur = 200;
-  ctx.shadowOffsetY = 25;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+  ctx.shadowBlur = 50;
   ctx.beginPath();
   ctx.roundRect(bounds.x, bounds.y, bounds.width, bounds.height, radius);
   ctx.fill();

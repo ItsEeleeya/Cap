@@ -3,7 +3,7 @@ import { createOptionsQuery } from "~/utils/queries";
 import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import Cropper from "~/components/Cropper";
 import { createStore } from "solid-js/store";
-import { type Crop } from "~/utils/tauri";
+import type { Crop } from "~/utils/tauri";
 import { makePersisted } from "@solid-primitives/storage";
 import { Tooltip } from "@kobalte/core";
 import { createEventListenerMap } from "@solid-primitives/event-listener";
@@ -20,28 +20,25 @@ export default function CaptureArea() {
   const setPendingState = (pending: boolean) =>
     webview.emitTo("main", "cap-window://capture-area/state/pending", pending);
 
-  let unlisten: () => void | undefined;
   onMount(async () => {
     setPendingState(true);
-    unlisten = await webview.onCloseRequested(() => setPendingState(false));
+    const unlisten = await webview.onCloseRequested(() => setPendingState(false));
+    onCleanup(unlisten);
   });
-  onCleanup(() => unlisten?.());
 
   const [windowSize, setWindowSize] = createSignal({
     x: window.innerWidth,
     y: window.innerHeight,
   });
 
-  onMount(() => {
-    createEventListenerMap(window, {
-      resize: () =>
-        setWindowSize({ x: window.innerWidth, y: window.innerHeight }),
-      keydown: (e) => {
-        if (e.key === "Escape") close();
-        else if (e.key === "Enter") handleConfirm();
-      },
-    });
-  });
+  onMount(() => createEventListenerMap(window, {
+    resize: () =>
+      setWindowSize({ x: window.innerWidth, y: window.innerHeight }),
+    keydown: (e) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "Enter") handleConfirm();
+    },
+  }));
 
   const [crop, setCrop] = createStore<Crop>({
     size: { x: 0, y: 0 },
@@ -73,9 +70,9 @@ export default function CaptureArea() {
   const [visible, setVisible] = createSignal(true);
   function close() {
     setVisible(false);
+    setPendingState(false);
     setTimeout(async () => {
-      (await WebviewWindow.getByLabel("main"))?.unminimize();
-      setPendingState(false);
+      WebviewWindow.getByLabel("main").then((w) => w?.unminimize());
       webview.close();
     }, 250);
   }
@@ -90,17 +87,19 @@ export default function CaptureArea() {
         >
           <Show when={visible()}>
             <div class="transition-all ease-out duration-300 absolute w-auto h-10 bg-gray-50 rounded-[12px] drop-shadow-2xl overflow-visible border border-gray-50 dark:border-gray-300 outline outline-1 outline-[#dedede] dark:outline-[#000] flex justify-around p-1 top-11">
-              <button
-                class="py-[0.25rem] px-2 text-gray-400 gap-[0.25rem] flex flex-row items-center rounded-[8px] ml-0 right-auto"
-                type="button"
-                onClick={close}
-              >
-                <IconCapCircleX class="size-5" />
-              </button>
+              <div class="border-r-2 border-dotted border-gray-200 mr-2 flex items-center justify-center">
+                <button
+                  class="py-[0.25rem] px-2 text-gray-400 gap-[0.25rem] flex flex-row items-center rounded-[8px] ml-0 right-auto"
+                  type="button"
+                  onClick={close}
+                >
+                  <IconCapCircleX class="size-5" />
+                </button>
+              </div>
               <Tooltip.Root openDelay={500}>
                 <Tooltip.Trigger tabIndex={-1}>
                   <button
-                    class={`py-[0.25rem] px-2 gap-[0.25rem] mr-2 hover:bg-gray-200 flex flex-row items-center rounded-[8px] transition-colors duration-200 ${state.showGrid ? "bg-gray-200 text-blue-300" : "text-gray-500 opacity-50"}`}
+                    class={`py-[0.25rem] px-1 gap-[0.25rem] mr-1 hover:bg-gray-200 flex flex-row items-center rounded-[8px] transition-colors duration-200 ${state.showGrid ? "bg-gray-200 text-blue-300" : "text-gray-500 opacity-50"}`}
                     type="button"
                     onClick={() => setState("showGrid", (v) => !v)}
                   >
@@ -140,6 +139,7 @@ export default function CaptureArea() {
             value={crop}
             onCropChange={setCrop}
             showGuideLines={state.showGrid}
+            snapToRatio={true}
             mappedSize={{ x: windowSize().x, y: windowSize().y }}
           />
         </Show>

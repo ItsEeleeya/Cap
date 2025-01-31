@@ -89,6 +89,7 @@ export default function Cropper(
     initialSize?: XY<number>;
     aspectRatio?: number;
     showGuideLines?: boolean;
+    snapToRatio?: boolean;
   }>,
 ) {
   const crop = props.value;
@@ -129,8 +130,8 @@ export default function Cropper(
 
     const updateContainerSize = () => {
       setContainerSize({
-        x: containerRef!.clientWidth,
-        y: containerRef!.clientHeight,
+        x: containerRef.clientWidth,
+        y: containerRef.clientHeight,
       });
     };
 
@@ -145,8 +146,8 @@ export default function Cropper(
       y: mapped.y / 2,
     };
 
-    let width = clamp(initial.x, minSize().x, mapped.x);
-    let height = clamp(initial.y, minSize().y, mapped.y);
+    const width = clamp(initial.x, minSize().x, mapped.x);
+    const height = clamp(initial.y, minSize().y, mapped.y);
 
     const box = Box.from(
       { x: (mapped.x - width) / 2, y: (mapped.y - height) / 2 },
@@ -176,12 +177,9 @@ export default function Cropper(
     ),
   );
 
-  const [snapToRatioEnabled, setSnapToRatioEnabled] = makePersisted(
-    createSignal(true),
-    { name: "cropSnapsToRatio" }
-  );
   const [snappedRatio, setSnappedRatio] = createSignal<Ratio | null>(null);
   const [dragging, setDragging] = createSignal(false);
+  const [selected, setSelected] = createSignal(false);
   const [gestureState, setGestureState] = createStore<{
     isTrackpadGesture: boolean;
     lastTouchCenter: XY<number> | null;
@@ -387,7 +385,7 @@ export default function Cropper(
   function findClosestRatio(
     width: number,
     height: number,
-    threshold = 0.01,
+    threshold = 0.008,
   ): Ratio | null {
     if (props.aspectRatio) return null;
     const currentRatio = width / height;
@@ -413,10 +411,18 @@ export default function Cropper(
     const scaleFactors = containerToMappedSizeScale();
     const mapped = mappedSize();
 
+    setSelected(true);
+
     createRoot((dispose) => {
       createEventListenerMap(window, {
-        mouseup: dispose,
-        touchend: dispose,
+        mouseup: () => {
+          setSelected(false);
+          dispose();
+        },
+        touchend: () => {
+          setSelected(false);
+          dispose();
+        },
         touchmove: (e) =>
           requestAnimationFrame(() => {
             if (e.touches.length !== 1) return;
@@ -424,7 +430,7 @@ export default function Cropper(
           }),
         mousemove: (e) =>
           requestAnimationFrame(() =>
-            handleResizeMove(e.clientX, e.clientY, e.altKey),
+            handleResizeMove(e.clientX, e.clientY, e.altKey, e.shiftKey),
           ),
       });
     });
@@ -438,6 +444,7 @@ export default function Cropper(
       moveX: number,
       moveY: number,
       centerOrigin = false,
+      forceDisableSnapping = false,
     ) {
       const dx = (moveX - lastValidPos.x) / scaleFactors.x;
       const dy = (moveY - lastValidPos.y) / scaleFactors.y;
@@ -468,7 +475,7 @@ export default function Cropper(
           : currentBox.size.y;
 
       const closest = findClosestRatio(newWidth, newHeight);
-      if (dir.length === 2 && snapToRatioEnabled() && closest) {
+      if (!forceDisableSnapping && dir.length === 2 && props.snapToRatio && closest) {
         const ratio = closest[0] / closest[1];
         if (dir.includes("n") || dir.includes("s")) {
           newWidth = newHeight * ratio;
@@ -512,7 +519,7 @@ export default function Cropper(
     props.onCropChange(value);
   }
 
-  let pressedKeys = new Set<string>([]);
+  const pressedKeys = new Set<string>([]);
   let lastKeyHandleFrame: number | null = null;
   function handleKeyDown(event: KeyboardEvent) {
     if (dragging()) return;
@@ -594,30 +601,13 @@ export default function Cropper(
     <div
       aria-label="Crop area"
       ref={containerRef}
-      class={`relative h-full w-full overflow-hidden overscroll-contain *:overscroll-none ${props.class}`}
+      class={`relative h-full w-full overscroll-contain *:overscroll-none ${props.class}`}
       onWheel={handleWheel}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onKeyDown={handleKeyDown}
-      tabIndex={0}
-      onContextMenu={async (e) => {
-        e.preventDefault();
-        const menu = await Menu.new({
-          id: "crop-options",
-          items: [
-            {
-              id: "enableRatioSnap",
-              text: "Snap to aspect ratios",
-              checked: snapToRatioEnabled(),
-              action: () => {
-                setSnapToRatioEnabled((v) => !v);
-              },
-            } satisfies CheckMenuItemOptions
-          ]
-        });
-        menu.popup();
-      }}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <CropAreaRenderer
         bounds={{
@@ -630,6 +620,7 @@ export default function Cropper(
         guideLines={props.showGuideLines}
         handles={true}
         highlighted={snappedRatio() !== null}
+        selected={selected()}
       >
         {props.children}
       </CropAreaRenderer>
@@ -674,10 +665,10 @@ export default function Cropper(
               animation.finished.then(done);
             }}
           >
-            <Show when={snappedRatio() !== null}>
-              <div class="absolute left-0 right-0 mx-auto top-2 bg-gray-200 opacity-80 h-6 w-10 rounded-[7px] text-center text-blue-400 text-sm border border-gray-50 dark:border-gray-300 outline outline-1 outline-[#dedede] dark:outline-[#000]">
-                {snappedRatio()![0]}:{snappedRatio()![1]}
-              </div>
+            <Show when={snappedRatio()}>
+              {(v) => <div class="absolute left-0 right-0 mx-auto top-2 bg-gray-200 opacity-80 h-6 w-10 rounded-[7px] text-center text-blue-400 text-sm border border-gray-50 dark:border-gray-300 outline outline-1 outline-[#dedede] dark:outline-[#000]">
+                {v()[0]}:{v()[1]}
+              </div>}
             </Show>
           </Transition>
         </div>
@@ -687,7 +678,6 @@ export default function Cropper(
 
             return isCorner ? (
               <div
-                role="slider"
                 class="absolute z-10 flex h-[30px] w-[30px] items-center justify-center"
                 style={{
                   ...(handle.x === "l"
@@ -712,7 +702,6 @@ export default function Cropper(
               />
             ) : (
               <div
-                role="slider"
                 class="absolute"
                 style={{
                   ...(handle.x === "l"
