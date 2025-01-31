@@ -13,9 +13,9 @@ pub struct H264Encoder {
     tag: &'static str,
     encoder: encoder::Video,
     config: VideoInfo,
-    frame_count: i64,
     converter: Option<ffmpeg::software::scaling::Context>,
     stream_index: usize,
+    packet: ffmpeg::Packet,
 }
 
 impl H264Encoder {
@@ -31,6 +31,8 @@ impl H264Encoder {
         config: VideoInfo,
         output: &mut format::context::Output,
     ) -> Result<Self, MediaError> {
+        dbg!(config);
+
         let (codec, options) = get_codec_and_options(&config)?;
 
         let (format, converter) = if !codec
@@ -83,35 +85,34 @@ impl H264Encoder {
             encoder: video_encoder,
             stream_index,
             config,
-            frame_count: 0,
             converter,
+            packet: FFPacket::empty(),
         })
     }
 
-    pub fn queue_frame(&mut self, mut frame: FFVideo, output: &mut format::context::Output) {
-        if let Some(converter) = &mut self.converter {
+    pub fn queue_frame(&mut self, frame: FFVideo, output: &mut format::context::Output) {
+        let frame = if let Some(converter) = &mut self.converter {
             let mut new_frame = FFVideo::empty();
             converter.run(&frame, &mut new_frame).unwrap();
-            frame = new_frame;
-        }
+            new_frame.set_pts(frame.pts());
+            new_frame
+        } else {
+            frame
+        };
 
-        frame.set_pts(Some(self.frame_count));
-        self.frame_count += 1;
         self.encoder.send_frame(&frame).unwrap();
 
         self.process_frame(output);
     }
 
     fn process_frame(&mut self, output: &mut format::context::Output) {
-        let mut encoded_packet = FFPacket::empty();
-
-        while self.encoder.receive_packet(&mut encoded_packet).is_ok() {
-            encoded_packet.set_stream(self.stream_index);
-            encoded_packet.rescale_ts(
-                self.encoder.time_base(),
+        while self.encoder.receive_packet(&mut self.packet).is_ok() {
+            self.packet.set_stream(self.stream_index);
+            self.packet.rescale_ts(
+                self.config.time_base,
                 output.stream(self.stream_index).unwrap().time_base(),
             );
-            encoded_packet.write_interleaved(output).unwrap();
+            self.packet.write_interleaved(output).unwrap();
         }
     }
 
