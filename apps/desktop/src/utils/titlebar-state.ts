@@ -27,7 +27,7 @@ const [state, setState] = createStore<TitlebarState>({
 	maximizable: false,
 	minimizable: true,
 	closable: true,
-	border: true,
+	border: false,
 	backgroundColor: null,
 	transparent: false,
 });

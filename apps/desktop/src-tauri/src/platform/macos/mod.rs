@@ -1,16 +1,30 @@
-// use std::ffi::c_void;
-
-// use cocoa::{
-//     base::{id, nil},
-//     foundation::NSString,
-// };
-// use core_graphics::{
-//     base::boolean_t,
-//     display::{CFDictionaryRef, CGRect},
-// };
-// use objc::{class, msg_send, sel, sel_impl};
+use anyhow::anyhow;
+use objc2::MainThreadMarker;
+use objc2_app_kit::{NSToolbar, NSWindowToolbarStyle};
+use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 
 pub mod delegates;
+
+pub fn add_toolbar_shell(window: &tauri::Window, compact: bool) -> tauri::Result<()> {
+    let mtm = MainThreadMarker::new()
+        .ok_or_else(|| tauri::Error::Anyhow(anyhow!("Failed to create MainThreadMarker")))?;
+
+    let nswindow: *mut objc2_app_kit::NSWindow = window.ns_window()?.cast();
+    unsafe {
+        let toolbar = NSToolbar::new(mtm);
+        toolbar.setAllowsUserCustomization(false);
+        toolbar.setAutosavesConfiguration(false);
+        toolbar.setDisplayMode(objc2_app_kit::NSToolbarDisplayMode::IconOnly);
+        toolbar.setAllowsDisplayModeCustomization(false);
+        (*nswindow).setToolbar(Some(&toolbar));
+        (*nswindow).setToolbarStyle(if compact {
+            NSWindowToolbarStyle::UnifiedCompact
+        } else {
+            NSWindowToolbarStyle::Unified
+        });
+    }
+    Ok(())
+}
 
 pub fn set_window_level(window: tauri::Window, level: objc2_app_kit::NSWindowLevel) {
     let c_window = window.clone();
@@ -23,28 +37,32 @@ pub fn set_window_level(window: tauri::Window, level: objc2_app_kit::NSWindowLev
     });
 }
 
-// pub fn get_ns_window_number(ns_window: *mut c_void) -> isize {
-//     let ns_window = ns_window as *const objc2_app_kit::NSWindow;
+#[inline]
+pub fn is_macos_at_least(major: isize, minor: isize, patch: isize) -> bool {
+    // Safety: calling into Objective-C runtime through the objc2_foundation bindings.
+    // The objc method `-isOperatingSystemAtLeastVersion:` is documented and safe to call.
+    unsafe {
+        NSProcessInfo::processInfo().isOperatingSystemAtLeastVersion(NSOperatingSystemVersion {
+            majorVersion: major,
+            minorVersion: minor,
+            patchVersion: patch,
+        })
+    }
+}
 
-//     unsafe { (*ns_window).windowNumber() }
-// }
-
-// #[link(name = "CoreGraphics", kind = "framework")]
-// unsafe extern "C" {
-//     pub fn CGRectMakeWithDictionaryRepresentation(
-//         dict: CFDictionaryRef,
-//         rect: *mut CGRect,
-//     ) -> boolean_t;
-// }
-
-// /// Makes the background of the WKWebView layer transparent.
-// /// This differs from Tauri's implementation as it does not change the window background which causes performance performance issues and artifacts when shadows are enabled on the window.
-// /// Use Tauri's implementation to make the window itself transparent.
-// pub fn make_webview_transparent(target: &tauri::WebviewWindow) -> tauri::Result<()> {
-//     target.with_webview(|webview| unsafe {
-//         let wkwebview = webview.inner() as id;
-//         let no: id = msg_send![class!(NSNumber), numberWithBool:0];
-//         // [https://developer.apple.com/documentation/webkit/webview/1408486-drawsbackground]
-//         let _: id = msg_send![wkwebview, setValue:no forKey: NSString::alloc(nil).init_str("drawsBackground")];
-//     })
-// }
+#[macro_export]
+macro_rules! available {
+    (macOS $major:expr) => {
+        $crate::platform::macos::is_macos_at_least($major as isize, 0isize, 0isize)
+    };
+    (macOS $major:expr, $minor:expr) => {
+        $crate::platform::macos::is_macos_at_least($major as isize, $minor as isize, 0isize)
+    };
+    (macOS $major:expr, $minor:expr, $patch:expr) => {
+        $crate::platform::macos::is_macos_at_least(
+            $major as isize,
+            $minor as isize,
+            $patch as isize,
+        )
+    };
+}

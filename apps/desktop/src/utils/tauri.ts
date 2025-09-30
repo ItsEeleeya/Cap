@@ -152,9 +152,6 @@ async isCameraWindowOpen() : Promise<boolean> {
 async seekTo(frameNumber: number) : Promise<null> {
     return await TAURI_INVOKE("seek_to", { frameNumber });
 },
-async positionTrafficLights(controlsInset: [number, number] | null) : Promise<void> {
-    await TAURI_INVOKE("position_traffic_lights", { controlsInset });
-},
 async setTheme(theme: AppTheme) : Promise<void> {
     await TAURI_INVOKE("set_theme", { theme });
 },

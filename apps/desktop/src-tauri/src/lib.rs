@@ -1894,7 +1894,6 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
             reset_microphone_permissions,
             is_camera_window_open,
             seek_to,
-            windows::position_traffic_lights,
             windows::set_theme,
             global_message_dialog,
             show_window,
