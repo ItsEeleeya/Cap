@@ -30,11 +30,21 @@ export function ToggleSetting(props: {
 }) {
 	return (
 		<Setting {...props}>
-			<Toggle
+			<div class="w-9 h-[1.25rem] p-[0.125rem]">
+				<input
+					type="checkbox"
+					class="p-[0.08rem]"
+					checked={props.value}
+					ref={(el) => {
+						el.setAttribute("switch", "true");
+					}}
+				/>
+			</div>
+			{/* <Toggle
 				size="sm"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
-			/>
+			/> */}
 		</Setting>
 	);
 }

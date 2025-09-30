@@ -108,5 +108,6 @@ module.exports = {
 		require("@tailwindcss/typography"),
 		require("@kobalte/tailwindcss"),
 		require("tailwind-scrollbar"),
+		require("tailwind-gradient-mask-image"),
 	],
 };

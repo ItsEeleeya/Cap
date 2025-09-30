@@ -11,7 +11,10 @@ export function SignInButton(
 	return (
 		<Button
 			size="md"
-			class="flex flex-grow justify-center items-center"
+			class="flex flex-grow justify-center items-center border border-gray-6"
+			style={{
+				"-apple-visual-effect": "-apple-system-glass-material",
+			}}
 			{...props}
 			variant={signIn.isPending ? "gray" : "primary"}
 			onClick={() => {
