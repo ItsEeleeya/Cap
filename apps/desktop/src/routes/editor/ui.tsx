@@ -176,7 +176,7 @@ export const Dialog = {
 						<KDialog.Content
 							class={cx(
 								props.contentClass,
-								"z-50 text-sm rounded-[1.25rem] overflow-hidden border border-gray-3 bg-gray-1 min-w-[22rem] ui-expanded:animate-in ui-expanded:fade-in ui-expanded:zoom-in-95 origin-top ui-closed:animate-out ui-closed:fade-out ui-closed:zoom-out-95",
+								"z-50 text-sm rounded-[1.25rem] overflow-hidden border border-gray-3 min-w-[22rem] ui-expanded:animate-in ui-expanded:fade-in ui-expanded:zoom-in-95 origin-top ui-closed:animate-out ui-closed:fade-out ui-closed:zoom-out-95",
 								(props.size ?? "sm") === "sm" ? "max-w-96" : "max-w-3xl",
 							)}
 						>

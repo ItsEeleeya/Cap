@@ -294,3 +294,11 @@ body {
     @apply scrollbar-thin scrollbar-track-transparent scrollbar-thumb-black-transparent-40;
   }
 }
+
+.glass {
+  -apple-visual-effect: -apple-system-glass-material;
+}
+
+.material-blur {
+  -apple-visual-effect: -apple-system-blur-material;
+}
