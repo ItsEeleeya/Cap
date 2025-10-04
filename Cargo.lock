@@ -1145,6 +1145,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "block2 0.6.1",
  "bytemuck",
  "cap-audio",
  "cap-camera",
@@ -1160,12 +1161,10 @@ dependencies = [
  "chrono",
  "cidre 0.11.0",
  "clipboard-rs",
- "cocoa 0.26.1",
- "core-foundation 0.10.1",
- "core-graphics 0.24.0",
  "cpal 0.15.3 (git+https://github.com/CapSoftware/cpal?rev=3cc779a7b4ca)",
  "device_query",
  "dirs",
+ "dispatch2",
  "dotenvy_macro",
  "ffmpeg-next",
  "flume",
@@ -1179,8 +1178,12 @@ dependencies = [
  "log",
  "md5",
  "nix 0.29.0",
- "objc",
+ "objc2 0.6.2",
  "objc2-app-kit",
+ "objc2-application-services",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.1",
+ "objc2-web-kit",
  "png 0.17.16",
  "rand 0.8.5",
  "relative-path",
@@ -5595,6 +5598,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-application-services"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9abc05b1f757ebfbd72f4f3f9a515662c67dfe66b26e71b37d818f56a1c2f17"
+dependencies = [
+ "bitflags 2.9.4",
+ "libc",
+ "objc2 0.6.2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-services",
+ "objc2-foundation 0.3.1",
+]
+
+[[package]]
 name = "objc2-av-foundation"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5675,7 +5693,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c10c2894a6fed806ade6027bcd50662746363a9589d3ec9d9bef30a4e4bc166"
 dependencies = [
  "bitflags 2.9.4",
+ "block2 0.6.1",
  "dispatch2",
+ "libc",
  "objc2 0.6.2",
 ]
 
@@ -5715,6 +5735,18 @@ dependencies = [
  "objc2-core-audio-types",
  "objc2-core-foundation",
  "objc2-core-video",
+]
+
+[[package]]
+name = "objc2-core-services"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "159be6e4cd366c7d236d798daa2aa71855230e5691cde045a0670ce01a06d664"
+dependencies = [
+ "dispatch2",
+ "objc2 0.6.2",
+ "objc2-core-foundation",
+ "objc2-security",
 ]
 
 [[package]]

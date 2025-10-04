@@ -3,14 +3,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_os = "macos")]
 use cidre::av;
 
-#[cfg(target_os = "macos")]
-#[link(name = "ApplicationServices", kind = "framework")]
-unsafe extern "C" {
-    fn AXIsProcessTrusted() -> bool;
-    fn AXIsProcessTrustedWithOptions(options: core_foundation::dictionary::CFDictionaryRef)
-    -> bool;
-}
-
 #[derive(Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum OSPermission {
@@ -88,20 +80,17 @@ pub async fn request_permission(_permission: OSPermission) {
                 });
             }
             OSPermission::Accessibility => {
-                use core_foundation::base::TCFType;
-                use core_foundation::dictionary::CFDictionary; // Import CFDictionaryRef
-                use core_foundation::string::CFString;
-
-                let prompt_key = CFString::new("AXTrustedCheckOptionPrompt");
-                let prompt_value = core_foundation::boolean::CFBoolean::true_value();
-
-                let options = CFDictionary::from_CFType_pairs(&[(
-                    prompt_key.as_CFType(),
-                    prompt_value.as_CFType(),
-                )]);
-
+                let options = objc2_core_foundation::CFDictionary::from_slices(
+                    &[&*objc2_core_foundation::CFString::from_static_str(
+                        "AXTrustedCheckOptionPrompt",
+                    )],
+                    &[&*objc2_core_foundation::CFBoolean::new(true)],
+                );
+                // SAFETY: The AXIsProcessTrustedWithOptions function is safe to call with a valid CFDictionaryRef.
                 unsafe {
-                    AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef());
+                    objc2_application_services::AXIsProcessTrustedWithOptions(Some(
+                        &*options.as_opaque(),
+                    ));
                 }
             }
         }

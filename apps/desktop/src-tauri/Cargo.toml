@@ -20,11 +20,11 @@ swift-rs = { version = "1.0.6", features = ["build"] }
 
 [dependencies]
 tauri = { workspace = true, features = [
-	"macos-private-api",
-	"protocol-asset",
-	"tray-icon",
-	"image-png",
-	"devtools",
+    "macos-private-api",
+    "protocol-asset",
+    "tray-icon",
+    "image-png",
+    "devtools",
 ] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "typescript"] }
 tauri-plugin-dialog = "2.2.0"
@@ -106,25 +106,27 @@ kameo = "0.17.2"
 tauri-plugin-sentry = "0.5.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-graphics = "0.24.0"
-core-foundation = "0.10.0"
-objc2-app-kit = { version = "0.3.0", features = [
-	"NSWindow",
-	"NSResponder",
-	"NSHapticFeedback",
-] }
-cocoa = "0.26.0"
-objc = "0.2.7"
-swift-rs = "1.0.6"
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
 cidre = { workspace = true }
+objc2 = "0.6.2"
+dispatch2 = "0.3.0"
+block2 = "0.6.1"
+objc2-foundation = "0.3.1"
+objc2-application-services = "0.3.1"
+objc2-core-foundation = "0.3.1"
+objc2-app-kit = { version = "0.3.1", features = [
+    "NSWindow",
+    "NSResponder",
+    "NSHapticFeedback",
+] }
+objc2-web-kit = "0.3.1"
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
 
 [target.'cfg(target_os= "windows")'.dependencies]
 windows = { workspace = true, features = [
-	"Win32_Foundation",
-	"Win32_System",
-	"Win32_UI_WindowsAndMessaging",
-	"Win32_Graphics_Gdi",
+    "Win32_Foundation",
+    "Win32_System",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
 ] }
 windows-sys = { workspace = true }
 

@@ -27,9 +27,6 @@ use crate::{
     target_select_overlay::WindowFocusManager,
 };
 
-#[cfg(target_os = "macos")]
-const DEFAULT_TRAFFIC_LIGHTS_INSET: LogicalPosition<f64> = LogicalPosition::new(12.0, 12.0);
-
 #[derive(Clone, Deserialize, Type)]
 pub enum CapWindowId {
     // Contains onboarding + permissions
@@ -148,17 +145,25 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
-        match self {
-            Self::Editor { .. } => Some(Some(LogicalPosition::new(20.0, 32.0))),
-            Self::InProgressRecording => Some(Some(LogicalPosition::new(-100.0, -100.0))),
+    pub fn has_toolbar(&self) -> bool {
+        matches!(self, Self::Editor { .. } | Self::Settings { .. })
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn undecorated(&self) -> bool {
+        matches!(
+            self,
             Self::Camera
-            | Self::WindowCaptureOccluder { .. }
-            | Self::CaptureArea
-            | Self::RecordingsOverlay
-            | Self::TargetSelectOverlay { .. } => None,
-            _ => Some(None),
-        }
+                | Self::WindowCaptureOccluder { .. }
+                | Self::CaptureArea
+                | Self::RecordingsOverlay
+                | Self::TargetSelectOverlay { .. }
+        )
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn disables_window_buttons(&self) -> bool {
+        matches!(self, Self::InProgressRecording)
     }
 
     pub fn min_size(&self) -> Option<(f64, f64)> {
@@ -207,6 +212,8 @@ pub enum ShowCapWindow {
 
 impl ShowCapWindow {
     pub async fn show(&self, app: &AppHandle<Wry>) -> tauri::Result<WebviewWindow> {
+        use std::fmt::Write;
+
         if let Self::Editor { project_path } = &self {
             let state = app.state::<EditorWindowIds>();
             let mut s = state.ids.lock().unwrap();
@@ -225,7 +232,9 @@ impl ShowCapWindow {
             return Ok(window);
         }
 
-        let _id = self.id(app);
+        #[cfg(target_os = "macos")]
+        let id = self.id(app);
+
         let monitor = app.primary_monitor()?.unwrap();
 
         let window = match self {
@@ -648,7 +657,7 @@ impl ShowCapWindow {
 
                             let panel = window.to_panel().unwrap();
 
-                            panel.set_level(cocoa::appkit::NSMainMenuWindowLevel);
+                            panel.set_level(objc2_app_kit::NSMainMenuWindowLevel as i32);
 
                             panel.set_collection_behaviour(
                                 NSWindowCollectionBehavior::NSWindowCollectionBehaviorTransient
@@ -676,8 +685,17 @@ impl ShowCapWindow {
         // window.hide().ok();
 
         #[cfg(target_os = "macos")]
-        if let Some(position) = _id.traffic_lights_position() {
-            add_traffic_lights(&window, position);
+        {
+            use crate::platform;
+            let win = window.as_ref().window();
+
+            if id.disables_window_buttons() {
+                platform::set_window_buttons_visibility(&win, false)?;
+            }
+
+            if id.has_toolbar() {
+                // todo!()
+            }
         }
 
         Ok(window)
@@ -704,12 +722,29 @@ impl ShowCapWindow {
 
         #[cfg(target_os = "macos")]
         {
-            if id.traffic_lights_position().is_some() {
-                builder = builder
-                    .hidden_title(true)
-                    .title_bar_style(tauri::TitleBarStyle::Overlay);
-            } else {
-                builder = builder.decorations(false)
+            builder = builder
+                .hidden_title(true)
+                .title_bar_style(tauri::TitleBarStyle::Overlay);
+
+            if id.undecorated() {
+                builder = builder.decorations(false);
+            }
+
+            if crate::platform::solarium_enabled(&app) {
+                // Enables the use of Hosted Materials on WebKit
+                // Hosted Materials are a feature that allows WebKit to propage elements into their own layer,
+                //  hosted inside a SwiftUI view that's automatically created and uses the system material specified by the element.
+                // https://github.com/WebKit/WebKit/commit/99b9a154a6f7e44e8a17c81b12919b8bf76fa6ce
+                builder = dispatch2::run_on_main(move |mtm| unsafe {
+                    use objc2_foundation::{NSObjectNSKeyValueCoding, ns_string};
+                    let preferences = objc2_web_kit::WKPreferences::new(mtm);
+                    let yes = objc2_foundation::NSNumber::new_bool(true);
+                    preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                    let target_configuration = objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                    target_configuration.setPreferences(&preferences);
+                    builder = builder.with_webview_configuration(target_configuration);
+                    builder
+                });
             }
         }
 
@@ -750,29 +785,6 @@ impl ShowCapWindow {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn add_traffic_lights(window: &WebviewWindow<Wry>, controls_inset: Option<LogicalPosition<f64>>) {
-    use crate::platform::delegates;
-
-    let target_window = window.clone();
-    window
-        .run_on_main_thread(move || {
-            delegates::setup(
-                target_window.as_ref().window(),
-                controls_inset.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_INSET),
-            );
-
-            let c_win = target_window.clone();
-            target_window.on_window_event(move |event| match event {
-                tauri::WindowEvent::ThemeChanged(..) | tauri::WindowEvent::Focused(..) => {
-                    position_traffic_lights_impl(&c_win.as_ref().window(), controls_inset);
-                }
-                _ => {}
-            });
-        })
-        .ok();
-}
-
 #[tauri::command]
 #[specta::specta]
 pub fn set_theme(window: tauri::Window, theme: AppTheme) {
@@ -781,48 +793,6 @@ pub fn set_theme(window: tauri::Window, theme: AppTheme) {
         AppTheme::Light => Some(tauri::Theme::Light),
         AppTheme::Dark => Some(tauri::Theme::Dark),
     });
-
-    #[cfg(target_os = "macos")]
-    match CapWindowId::from_str(window.label()) {
-        Ok(win) if win.traffic_lights_position().is_some() => position_traffic_lights(window, None),
-        Ok(_) | Err(_) => {}
-    }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn position_traffic_lights(_window: tauri::Window, _controls_inset: Option<(f64, f64)>) {
-    #[cfg(target_os = "macos")]
-    position_traffic_lights_impl(
-        &_window,
-        _controls_inset.map(LogicalPosition::from).or_else(|| {
-            // Attempt to get the default inset from the window's traffic lights position
-            CapWindowId::from_str(_window.label())
-                .ok()
-                .and_then(|id| id.traffic_lights_position().flatten())
-        }),
-    );
-}
-
-#[cfg(target_os = "macos")]
-fn position_traffic_lights_impl(
-    window: &tauri::Window,
-    controls_inset: Option<LogicalPosition<f64>>,
-) {
-    use crate::platform::delegates::{UnsafeWindowHandle, position_window_controls};
-    let c_win = window.clone();
-    window
-        .run_on_main_thread(move || {
-            let ns_window = match c_win.ns_window() {
-                Ok(handle) => handle,
-                Err(_) => return,
-            };
-            position_window_controls(
-                UnsafeWindowHandle(ns_window),
-                &controls_inset.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_INSET),
-            );
-        })
-        .ok();
 }
 
 // Credits: tauri-plugin-window-state

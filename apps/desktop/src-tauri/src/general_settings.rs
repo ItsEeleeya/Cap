@@ -97,6 +97,8 @@ pub struct GeneralSettingsStore {
     pub enable_new_recording_flow: bool,
     #[serde(default)]
     pub post_deletion_behaviour: PostDeletionBehaviour,
+    #[serde(default = "true_b")]
+    pub solarium_enabled: bool,
 }
 
 fn default_enable_native_camera_preview() -> bool {
