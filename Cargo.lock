@@ -1007,6 +1007,7 @@ dependencies = [
  "cap-recording",
  "cap-rendering",
  "cap-utils",
+ "cidre 0.11.0",
  "clap",
  "ffmpeg-next",
  "flume",
@@ -1140,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "cap-desktop"
-version = "0.3.72"
+version = "0.3.72-beta.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -1419,6 +1420,7 @@ dependencies = [
 name = "cap-recording"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cap-audio",
  "cap-camera",
  "cap-camera-ffmpeg",
@@ -7523,6 +7525,7 @@ dependencies = [
  "objc",
  "serde",
  "specta",
+ "tokio",
  "tracing",
  "windows 0.60.0",
 ]

@@ -22,6 +22,10 @@ lazy_static! {
     };
 }
 
+mod sc_shareable_content;
+
+pub use sc_shareable_content::*;
+
 pub fn set_window_buttons_visibility(window: &tauri::Window, visible: bool) -> tauri::Result<()> {
     unsafe {
         for btn in [
