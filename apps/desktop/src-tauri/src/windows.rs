@@ -745,22 +745,9 @@ impl ShowCapWindow {
                 builder = builder.decorations(false);
             }
 
-            if crate::platform::solarium_enabled(&app) {
-                // Enables the use of Hosted Materials on WebKit
-                // Hosted Materials are a feature that allows WebKit to propage elements into their own layer,
-                //  hosted inside a SwiftUI view that's automatically created and uses the system material specified by the element.
-                // https://github.com/WebKit/WebKit/commit/99b9a154a6f7e44e8a17c81b12919b8bf76fa6ce
-                builder = dispatch2::run_on_main(move |mtm| unsafe {
-                    use objc2_foundation::{NSObjectNSKeyValueCoding, ns_string};
-                    let preferences = objc2_web_kit::WKPreferences::new(mtm);
-                    let yes = objc2_foundation::NSNumber::new_bool(true);
-                    preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
-                    let target_configuration = objc2_web_kit::WKWebViewConfiguration::new(mtm);
-                    target_configuration.setPreferences(&preferences);
-                    builder = builder.with_webview_configuration(target_configuration);
-                    builder
-                });
-            }
+            // TODO: Better error handling
+            (builder, _) =
+                crate::platform::try_enable_use_system_appearance_for_webview_builder(builder, app);
         }
 
         #[cfg(windows)]
