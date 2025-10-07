@@ -157,6 +157,7 @@ impl Default for GeneralSettingsStore {
             auto_zoom_on_clicks: false,
             enable_new_recording_flow: default_enable_new_recording_flow(),
             post_deletion_behaviour: PostDeletionBehaviour::DoNothing,
+            solarium_enabled: true,
         }
     }
 }

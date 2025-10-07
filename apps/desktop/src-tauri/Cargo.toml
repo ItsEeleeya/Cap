@@ -110,15 +110,17 @@ cidre = { workspace = true }
 objc2 = "0.6.2"
 dispatch2 = "0.3.0"
 block2 = "0.6.1"
-objc2-foundation = "0.3.1"
-objc2-application-services = "0.3.1"
-objc2-core-foundation = "0.3.1"
-objc2-app-kit = { version = "0.3.1", features = [
+objc2-foundation = "0.3.2"
+objc2-application-services = "0.3.2"
+objc2-core-foundation = "0.3.2"
+objc2-core-graphics = "0.3.2"
+objc2-quartz-core = { version = "0.3.2", features = ["objc2-core-graphics"] }
+objc2-app-kit = { version = "0.3.2", features = [
     "NSWindow",
     "NSResponder",
     "NSHapticFeedback",
 ] }
-objc2-web-kit = "0.3.1"
+objc2-web-kit = "0.3.2"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
 
 [target.'cfg(target_os= "windows")'.dependencies]

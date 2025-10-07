@@ -159,7 +159,7 @@ pub fn do_permissions_check(_initial_check: bool) -> OSPermissionsCheck {
             },
             microphone: check_av_permission(MediaType::audio()),
             camera: check_av_permission(MediaType::video()),
-            accessibility: if unsafe { AXIsProcessTrusted() } {
+            accessibility: if unsafe { objc2_application_services::AXIsProcessTrusted() } {
                 OSPermissionStatus::Granted
             } else {
                 OSPermissionStatus::Denied

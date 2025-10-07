@@ -1,5 +1,5 @@
 use cidre::{arc, ns, sc};
-use core_graphics::{display::CGDirectDisplayID, window::CGWindowID};
+use objc2_core_graphics::{CGDirectDisplayID, CGWindowID};
 use std::sync::Arc;
 use std::{
     collections::HashMap,

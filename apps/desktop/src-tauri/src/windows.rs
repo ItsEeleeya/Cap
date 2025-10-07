@@ -28,8 +28,11 @@ use crate::{
     target_select_overlay::WindowFocusManager,
 };
 
+#[cfg(target_os = "macos")]
+use crate::platform::WebviewWindowExt;
+
 #[derive(Clone, Deserialize, Type)]
-pub enum CapWindowId {
+pub enum CapWindowDefinition {
     // Contains onboarding + permissions
     Setup,
     Main,
@@ -46,7 +49,7 @@ pub enum CapWindowId {
     Debug,
 }
 
-impl FromStr for CapWindowId {
+impl FromStr for CapWindowDefinition {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -84,7 +87,7 @@ impl FromStr for CapWindowId {
     }
 }
 
-impl std::fmt::Display for CapWindowId {
+impl std::fmt::Display for CapWindowDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Setup => write!(f, "setup"),
@@ -108,7 +111,7 @@ impl std::fmt::Display for CapWindowId {
     }
 }
 
-impl CapWindowId {
+impl CapWindowDefinition {
     pub fn label(&self) -> String {
         self.to_string()
     }
@@ -182,7 +185,7 @@ impl CapWindowId {
 }
 
 #[derive(Clone, Type, Deserialize)]
-pub enum ShowCapWindow {
+pub enum CapWindow {
     Setup,
     Main {
         init_target_mode: Option<RecordingTargetMode>,
@@ -211,7 +214,7 @@ pub enum ShowCapWindow {
     ModeSelect,
 }
 
-impl ShowCapWindow {
+impl CapWindow {
     pub async fn show(&self, app: &AppHandle<Wry>) -> tauri::Result<WebviewWindow> {
         use std::fmt::Write;
 
@@ -279,9 +282,15 @@ impl ShowCapWindow {
                     ))
                     .build()?;
 
+                #[cfg(target_os = "macos")]
                 if new_recording_flow {
-                    #[cfg(target_os = "macos")]
-                    crate::platform::set_window_level(window.as_ref().window(), 50);
+                    println!("objc2_nswindow --");
+                    let w = window.objc2_nswindow();
+                    println!("objc2_nswindow -- {}", w.title());
+
+                    window.set_level(50);
+
+                    println!("objc2_nswindow -- after");
                 }
 
                 #[cfg(target_os = "macos")]
@@ -365,21 +374,19 @@ impl ShowCapWindow {
                     .spawn(display_id, window.clone());
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(window.as_ref().window(), 45);
-                }
+                window.set_level(45);
 
                 window
             }
             Self::Settings { page } => {
                 // Hide main window and target select overlays when settings window opens
                 for (label, window) in app.webview_windows() {
-                    if let Ok(id) = CapWindowId::from_str(&label)
+                    if let Ok(id) = CapWindowDefinition::from_str(&label)
                         && matches!(
                             id,
-                            CapWindowId::TargetSelectOverlay { .. }
-                                | CapWindowId::Main
-                                | CapWindowId::Camera
+                            CapWindowDefinition::TargetSelectOverlay { .. }
+                                | CapWindowDefinition::Main
+                                | CapWindowDefinition::Camera
                         )
                     {
                         let _ = window.hide();
@@ -396,7 +403,7 @@ impl ShowCapWindow {
                 .build()?
             }
             Self::Editor { .. } => {
-                if let Some(main) = CapWindowId::Main.get(app) {
+                if let Some(main) = CapWindowDefinition::Main.get(app) {
                     let _ = main.close();
                 };
 
@@ -408,7 +415,7 @@ impl ShowCapWindow {
             }
             Self::Upgrade => {
                 // Hide main window when upgrade window opens
-                if let Some(main) = CapWindowId::Main.get(app) {
+                if let Some(main) = CapWindowDefinition::Main.get(app) {
                     let _ = main.hide();
                 }
 
@@ -425,7 +432,7 @@ impl ShowCapWindow {
             }
             Self::ModeSelect => {
                 // Hide main window when mode select window opens
-                if let Some(main) = CapWindowId::Main.get(app) {
+                if let Some(main) = CapWindowDefinition::Main.get(app) {
                     let _ = main.hide();
                 }
 
@@ -456,7 +463,7 @@ impl ShowCapWindow {
 
                     if enable_native_camera_preview && state.camera_preview.is_initialized() {
                         error!("Unable to initialize camera preview as one already exists!");
-                        if let Some(window) = CapWindowId::Camera.get(app) {
+                        if let Some(window) = CapWindowDefinition::Camera.get(app) {
                             window.show().ok();
                         }
                         return Err(anyhow!(
@@ -552,9 +559,7 @@ impl ShowCapWindow {
                 window.set_ignore_cursor_events(true).unwrap();
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(window.as_ref().window(), 900);
-                }
+                window.set_level(900);
 
                 window
             }
@@ -592,13 +597,12 @@ impl ShowCapWindow {
                 let window = window_builder.build()?;
 
                 #[cfg(target_os = "macos")]
-                crate::platform::set_window_level(
-                    window.as_ref().window(),
-                    objc2_app_kit::NSScreenSaverWindowLevel,
-                );
+                window
+                    .objc2_nswindow()
+                    .setLevel(objc2_app_kit::NSScreenSaverWindowLevel);
 
                 // Hide the main window if the target monitor is the same
-                if let Some(main_window) = CapWindowId::Main.get(app)
+                if let Some(main_window) = CapWindowDefinition::Main.get(app)
                     && let (Ok(outer_pos), Ok(outer_size)) =
                         (main_window.outer_position(), main_window.outer_size())
                     && let Ok(scale_factor) = main_window.scale_factor()
@@ -636,9 +640,7 @@ impl ShowCapWindow {
                     .build()?;
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(window.as_ref().window(), 1000);
-                }
+                window.set_level(1000);
 
                 window
             }
@@ -701,15 +703,12 @@ impl ShowCapWindow {
 
         #[cfg(target_os = "macos")]
         {
-            use crate::platform;
-            let win = window.as_ref().window();
-
             if id.disables_window_buttons() {
-                platform::set_window_buttons_visibility(&win, false)?;
+                window.set_window_buttons_visible(false);
             }
 
             if id.has_toolbar() {
-                // todo!()
+                window.add_toolbar_shell();
             }
         }
 
@@ -744,10 +743,6 @@ impl ShowCapWindow {
             if id.undecorated() {
                 builder = builder.decorations(false);
             }
-
-            // TODO: Better error handling
-            (builder, _) =
-                crate::platform::try_enable_use_system_appearance_for_webview_builder(builder, app);
         }
 
         #[cfg(windows)]
@@ -758,31 +753,33 @@ impl ShowCapWindow {
         builder
     }
 
-    pub fn id(&self, app: &AppHandle) -> CapWindowId {
+    pub fn id(&self, app: &AppHandle) -> CapWindowDefinition {
         match self {
-            ShowCapWindow::Setup => CapWindowId::Setup,
-            ShowCapWindow::Main { .. } => CapWindowId::Main,
-            ShowCapWindow::Settings { .. } => CapWindowId::Settings,
-            ShowCapWindow::Editor { project_path } => {
+            CapWindow::Setup => CapWindowDefinition::Setup,
+            CapWindow::Main { .. } => CapWindowDefinition::Main,
+            CapWindow::Settings { .. } => CapWindowDefinition::Settings,
+            CapWindow::Editor { project_path } => {
                 let state = app.state::<EditorWindowIds>();
                 let s = state.ids.lock().unwrap();
                 let id = s.iter().find(|(path, _)| path == project_path).unwrap().1;
-                CapWindowId::Editor { id }
+                CapWindowDefinition::Editor { id }
             }
-            ShowCapWindow::RecordingsOverlay => CapWindowId::RecordingsOverlay,
-            ShowCapWindow::TargetSelectOverlay { display_id } => CapWindowId::TargetSelectOverlay {
-                display_id: display_id.clone(),
-            },
-            ShowCapWindow::WindowCaptureOccluder { screen_id } => {
-                CapWindowId::WindowCaptureOccluder {
+            CapWindow::RecordingsOverlay => CapWindowDefinition::RecordingsOverlay,
+            CapWindow::TargetSelectOverlay { display_id } => {
+                CapWindowDefinition::TargetSelectOverlay {
+                    display_id: display_id.clone(),
+                }
+            }
+            CapWindow::WindowCaptureOccluder { screen_id } => {
+                CapWindowDefinition::WindowCaptureOccluder {
                     screen_id: screen_id.clone(),
                 }
             }
-            ShowCapWindow::CaptureArea { .. } => CapWindowId::CaptureArea,
-            ShowCapWindow::Camera => CapWindowId::Camera,
-            ShowCapWindow::InProgressRecording { .. } => CapWindowId::InProgressRecording,
-            ShowCapWindow::Upgrade => CapWindowId::Upgrade,
-            ShowCapWindow::ModeSelect => CapWindowId::ModeSelect,
+            CapWindow::CaptureArea { .. } => CapWindowDefinition::CaptureArea,
+            CapWindow::Camera => CapWindowDefinition::Camera,
+            CapWindow::InProgressRecording { .. } => CapWindowDefinition::InProgressRecording,
+            CapWindow::Upgrade => CapWindowDefinition::Upgrade,
+            CapWindow::ModeSelect => CapWindowDefinition::ModeSelect,
         }
     }
 }

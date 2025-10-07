@@ -86,7 +86,7 @@ use tokio::sync::{RwLock, oneshot};
 use tracing::{error, trace};
 use upload::{S3UploadMeta, create_or_get_video, upload_image, upload_video};
 use web_api::ManagerExt as WebManagerExt;
-use windows::{CapWindowId, EditorWindowIds, ShowCapWindow, set_window_transparent};
+use windows::{CapWindow, CapWindowDefinition, EditorWindowIds, set_window_transparent};
 
 use crate::{
     camera::CameraPreviewManager,
@@ -262,7 +262,7 @@ async fn set_camera_input(
                 .map_err(|e| e.to_string())?;
         }
         Some(id) => {
-            ShowCapWindow::Camera
+            CapWindow::Camera
                 .show(&app_handle)
                 .await
                 .map_err(|err| error!("Failed to show camera preview window: {err}"))
@@ -811,7 +811,8 @@ struct SerializedEditorInstance {
 #[tauri::command]
 #[specta::specta]
 async fn create_editor_instance(window: Window) -> Result<SerializedEditorInstance, String> {
-    let CapWindowId::Editor { id } = CapWindowId::from_str(window.label()).unwrap() else {
+    let CapWindowDefinition::Editor { id } = CapWindowDefinition::from_str(window.label()).unwrap()
+    else {
         return Err("Invalid window".to_string());
     };
 
@@ -950,14 +951,14 @@ fn close_recordings_overlay_window(app: AppHandle) {
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::ManagerExt;
-        if let Ok(panel) = app.get_webview_panel(&CapWindowId::RecordingsOverlay.label()) {
+        if let Ok(panel) = app.get_webview_panel(&CapWindowDefinition::RecordingsOverlay.label()) {
             panel.released_when_closed(true);
             panel.close();
         }
     }
 
     if !cfg!(target_os = "macos")
-        && let Some(window) = CapWindowId::RecordingsOverlay.get(&app)
+        && let Some(window) = CapWindowDefinition::RecordingsOverlay.get(&app)
     {
         let _ = window.close();
     }
@@ -969,7 +970,7 @@ fn focus_captures_panel(_app: AppHandle) {
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::ManagerExt;
-        if let Ok(panel) = _app.get_webview_panel(&CapWindowId::RecordingsOverlay.label()) {
+        if let Ok(panel) = _app.get_webview_panel(&CapWindowDefinition::RecordingsOverlay.label()) {
             panel.make_key_window();
         }
     }
@@ -1160,7 +1161,7 @@ async fn upload_screenshot(
     };
 
     if !auth.is_upgraded() {
-        ShowCapWindow::Upgrade.show(&app).await.ok();
+        CapWindow::Upgrade.show(&app).await.ok();
         return Ok(UploadResult::UpgradeRequired);
     }
 
@@ -1218,7 +1219,7 @@ async fn take_screenshot(app: AppHandle, _state: MutableState<'_, App>) -> Resul
             ..Default::default()
         };
 
-        if let Some(window) = CapWindowId::Main.get(&app) {
+        if let Some(window) = CapWindowDefinition::Main.get(&app) {
             let _ = window.hide();
         }
 
@@ -1230,7 +1231,7 @@ async fn take_screenshot(app: AppHandle, _state: MutableState<'_, App>) -> Resul
             .map_err(|e| format!("Failed to get frame: {e}"))?;
         capturer.stop_capture();
 
-        if let Some(window) = CapWindowId::Main.get(&app) {
+        if let Some(window) = CapWindowDefinition::Main.get(&app) {
             let _ = window.show();
         }
 
@@ -1643,7 +1644,7 @@ async fn reset_microphone_permissions(_app: AppHandle) -> Result<(), ()> {
 #[tauri::command]
 #[specta::specta]
 async fn is_camera_window_open(app: AppHandle) -> bool {
-    CapWindowId::Camera.get(&app).is_some()
+    CapWindowDefinition::Camera.get(&app).is_some()
 }
 
 #[tauri::command]
@@ -1716,7 +1717,7 @@ async fn editor_delete_project(
 // keep this async otherwise opening windows may hang on windows
 #[tauri::command]
 #[specta::specta]
-async fn show_window(app: AppHandle, window: ShowCapWindow) -> Result<(), String> {
+async fn show_window(app: AppHandle, window: CapWindow) -> Result<(), String> {
     let _ = window.show(&app).await;
     Ok(())
 }
@@ -2017,7 +2018,7 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
             else {
                 let app = app.clone();
                 tokio::spawn(async move {
-                    ShowCapWindow::Main {
+                    CapWindow::Main {
                         init_target_mode: None,
                     }
                     .show(&app)
@@ -2058,14 +2059,14 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                     flags
                 })
                 .with_denylist(&[
-                    CapWindowId::Setup.label().as_str(),
+                    CapWindowDefinition::Setup.label().as_str(),
                     "window-capture-occluder",
                     "target-select-overlay",
-                    CapWindowId::CaptureArea.label().as_str(),
-                    CapWindowId::Camera.label().as_str(),
-                    CapWindowId::RecordingsOverlay.label().as_str(),
-                    CapWindowId::InProgressRecording.label().as_str(),
-                    CapWindowId::Upgrade.label().as_str(),
+                    CapWindowDefinition::CaptureArea.label().as_str(),
+                    CapWindowDefinition::Camera.label().as_str(),
+                    CapWindowDefinition::RecordingsOverlay.label().as_str(),
+                    CapWindowDefinition::InProgressRecording.label().as_str(),
+                    CapWindowDefinition::Upgrade.label().as_str(),
                 ])
                 .map_label(|label| match label {
                     label if label.starts_with("editor-") => "editor",
@@ -2096,7 +2097,7 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                     camera_feed
                         .tell(feeds::camera::OnFeedDisconnect(Box::new({
                             move || {
-                                if let Some(win) = CapWindowId::Camera.get(&app) {
+                                if let Some(win) = CapWindowDefinition::Camera.get(&app) {
                                     win.close().ok();
                                 }
                             }
@@ -2159,11 +2160,11 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                             .map(|s| !s.has_completed_startup)
                             .unwrap_or(false)
                     {
-                        let _ = ShowCapWindow::Setup.show(&app).await;
+                        let _ = CapWindow::Setup.show(&app).await;
                     } else {
                         println!("Permissions granted, showing main window");
 
-                        let _ = ShowCapWindow::Main {
+                        let _ = CapWindow::Main {
                             init_target_mode: None,
                         }
                         .show(&app)
@@ -2202,7 +2203,7 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
             });
 
             RequestOpenRecordingPicker::listen_any_spawn(&app, async |event, app| {
-                let _ = ShowCapWindow::Main {
+                let _ = CapWindow::Main {
                     init_target_mode: event.target_mode,
                 }
                 .show(&app)
@@ -2210,7 +2211,7 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
             });
 
             RequestOpenSettings::listen_any_spawn(&app, async |payload, app| {
-                let _ = ShowCapWindow::Settings {
+                let _ = CapWindow::Settings {
                     page: Some(payload.page),
                 }
                 .show(&app)
@@ -2236,14 +2237,14 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
 
             match event {
                 WindowEvent::Destroyed => {
-                    if let Ok(window_id) = CapWindowId::from_str(label) {
+                    if let Ok(window_id) = CapWindowDefinition::from_str(label) {
                         match window_id {
-                            CapWindowId::Main => {
+                            CapWindowDefinition::Main => {
                                 let app = app.clone();
 
                                 for (id, window) in app.webview_windows() {
-                                    if let Ok(CapWindowId::TargetSelectOverlay { .. }) =
-                                        CapWindowId::from_str(&id)
+                                    if let Ok(CapWindowDefinition::TargetSelectOverlay { .. }) =
+                                        CapWindowDefinition::from_str(&id)
                                     {
                                         let _ = window.close();
                                     }
@@ -2263,22 +2264,22 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                                     }
                                 });
                             }
-                            CapWindowId::Editor { id } => {
+                            CapWindowDefinition::Editor { id } => {
                                 let window_ids = EditorWindowIds::get(window.app_handle());
                                 window_ids.ids.lock().unwrap().retain(|(_, _id)| *_id != id);
 
                                 tokio::spawn(EditorInstances::remove(window.clone()));
                             }
-                            CapWindowId::Settings
-                            | CapWindowId::Upgrade
-                            | CapWindowId::ModeSelect => {
+                            CapWindowDefinition::Settings
+                            | CapWindowDefinition::Upgrade
+                            | CapWindowDefinition::ModeSelect => {
                                 for (label, window) in app.webview_windows() {
-                                    if let Ok(id) = CapWindowId::from_str(&label)
+                                    if let Ok(id) = CapWindowDefinition::from_str(&label)
                                         && matches!(
                                             id,
-                                            CapWindowId::TargetSelectOverlay { .. }
-                                                | CapWindowId::Main
-                                                | CapWindowId::Camera
+                                            CapWindowDefinition::TargetSelectOverlay { .. }
+                                                | CapWindowDefinition::Main
+                                                | CapWindowDefinition::Camera
                                         )
                                     {
                                         let _ = window.show();
@@ -2286,11 +2287,11 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                                 }
                                 return;
                             }
-                            CapWindowId::TargetSelectOverlay { display_id } => {
+                            CapWindowDefinition::TargetSelectOverlay { display_id } => {
                                 app.state::<target_select_overlay::WindowFocusManager>()
                                     .destroy(&display_id, app.global_shortcut());
                             }
-                            CapWindowId::Camera => {
+                            CapWindowDefinition::Camera => {
                                 let app = app.clone();
                                 tokio::spawn(async move {
                                     app.state::<ArcLock<App>>()
@@ -2306,10 +2307,11 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
 
                     if let Some(settings) = GeneralSettingsStore::get(app).unwrap_or(None)
                         && settings.hide_dock_icon
-                        && app
-                            .webview_windows()
-                            .keys()
-                            .all(|label| !CapWindowId::from_str(label).unwrap().activates_dock())
+                        && app.webview_windows().keys().all(|label| {
+                            !CapWindowDefinition::from_str(label)
+                                .unwrap()
+                                .activates_dock()
+                        })
                     {
                         #[cfg(target_os = "macos")]
                         app.set_activation_policy(tauri::ActivationPolicy::Accessory)
@@ -2318,12 +2320,12 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                 }
                 #[cfg(target_os = "macos")]
                 WindowEvent::Focused(focused) => {
-                    let window_id = CapWindowId::from_str(label);
+                    let window_id = CapWindowDefinition::from_str(label);
 
-                    if matches!(window_id, Ok(CapWindowId::Upgrade)) {
+                    if matches!(window_id, Ok(CapWindowDefinition::Upgrade)) {
                         for (label, window) in app.webview_windows() {
-                            if let Ok(id) = CapWindowId::from_str(&label)
-                                && matches!(id, CapWindowId::TargetSelectOverlay { .. })
+                            if let Ok(id) = CapWindowDefinition::from_str(&label)
+                                && matches!(id, CapWindowDefinition::TargetSelectOverlay { .. })
                             {
                                 let _ = window.hide();
                             }
@@ -2373,7 +2375,7 @@ pub async fn run(recording_logging_handle: LoggingHandle) {
                 } else {
                     let handle = _handle.clone();
                     tokio::spawn(async move {
-                        let _ = ShowCapWindow::Main {
+                        let _ = CapWindow::Main {
                             init_target_mode: None,
                         }
                         .show(&handle)
@@ -2494,7 +2496,7 @@ fn open_project_from_path(path: &Path, app: AppHandle) -> Result<(), String> {
         RecordingMetaInner::Studio(_) => {
             let project_path = path.to_path_buf();
 
-            tokio::spawn(async move { ShowCapWindow::Editor { project_path }.show(&app).await });
+            tokio::spawn(async move { CapWindow::Editor { project_path }.show(&app).await });
         }
         RecordingMetaInner::Instant(_) => {
             let mp4_path = path.join("content/output.mp4");
@@ -2503,7 +2505,7 @@ fn open_project_from_path(path: &Path, app: AppHandle) -> Result<(), String> {
                 let _ = app
                     .opener()
                     .open_path(mp4_path.to_str().unwrap_or_default(), None::<String>);
-                if let Some(main_window) = CapWindowId::Main.get(&app) {
+                if let Some(main_window) = CapWindowDefinition::Main.get(&app) {
                     main_window.close().ok();
                 }
             }

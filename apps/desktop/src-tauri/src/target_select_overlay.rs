@@ -7,7 +7,7 @@ use std::{
 
 use base64::prelude::*;
 
-use crate::windows::{CapWindowId, ShowCapWindow};
+use crate::windows::{CapWindow, CapWindowDefinition};
 use scap_targets::{
     Display, DisplayId, Window, WindowId,
     bounds::{LogicalBounds, PhysicalSize},
@@ -51,7 +51,7 @@ pub async fn open_target_select_overlays(
         .map(|d| d.id())
         .collect::<Vec<_>>();
     for display_id in displays {
-        let _ = ShowCapWindow::TargetSelectOverlay { display_id }
+        let _ = CapWindow::TargetSelectOverlay { display_id }
             .show(&app)
             .await;
     }
@@ -104,7 +104,9 @@ pub async fn open_target_select_overlays(
 #[tauri::command]
 pub async fn close_target_select_overlays(app: AppHandle) -> Result<(), String> {
     for (id, window) in app.webview_windows() {
-        if let Ok(CapWindowId::TargetSelectOverlay { .. }) = CapWindowId::from_str(&id) {
+        if let Ok(CapWindowDefinition::TargetSelectOverlay { .. }) =
+            CapWindowDefinition::from_str(&id)
+        {
             let _ = window.close();
         }
     }
@@ -196,8 +198,8 @@ impl WindowFocusManager {
             tokio::spawn(async move {
                 let app = window.app_handle();
                 loop {
-                    let cap_main = CapWindowId::Main.get(app);
-                    let cap_settings = CapWindowId::Settings.get(app);
+                    let cap_main = CapWindowDefinition::Main.get(app);
+                    let cap_settings = CapWindowDefinition::Settings.get(app);
 
                     let has_cap_main = cap_main
                         .as_ref()
