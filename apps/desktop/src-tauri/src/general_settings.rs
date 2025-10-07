@@ -99,6 +99,8 @@ pub struct GeneralSettingsStore {
     pub post_deletion_behaviour: PostDeletionBehaviour,
     #[serde(default = "true_b")]
     pub solarium_enabled: bool,
+    #[serde(default = "default_enable_new_uploader", skip_serializing_if = "no")]
+    pub enable_new_uploader: bool,
 }
 
 fn default_enable_native_camera_preview() -> bool {
@@ -107,6 +109,10 @@ fn default_enable_native_camera_preview() -> bool {
 }
 
 fn default_enable_new_recording_flow() -> bool {
+    cfg!(debug_assertions)
+}
+
+fn default_enable_new_uploader() -> bool {
     cfg!(debug_assertions)
 }
 
@@ -158,6 +164,7 @@ impl Default for GeneralSettingsStore {
             enable_new_recording_flow: default_enable_new_recording_flow(),
             post_deletion_behaviour: PostDeletionBehaviour::DoNothing,
             solarium_enabled: true,
+            enable_new_uploader: default_enable_new_uploader(),
         }
     }
 }

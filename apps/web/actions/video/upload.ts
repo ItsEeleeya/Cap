@@ -11,7 +11,7 @@ import { s3Buckets, videos, videoUploads } from "@cap/database/schema";
 import { buildEnv, NODE_ENV, serverEnv } from "@cap/env";
 import { userIsPro } from "@cap/utils";
 import { S3Buckets } from "@cap/web-backend";
-import { type Folder, Video } from "@cap/web-domain";
+import { type Folder, type Organisation, Video } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { revalidatePath } from "next/cache";
@@ -165,6 +165,7 @@ export async function createVideoAndGetUploadUrl({
 	isUpload = false,
 	folderId,
 	orgId,
+	supportsUploadProgress = false,
 }: {
 	videoId?: Video.VideoId;
 	duration?: number;
@@ -174,18 +175,17 @@ export async function createVideoAndGetUploadUrl({
 	isScreenshot?: boolean;
 	isUpload?: boolean;
 	folderId?: Folder.FolderId;
-	orgId: string;
+	orgId: Organisation.OrganisationId;
+	// TODO: Remove this once we are happy with it's stability
+	supportsUploadProgress?: boolean;
 }) {
 	const user = await getCurrentUser();
 
-	if (!user) {
-		throw new Error("Unauthorized");
-	}
+	if (!user) throw new Error("Unauthorized");
 
 	try {
-		if (!userIsPro(user) && duration && duration > 300) {
+		if (!userIsPro(user) && duration && duration > 300)
 			throw new Error("upgrade_required");
-		}
 
 		const [customBucket] = await db()
 			.select()
@@ -240,9 +240,10 @@ export async function createVideoAndGetUploadUrl({
 
 		await db().insert(videos).values(videoData);
 
-		await db().insert(videoUploads).values({
-			videoId: idToUse,
-		});
+		if (supportsUploadProgress)
+			await db().insert(videoUploads).values({
+				videoId: idToUse,
+			});
 
 		const fileKey = `${user.id}/${idToUse}/${
 			isScreenshot ? "screenshot/screen-capture.jpg" : "result.mp4"
