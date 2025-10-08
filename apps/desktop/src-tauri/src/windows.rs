@@ -7,6 +7,7 @@ use scap_targets::{Display, DisplayId};
 use serde::Deserialize;
 use specta::Type;
 use std::{
+    f64,
     ops::Deref,
     path::PathBuf,
     str::FromStr,
@@ -29,7 +30,7 @@ use crate::{
 };
 
 #[cfg(target_os = "macos")]
-use crate::platform::WebviewWindowExt;
+use crate::platform::{self, WebviewWindowExt};
 
 #[derive(Clone, Deserialize, Type)]
 pub enum CapWindowDefinition {
@@ -170,12 +171,17 @@ impl CapWindowDefinition {
         matches!(self, Self::InProgressRecording)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn disables_fullscreen(&self) -> bool {
+        matches!(self, Self::Settings)
+    }
+
     pub fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Setup => (600.0, 600.0),
             Self::Main => (300.0, 360.0),
             Self::Editor { .. } => (1275.0, 800.0),
-            Self::Settings => (600.0, 450.0),
+            Self::Settings => (650.0, 430.0),
             Self::Camera => (460.0, 920.0),
             Self::Upgrade => (950.0, 850.0),
             Self::ModeSelect => (900.0, 500.0),
@@ -231,13 +237,13 @@ impl CapWindow {
             }
         }
 
-        if let Some(window) = self.id(app).get(app) {
+        if let Some(window) = self.definition(app).get(app) {
             window.set_focus().ok();
             return Ok(window);
         }
 
         #[cfg(target_os = "macos")]
-        let id = self.id(app);
+        let id = self.definition(app);
 
         let monitor = app.primary_monitor()?.unwrap();
 
@@ -393,19 +399,29 @@ impl CapWindow {
                     }
                 }
 
-                self.window_builder(
-                    app,
-                    format!("/settings/{}", page.clone().unwrap_or_default()),
-                )
-                .resizable(true)
-                .maximized(false)
-                .center()
-                .build()?
+                let mut builder = self
+                    .window_builder(
+                        app,
+                        format!("/settings/{}", page.clone().unwrap_or_default()),
+                    )
+                    .resizable(true)
+                    .maximized(false)
+                    .center();
+
+                #[cfg(target_os = "macos")]
+                {
+                    builder = builder.max_inner_size(650.0, f64::MAX);
+                }
+
+                builder.build()?
             }
-            Self::Editor { .. } => {
+            Self::Editor { project_path } => {
                 if let Some(main) = CapWindowDefinition::Main.get(app) {
                     let _ = main.close();
                 };
+
+                #[cfg(target_os = "macos")]
+                platform::add_recent_document(project_path);
 
                 self.window_builder(app, "/editor")
                     .maximizable(true)
@@ -419,16 +435,14 @@ impl CapWindow {
                     let _ = main.hide();
                 }
 
-                let mut builder = self
-                    .window_builder(app, "/upgrade")
+                self.window_builder(app, "/upgrade")
                     .resizable(false)
                     .focused(true)
                     .always_on_top(true)
                     .maximized(false)
                     .shadow(true)
-                    .center();
-
-                builder.build()?
+                    .center()
+                    .build()?
             }
             Self::ModeSelect => {
                 // Hide main window when mode select window opens
@@ -436,8 +450,7 @@ impl CapWindow {
                     let _ = main.hide();
                 }
 
-                let mut builder = self
-                    .window_builder(app, "/mode-select")
+                self.window_builder(app, "/mode-select")
                     .inner_size(900.0, 500.0)
                     .min_inner_size(900.0, 500.0)
                     .resizable(true)
@@ -445,9 +458,8 @@ impl CapWindow {
                     .maximizable(false)
                     .center()
                     .focused(true)
-                    .shadow(true);
-
-                builder.build()?
+                    .shadow(true)
+                    .build()?
             }
             Self::Camera => {
                 const WINDOW_SIZE: f64 = 230.0 * 2.0;
@@ -703,12 +715,18 @@ impl CapWindow {
 
         #[cfg(target_os = "macos")]
         {
+            let nswindow = window.objc2_nswindow();
+
             if id.disables_window_buttons() {
                 window.set_window_buttons_visible(false);
             }
 
             if id.has_toolbar() {
                 window.add_toolbar_shell();
+            }
+
+            if id.disables_fullscreen() {
+                window.disable_fullscreen();
             }
         }
 
@@ -720,15 +738,15 @@ impl CapWindow {
         app: &'a AppHandle<Wry>,
         url: impl Into<PathBuf>,
     ) -> WebviewWindowBuilder<'a, Wry, AppHandle<Wry>> {
-        let id = self.id(app);
+        let def = self.definition(app);
 
-        let mut builder = WebviewWindow::builder(app, id.label(), WebviewUrl::App(url.into()))
-            .title(id.title())
+        let mut builder = WebviewWindow::builder(app, def.label(), WebviewUrl::App(url.into()))
+            .title(def.title())
             .visible(false)
             .accept_first_mouse(true)
             .shadow(true);
 
-        if let Some(min) = id.min_size() {
+        if let Some(min) = def.min_size() {
             builder = builder
                 .inner_size(min.0, min.1)
                 .min_inner_size(min.0, min.1);
@@ -740,7 +758,7 @@ impl CapWindow {
                 .hidden_title(true)
                 .title_bar_style(tauri::TitleBarStyle::Overlay);
 
-            if id.undecorated() {
+            if def.undecorated() {
                 builder = builder.decorations(false);
             }
         }
@@ -753,7 +771,7 @@ impl CapWindow {
         builder
     }
 
-    pub fn id(&self, app: &AppHandle) -> CapWindowDefinition {
+    pub fn definition(&self, app: &AppHandle) -> CapWindowDefinition {
         match self {
             CapWindow::Setup => CapWindowDefinition::Setup,
             CapWindow::Main { .. } => CapWindowDefinition::Main,

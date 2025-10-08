@@ -27,7 +27,8 @@ FFMPEG_DIR = { relative = true, force = true, value = "target/native-deps" }
 async function main() {
 	await fs.mkdir(targetDir, { recursive: true });
 
-	let cargoConfigContents = BASE_CARGO_TOML;
+	// We'll compute a possible libclang line for Windows (empty otherwise)
+	let libclangLine = "";
 
 	if (process.platform === "darwin") {
 		const NATIVE_DEPS_VERSION = "v0.25";
@@ -157,20 +158,50 @@ async function main() {
 			"VC/Tools/LLVM/x64/bin/libclang.dll",
 		);
 
-		cargoConfigContents += `LIBCLANG_PATH = "${libclangPath.replaceAll(
-			"\\",
-			"/",
-		)}"\n`;
+		// store the formatted line so we can append it to the cargo config only if missing
+		libclangLine = `LIBCLANG_PATH = "${libclangPath.replaceAll("\\", "/")}"\n`;
 	}
 
+	// Ensure the .cargo directory exists and update config only if necessary
 	await fs.mkdir(path.join(__root, ".cargo"), { recursive: true });
-	await fs.writeFile(
-		path.join(__root, ".cargo/config.toml"),
-		cargoConfigContents,
+	await ensureCargoConfig(
+		path.join(__root, ".cargo", "config.toml"),
+		libclangLine,
 	);
 }
 
-main();
+main().catch((err) => {
+	console.error(err);
+	process.exitCode = 1;
+});
+
+async function ensureCargoConfig(cargoConfigPath, libclangLine) {
+	// Read existing content if present
+	let existing = "";
+	if (await fileExists(cargoConfigPath)) {
+		existing = await fs.readFile(cargoConfigPath, "utf8");
+	}
+
+	let newContent = `\n${existing}`;
+
+	// Append base config if FFMPEG_DIR is not found
+	if (!existing.includes("FFMPEG_DIR")) {
+		if (newContent.length > 0 && !newContent.endsWith("\n")) newContent += "\n";
+		newContent += BASE_CARGO_TOML;
+	}
+
+	// If libclangLine was provided (Windows) and the file doesn't contain LIBCLANG_PATH, append it
+	if (libclangLine && !existing.includes("LIBCLANG_PATH")) {
+		if (newContent.length > 0 && !newContent.endsWith("\n")) newContent += "\n";
+		// If we already appended BASE_CARGO_TOML then LIBCLANG_PATH will be at the end; this just appends the line.
+		newContent += libclangLine;
+	}
+
+	if (newContent !== existing) {
+		await fs.writeFile(cargoConfigPath, newContent, "utf8");
+		console.log(`Updated cargo config at ${cargoConfigPath}`);
+	}
+}
 
 async function trimMacOSFramework(frameworkDir) {
 	const headersDir = path.join(frameworkDir, "Headers");
@@ -239,9 +270,9 @@ async function signMacOSFrameworkLibs(frameworkDir) {
 		);
 }
 
-async function fileExists(path) {
+async function fileExists(pathToCheck) {
 	return await fs
-		.access(path)
+		.access(pathToCheck)
 		.then(() => true)
 		.catch(() => false);
 }

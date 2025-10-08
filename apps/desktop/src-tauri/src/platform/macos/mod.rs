@@ -1,12 +1,15 @@
+use std::path::PathBuf;
+
 use block2::StackBlock;
 
 use dispatch2::run_on_main;
 use objc2::{MainThreadMarker, Message, rc::Retained};
 use objc2_app_kit::{
-    NSToolbar, NSWindowButton, NSWindowDidExitFullScreenNotification, NSWindowLevel,
-    NSWindowToolbarStyle, NSWindowWillEnterFullScreenNotification,
+    NSApplication, NSDocumentController, NSToolbar, NSWindowButton, NSWindowCollectionBehavior,
+    NSWindowDidExitFullScreenNotification, NSWindowLevel, NSWindowToolbarStyle,
+    NSWindowWillEnterFullScreenNotification,
 };
-use objc2_foundation::NSNotificationCenter;
+use objc2_foundation::{NSNotificationCenter, NSURL};
 use tauri::{AppHandle, WebviewWindow};
 
 use crate::general_settings::GeneralSettingsStore;
@@ -31,6 +34,8 @@ pub trait WebviewWindowExt {
 
     fn set_level(&self, level: NSWindowLevel);
 
+    fn disable_fullscreen(&self);
+
     fn add_toolbar_shell(&self);
 }
 
@@ -42,20 +47,31 @@ impl WebviewWindowExt for WebviewWindow {
     }
 
     fn set_window_buttons_visible(&self, visible: bool) {
-        let nswindow = self.objc2_nswindow();
-        for btn in [
-            NSWindowButton::CloseButton,
-            NSWindowButton::MiniaturizeButton,
-            NSWindowButton::ZoomButton,
-        ] {
-            if let Some(btn) = nswindow.standardWindowButton(btn) {
-                btn.setHidden(!visible);
+        run_on_main(move |_| {
+            let nswindow = self.objc2_nswindow();
+            for btn in [
+                NSWindowButton::CloseButton,
+                NSWindowButton::MiniaturizeButton,
+                NSWindowButton::ZoomButton,
+            ] {
+                if let Some(btn) = nswindow.standardWindowButton(btn) {
+                    btn.setHidden(!visible);
+                }
             }
-        }
+        });
     }
 
     fn set_level(&self, level: NSWindowLevel) {
         run_on_main(move |_| self.objc2_nswindow().setLevel(level));
+    }
+
+    fn disable_fullscreen(&self) {
+        run_on_main(move |_| {
+            let window = self.objc2_nswindow();
+            window.setCollectionBehavior(
+                window.collectionBehavior() | NSWindowCollectionBehavior::FullScreenNone,
+            );
+        });
     }
 
     fn add_toolbar_shell(&self) {
@@ -89,6 +105,19 @@ impl WebviewWindowExt for WebviewWindow {
                 None,
                 &toggle,
             );
+
+            println!("Hello 1");
         });
     }
+}
+
+pub fn add_recent_document<P: AsRef<std::path::Path>>(path: P) {
+    println!("Add for path: {}", &path.as_ref().display());
+    let Some(url) = NSURL::from_file_path(path) else {
+        println!("^-- Was invalid");
+        return;
+    };
+    run_on_main(move |mtm| {
+        NSDocumentController::sharedDocumentController(mtm).noteNewRecentDocumentURL(&url)
+    });
 }
