@@ -22,6 +22,7 @@ uuid = { version = "1.11.1", features = ["v4"] }
 ffmpeg = { workspace = true }
 tracing.workspace = true
 tracing-subscriber = "0.3.19"
+chrono = { version = "0.4.31", features = ["serde"] }
 flume.workspace = true
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

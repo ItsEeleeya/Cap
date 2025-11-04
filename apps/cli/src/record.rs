@@ -3,7 +3,6 @@ use clap::Args;
 use scap_targets::{DisplayId, WindowId};
 use std::{env::current_dir, path::PathBuf};
 use tokio::io::AsyncBufReadExt;
-use uuid::Uuid;
 
 #[derive(Args)]
 pub struct RecordStart {
@@ -53,10 +52,23 @@ impl RecordStart {
         //     None
         // };
 
-        let id = Uuid::new_v4().to_string();
-        let path = self
-            .path
-            .unwrap_or_else(|| current_dir().unwrap().join(format!("{id}.cap")));
+        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+
+        let path = self.path.unwrap_or_else(|| {
+            current_dir().unwrap().join(
+                target_info
+                    .title()
+                    .map(|title| {
+                        let kind = match target_info {
+                            ScreenCaptureTarget::Display { .. } => "Display",
+                            ScreenCaptureTarget::Window { .. } => "Window",
+                            ScreenCaptureTarget::Area { .. } => "Area",
+                        };
+                        format!("{kind} ({title}) {timestamp}.cap")
+                    })
+                    .unwrap_or(format!("Recording {timestamp}.cap")),
+            )
+        });
 
         let actor = studio_recording::Actor::builder(path, target_info)
             .with_system_audio(self.system_audio)

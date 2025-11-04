@@ -21,6 +21,8 @@ use cap_recording::{
 use cap_rendering::ProjectRecordingsMeta;
 use cap_utils::{ensure_dir, spawn_actor};
 use futures::stream;
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::{
@@ -257,6 +259,202 @@ pub enum RecordingAction {
     UpgradeRequired,
 }
 
+lazy_static! {
+    static ref DATE_REGEX: Regex = Regex::new(r"\{date(?::([^}]+))?\}").unwrap();
+    static ref TIME_REGEX: Regex = Regex::new(r"\{time(?::([^}]+))?\}").unwrap();
+    static ref DATETIME_REGEX: Regex = Regex::new(r"\{datetime(?::([^}]+))?\}").unwrap();
+    static ref TIMESTAMP_REGEX: Regex = Regex::new(r"\{timestamp(?::([^}]+))?\}").unwrap();
+}
+
+pub const DEFAULT_FILENAME_TEMPLATE: &str = "{target} {datetime}";
+
+pub struct ProjectName {
+    pretty: String,
+    filename: String,
+}
+
+/// Converts template format strings to chrono format strings.
+///
+/// This function translates common template format patterns to chrono format specifiers.
+/// On Windows, colons in time formats are replaced with dots to avoid file path issues.
+///
+/// # Examples
+///
+/// - `YYYY-MM-DD HH:mm` → `%Y-%m-%d %H:%M` (or `%Y-%m-%d %H.%M` on Windows)
+/// - `YYYYMMDD_HHmm` → `%Y%m%d_%H%M`
+/// - `MM/DD/YYYY` → `%m/%d/%Y`
+fn convert_template_format_to_chrono(template_format: &str) -> String {
+    #[allow(unused_mut)]
+    let mut result = template_format
+        .replace("YYYY", "%Y")
+        .replace("MM", "%m")
+        .replace("DD", "%d")
+        .replace("HH", "%H")
+        .replace("mm", "%M")
+        .replace("ss", "%S")
+        .replace("A", "%p")
+        .replace("a", "%p");
+
+    // On Windows, replace colons with dots in time formats to avoid file path issues
+    result = result.replace(":", ".");
+
+    // #[cfg(target_os = "windows")]
+    // {
+    //     result = result.replace(":", ".");
+    // }
+
+    result
+}
+
+/// Creates a filename from a template string using recording inputs and current date/time.
+///
+/// # Template Variables
+///
+/// The template supports the following variables that will be replaced with actual values:
+///
+/// ## Recording Mode Variables
+/// - `{recording_mode}` - The recording mode: "Studio" or "Instant"
+/// - `{mode}` - Short form of recording mode: "studio" or "instant"
+///
+/// ## Target Variables
+/// - `{target_kind}` - The type of capture target: "Display", "Window", or "Area"
+/// - `{target_name}` - The specific name of the target (e.g., "Built-in Retina Display", "Chrome", etc.)
+/// - `{target}` - Combined target information (e.g., "Display (Built-in Retina Display)")
+///
+/// ## Date/Time Variables
+/// - `{date}` - Current date in YYYY-MM-DD format (e.g., "2025-09-11")
+/// - `{time}` - Current time in HH:MM AM/PM format (e.g., "3:23 PM")
+/// - `{datetime}` - Combined date and time (e.g., "2025-09-11 3:23 PM")
+/// - `{timestamp}` - Unix timestamp (e.g., "1705326783")
+///
+/// ## Customizable Date/Time Formats
+/// You can customize date and time formats by adding format specifiers:
+/// - `{date:YYYY-MM-DD}` - Custom date format
+/// - `{time:HH:mm}` - 24-hour time format
+/// - `{time:hh:mm A}` - 12-hour time with AM/PM
+/// - `{datetime:YYYY-MM-DD HH:mm}` - Combined custom format
+///
+/// ## Examples
+///
+/// ```rust
+/// // Template: "{recording_mode} Recording {target_kind} ({target_name}) {date} {time}"
+/// // Result: "Instant Recording Display (Built-in Retina Display) 2025-09-11 3:23 PM"
+///
+/// // Template: "{mode}_{target_kind}_{date:YYYYMMDD}_{time:HHmm}"
+/// // Result: "instant_display_20250115_1523"
+///
+/// // Template: "Cap {target} - {datetime:YYYY-MM-DD HH:mm}"
+/// // Result: "Cap Display (Built-in Retina Display) - 2025-09-11 15:23"
+/// ```
+///
+/// # Arguments
+///
+/// * `template` - The template string with variables to replace
+/// * `inputs` - The recording inputs containing target and mode information
+///
+/// # Returns
+///
+/// Returns `Some(String)` with the resolved filename, or `None` if the template is invalid.
+/// The returned filename will be sanitized for filesystem compatibility.
+pub fn create_recording_filename_with_inputs_from_template(
+    template: Option<&str>,
+    inputs: &StartRecordingInputs,
+) -> Option<ProjectName> {
+    let template = template.unwrap_or(DEFAULT_FILENAME_TEMPLATE);
+    let now = chrono::Local::now();
+
+    // Get target information
+    let target_name = inputs
+        .capture_target
+        .title()
+        .unwrap_or_else(|| "Unknown".to_string());
+    let target_kind = match inputs.capture_target {
+        ScreenCaptureTarget::Display { .. } => "Display",
+        ScreenCaptureTarget::Window { .. } => "Window",
+        ScreenCaptureTarget::Area { .. } => "Area",
+    };
+
+    // Get recording mode information
+    let (recording_mode, mode) = match inputs.mode {
+        RecordingMode::Studio => ("Studio", "studio"),
+        RecordingMode::Instant => ("Instant", "instant"),
+    };
+
+    // Build result string with basic replacements
+    // Using a single chain of replacements is more efficient than multiple reassignments
+    let mut result = template
+        .replace("{recording_mode}", recording_mode)
+        .replace("{mode}", mode)
+        .replace("{target_kind}", target_kind)
+        .replace("{target_name}", &target_name)
+        .replace("{target}", &format!("{target_kind} ({target_name})"));
+
+    // Handle date/time variables with optional format specifiers
+    result = DATE_REGEX
+        .replace_all(&result, |caps: &regex::Captures| {
+            let format = caps.get(1).map(|m| m.as_str()).unwrap_or("%Y-%m-%d");
+            let chrono_format = convert_template_format_to_chrono(format);
+            now.format(&chrono_format).to_string()
+        })
+        .into_owned();
+
+    result = TIME_REGEX
+        .replace_all(&result, |caps: &regex::Captures| {
+            let format = caps.get(1).map(|m| m.as_str()).unwrap_or("%l:%M %p");
+            let chrono_format = convert_template_format_to_chrono(format);
+            now.format(&chrono_format).to_string()
+        })
+        .into_owned();
+
+    result = DATETIME_REGEX
+        .replace_all(&result, |caps: &regex::Captures| {
+            let format = caps.get(1).map(|m| m.as_str()).unwrap_or("%Y-%m-%d %H:%M");
+            let chrono_format = convert_template_format_to_chrono(format);
+            now.format(&chrono_format).to_string()
+        })
+        .into_owned();
+
+    result = TIMESTAMP_REGEX
+        .replace_all(&result, |caps: &regex::Captures| {
+            caps.get(1)
+                .map(|m| now.format(m.as_str()).to_string())
+                .unwrap_or_else(|| now.timestamp().to_string())
+        })
+        .into_owned();
+
+    println!("created project name: \"{}\"", &result);
+
+    // Sanitize the filename for filesystem compatibility
+    let sanitized = if cfg!(windows) {
+        // On Windows, use the sanitize-filename crate which handles colons
+        sanitize_filename::sanitize_with_options(
+            &result,
+            sanitize_filename::Options {
+                windows: true,
+                truncate: true,
+                replacement: "_",
+            },
+        )
+    } else {
+        // On non-Windows, only replace truly invalid characters
+        result
+            .chars()
+            .map(|c| match c {
+                '/' | '\\' | '*' | '?' | '"' | '<' | '>' | '|' | '\0' => '_',
+                c if c.is_control() => '_',
+                c => c,
+            })
+            .collect::<String>()
+    };
+
+    println!("- sanitized: \"{}\"", &sanitized);
+
+    Some(ProjectName {
+        pretty: result,
+        filename: format!("{sanitized}.cap"),
+    })
+}
+
 #[tauri::command]
 #[specta::specta]
 #[tracing::instrument(name = "recording", skip_all)]
@@ -269,16 +467,18 @@ pub async fn start_recording(
         return Err("Recording already in progress".to_string());
     }
 
-    let id = uuid::Uuid::new_v4().to_string();
     let general_settings = GeneralSettingsStore::get(&app).ok().flatten();
     let general_settings = general_settings.as_ref();
 
-    let recording_dir = app
-        .path()
-        .app_data_dir()
-        .unwrap()
-        .join("recordings")
-        .join(format!("{id}.cap"));
+    let project_name = create_recording_filename_with_inputs_from_template(None, &inputs)
+        .ok_or("Invalid filename template provided")?;
+
+    let recordings_base_dir = app.path().app_data_dir().unwrap().join("recordings");
+
+    let recording_dir = recordings_base_dir.join(&cap_utils::ensure_unique_filename(
+        &project_name.filename,
+        &recordings_base_dir,
+    )?);
 
     ensure_dir(&recording_dir).map_err(|e| format!("Failed to create recording directory: {e}"))?;
     state_mtx
@@ -351,17 +551,10 @@ pub async fn start_recording(
         RecordingMode::Studio => None,
     };
 
-    let date_time = if cfg!(windows) {
-        // Windows doesn't support colon in file paths
-        chrono::Local::now().format("%Y-%m-%d %H.%M.%S")
-    } else {
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-    };
-
     let meta = RecordingMeta {
         platform: Some(Platform::default()),
         project_path: recording_dir.clone(),
-        pretty_name: format!("{target_name} {date_time}"),
+        pretty_name: project_name.pretty,
         inner: match inputs.mode {
             RecordingMode::Studio => {
                 RecordingMetaInner::Studio(StudioRecordingMeta::MultipleSegments {

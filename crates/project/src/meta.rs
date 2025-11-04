@@ -152,6 +152,28 @@ impl RecordingMeta {
         Ok(meta)
     }
 
+    async fn load_for_project_async(
+        project_path: &std::path::Path,
+    ) -> Result<RecordingMeta, String> {
+        let meta_path = project_path.join("recording-meta.json");
+
+        let contents = tokio::fs::read_to_string(&meta_path).await.map_err(|e| {
+            format!(
+                "Failed to read metadata file {}: {}",
+                meta_path.display(),
+                e
+            )
+        })?;
+
+        serde_json::from_str(&contents).map_err(|e| {
+            format!(
+                "Failed to parse metadata file {}: {}",
+                meta_path.display(),
+                e
+            )
+        })
+    }
+
     pub fn save_for_project(&self) -> Result<(), Either<serde_json::Error, std::io::Error>> {
         let meta_path = &self.project_path.join("recording-meta.json");
         let meta = serde_json::to_string_pretty(&self).map_err(Either::Left)?;
