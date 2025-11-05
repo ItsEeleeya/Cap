@@ -1,0 +1,28 @@
+[package]
+name = "cap-migrator"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/migrator.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+tauri.workspace = true
+tokio.workspace = true
+futures.workspace = true
+tauri-plugin-store.workspace = true
+inventory = "0.3.21"
+relative-path = { version = "1.9.3", features = ["serde"] }
+log = "0.4"
+tracing.workspace = true
+sanitize-filename = "0.6.0"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+cap-project = { path = "../project" }
+cap-utils = { path = "../utils" }
+
+[dev-dependencies]
+tempfile = "3"

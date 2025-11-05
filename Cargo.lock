@@ -1457,6 +1457,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-migrator"
+version = "0.1.0"
+dependencies = [
+ "cap-project",
+ "cap-utils",
+ "futures",
+ "inventory",
+ "log",
+ "relative-path",
+ "sanitize-filename",
+ "serde_json",
+ "tauri",
+ "tauri-plugin-store",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "cap-project"
 version = "0.1.0"
 dependencies = [
@@ -8111,6 +8130,7 @@ version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
+ "indexmap 2.11.4",
  "itoa",
  "memchr",
  "ryu",
