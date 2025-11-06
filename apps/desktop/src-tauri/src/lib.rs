@@ -15,7 +15,6 @@ mod general_settings;
 mod hotkeys;
 mod http_client;
 mod logging;
-mod migrations;
 mod notifications;
 mod permissions;
 mod platform;
@@ -2045,7 +2044,43 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
         )
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
-            let app = app.handle().clone();
+            let app = app.handle();
+
+            let app = app.clone();
+            let schema_version = {
+                use tauri_plugin_store::StoreExt;
+
+                app.store("store")
+                    .map_err(|e| format!("Failed to access store: {}", e))?
+                    .get("schema_version")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32
+            };
+
+            if let Err(err) = futures::executor::block_on(cap_migrator::run(&app, schema_version)) {
+                use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+                tracing::error!("Migration(s) failed: {err}");
+
+                let _result = app
+                    .dialog()
+                    .message(
+                        r#"
+                        An error occurred during migration of app's data.
+                        You can try to copy the errors to clipboard and report them.
+                        Clicking "Open anyway" may result in the loss of settings.
+                        "#,
+                    )
+                    .title("Error")
+                    .kind(MessageDialogKind::Info)
+                    .buttons(MessageDialogButtons::YesNoCancelCustom(
+                        "Quit".to_string(),
+                        "Copy Errors to Clipboard".to_string(),
+                        "Open anyway".to_string(),
+                    ))
+                    .blocking_show();
+            }
+
             specta_builder.mount_events(&app);
             hotkeys::init(&app);
             general_settings::init(&app);
@@ -2141,11 +2176,6 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                 app.manage(Arc::new(RwLock::new(
                     ClipboardContext::new().expect("Failed to create clipboard context"),
                 )));
-            }
-
-            // Run blocking migrations before continuing startup flow
-            if let Err(err) = tauri::async_runtime::block_on(migrations::run_migrations(&app)) {
-                error!("Error running migrations: {err}");
             }
 
             tokio::spawn(check_notification_permissions(app.clone()));

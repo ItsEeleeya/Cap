@@ -400,12 +400,7 @@ impl ShowCapWindow {
                 .center()
                 .build()?
             }
-            Self::Editor { project_path } => {
-                if let Ok(meta) = cap_project::RecordingMeta::load_for_project(project_path) {
-                    _ = crate::migrate_project_filename_if_needed(project_path, &meta)
-                        .map_err(|e| tracing::error!(e))
-                }
-
+            Self::Editor { .. } => {
                 if let Some(main) = CapWindowId::Main.get(app) {
                     let _ = main.close();
                 };

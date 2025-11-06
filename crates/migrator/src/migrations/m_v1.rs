@@ -1,12 +1,22 @@
 use std::path::{Path, PathBuf};
 
-use crate::{data_migration, migration};
 use cap_project::RecordingMeta;
 use futures::StreamExt;
-use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-migration!(to_schema: 1, name: "Migrate project names from UUIDs", migrate);
+crate::migration!(to_schema: 1, name: "Migrate project names from UUIDs", migrate_test);
+
+pub async fn migrate_test(app: &AppHandle) -> Result<(), String> {
+    tracing::info!("Running schema: 1 migration");
+    Ok(())
+}
+
+crate::migration!(to_schema: 2, name: "Schema 2", migrate_test2);
+
+pub async fn migrate_test2(app: &AppHandle) -> Result<(), String> {
+    tracing::info!("Running schema: 2 migration");
+    Ok(())
+}
 
 /// Performs a one-time migration of all UUID-named projects to pretty name-based naming.
 /// This function uses parallel processing with controlled concurrency for improved performance.
@@ -15,7 +25,7 @@ migration!(to_schema: 1, name: "Migrate project names from UUIDs", migrate);
 ///
 /// Returns Ok with the number of successfully migrated projects, or an error if the
 /// recordings directory cannot be accessed.
-pub async fn migrate_all_uuid_projects(app: &AppHandle) -> Result<usize, String> {
+pub async fn migrate(app: &AppHandle) -> Result<(), String> {
     let recordings_dir = app
         .path()
         .app_data_dir()
@@ -29,7 +39,7 @@ pub async fn migrate_all_uuid_projects(app: &AppHandle) -> Result<usize, String>
         .await
         .map_err(|e| format!("Failed to check recordings directory: {}", e))?
     {
-        return Ok(0);
+        return Ok(());
     }
 
     // Collect all UUID-named project paths
@@ -57,7 +67,7 @@ pub async fn migrate_all_uuid_projects(app: &AppHandle) -> Result<usize, String>
     }
 
     if uuid_projects.is_empty() {
-        return Ok(0);
+        return Ok(());
     }
 
     println!(
@@ -137,12 +147,6 @@ pub async fn migrate_all_uuid_projects(app: &AppHandle) -> Result<usize, String>
         }
     }
 
-    Ok(total_migrated)
-}
-
-// Registry glue: adapt count-returning migration to () and register.
-pub async fn migrate(app: &AppHandle) -> Result<(), String> {
-    let _ = migrate_all_uuid_projects(app).await?;
     Ok(())
 }
 
