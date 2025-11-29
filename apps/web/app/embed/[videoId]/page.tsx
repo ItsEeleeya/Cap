@@ -11,7 +11,7 @@ import {
 import type { VideoMetadata } from "@cap/database/types";
 import { buildEnv } from "@cap/env";
 import { provideOptionalAuth, Videos, VideosPolicy } from "@cap/web-backend";
-import { Policy, type Video } from "@cap/web-domain";
+import { type Organisation, Policy, type Video } from "@cap/web-domain";
 import { eq, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import type { Metadata } from "next";
@@ -23,17 +23,13 @@ import { isAiGenerationEnabled } from "@/utils/flags";
 import { EmbedVideo } from "./_components/EmbedVideo";
 import { PasswordOverlay } from "./_components/PasswordOverlay";
 
-export const dynamic = "auto";
-export const dynamicParams = true;
-export const revalidate = 30;
-
 export async function generateMetadata(
 	props: PageProps<"/embed/[videoId]">,
 ): Promise<Metadata> {
 	const params = await props.params;
 	const videoId = params.videoId as Video.VideoId;
 
-	return Effect.flatMap(Videos, (v) => v.getById(videoId)).pipe(
+	return Effect.flatMap(Videos, (v) => v.getByIdForViewing(videoId)).pipe(
 		Effect.map(
 			Option.match({
 				onNone: () => notFound(),
@@ -127,7 +123,9 @@ export default async function EmbedVideoPage(
 					name: videos.name,
 					ownerId: videos.ownerId,
 					orgId: videos.orgId,
+					settings: videos.settings,
 					createdAt: videos.createdAt,
+					effectiveCreatedAt: videos.effectiveCreatedAt,
 					updatedAt: videos.updatedAt,
 					bucket: videos.bucket,
 					metadata: videos.metadata,
@@ -165,13 +163,7 @@ export default async function EmbedVideoPage(
 		return Option.fromNullable(video);
 	}).pipe(
 		Effect.flatten,
-		Effect.map(
-			(video) =>
-				({
-					needsPassword: false,
-					video,
-				}) as const,
-		),
+		Effect.map((video) => ({ needsPassword: false, video }) as const),
 		Effect.catchTag("VerifyVideoPasswordError", () =>
 			Effect.succeed({ needsPassword: true } as const),
 		),
@@ -186,7 +178,7 @@ export default async function EmbedVideoPage(
 		Effect.catchTags({
 			PolicyDenied: () =>
 				Effect.succeed(
-					<div className="flex flex-col justify-center items-center min-h-screen text-center bg-black text-white">
+					<div className="flex flex-col justify-center items-center min-h-screen text-center text-white bg-black">
 						<h1 className="mb-4 text-2xl font-bold">This video is private</h1>
 						<p className="text-gray-400">
 							If you own this video, please <Link href="/login">sign in</Link>{" "}
@@ -194,7 +186,7 @@ export default async function EmbedVideoPage(
 						</p>
 					</div>,
 				),
-			NoSuchElementException: () => Effect.sync(notFound()),
+			NoSuchElementException: () => Effect.sync(() => notFound()),
 		}),
 		provideOptionalAuth,
 		EffectRuntime.runPromise,
@@ -206,7 +198,7 @@ async function EmbedContent({
 	autoplay,
 }: {
 	video: Omit<typeof videos.$inferSelect, "password"> & {
-		sharedOrganization: { organizationId: string } | null;
+		sharedOrganization: { organizationId: Organisation.OrganisationId } | null;
 		hasActiveUpload: boolean | undefined;
 	};
 	autoplay: boolean;
@@ -241,7 +233,7 @@ async function EmbedContent({
 				!user.email.endsWith(`@${organization[0].allowedEmailDomain}`)
 			) {
 				return (
-					<div className="flex flex-col justify-center items-center min-h-screen text-center bg-black text-white">
+					<div className="flex flex-col justify-center items-center min-h-screen text-center text-white bg-black">
 						<h1 className="mb-4 text-2xl font-bold">Access Restricted</h1>
 						<p className="mb-2 text-gray-300">
 							This video is only accessible to members of this organization.
@@ -288,7 +280,7 @@ async function EmbedContent({
 
 	if (video.isScreenshot === true) {
 		return (
-			<div className="flex items-center justify-center min-h-screen bg-black text-white">
+			<div className="flex justify-center items-center min-h-screen text-white bg-black">
 				<p>Screenshots cannot be embedded</p>
 			</div>
 		);

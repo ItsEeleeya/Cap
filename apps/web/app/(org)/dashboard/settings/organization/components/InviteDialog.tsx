@@ -9,6 +9,7 @@ import {
 	DialogTitle,
 	Input,
 } from "@cap/ui";
+import type { Organisation } from "@cap/web-domain";
 import { faUserGroup } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMutation } from "@tanstack/react-query";
@@ -95,7 +96,7 @@ export const InviteDialog = ({
 
 			return await sendOrganizationInvites(
 				inviteEmails,
-				activeOrganization?.organization.id as string,
+				activeOrganization?.organization.id as Organisation.OrganisationId,
 			);
 		},
 		onSuccess: () => {
@@ -113,10 +114,6 @@ export const InviteDialog = ({
 			);
 		},
 	});
-
-	const handleSendInvites = () => {
-		sendInvites.mutate();
-	};
 
 	return (
 		<Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -213,7 +210,7 @@ export const InviteDialog = ({
 							inviteEmails.length === 0 ||
 							remainingSeats === 0
 						}
-						onClick={handleSendInvites}
+						onClick={() => sendInvites.mutate()}
 					>
 						Send Invites
 					</Button>

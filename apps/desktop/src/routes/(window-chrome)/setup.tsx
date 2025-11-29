@@ -21,6 +21,7 @@ import {
 	type OSPermission,
 	type OSPermissionStatus,
 } from "~/utils/tauri";
+import IconLucideVolumeX from "~icons/lucide/volume-x";
 
 function isPermitted(status?: OSPermissionStatus): boolean {
 	return status === "granted" || status === "notNeeded";
@@ -164,7 +165,9 @@ export default function () {
 					<h1 class="text-[1.2rem] font-[700] mb-1 text-[--text-primary]">
 						Select Recording Mode
 					</h1>
-					<p class="text-gray-11">Choose how you want to record with Cap.</p>
+					<p class="text-gray-11">
+						Choose how you want to record with Cap. You can change this later.
+					</p>
 				</div>
 
 				<div class="w-full py-4">

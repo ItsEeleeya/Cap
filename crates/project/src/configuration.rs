@@ -1,9 +1,12 @@
 use std::{
+    env::temp_dir,
+    fmt,
     ops::{Add, Div, Mul, Sub, SubAssign},
     path::Path,
 };
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use specta::Type;
 
 #[derive(Type, Serialize, Deserialize, Clone, Debug, Default)]
@@ -30,6 +33,8 @@ pub enum BackgroundSource {
     },
     Color {
         value: Color,
+        #[serde(default = "default_alpha")]
+        alpha: u8,
     },
     Gradient {
         from: Color,
@@ -41,6 +46,10 @@ pub enum BackgroundSource {
 
 fn default_gradient_angle() -> u16 {
     90
+}
+
+fn default_alpha() -> u8 {
+    u8::MAX
 }
 
 impl Default for BackgroundSource {
@@ -104,17 +113,6 @@ impl<T: Sub<Output = T> + Copy> Sub<T> for XY<T> {
     }
 }
 
-impl<T: Mul<Output = T> + Copy> Mul<T> for XY<T> {
-    type Output = Self;
-
-    fn mul(self, other: T) -> Self {
-        Self {
-            x: self.x * other,
-            y: self.y * other,
-        }
-    }
-}
-
 impl<T: Mul<Output = T> + Copy> Mul<XY<T>> for XY<T> {
     type Output = Self;
 
@@ -122,6 +120,17 @@ impl<T: Mul<Output = T> + Copy> Mul<XY<T>> for XY<T> {
         Self {
             x: self.x * other.x,
             y: self.y * other.y,
+        }
+    }
+}
+
+impl<T: Mul<Output = T> + Copy> Mul<T> for XY<T> {
+    type Output = Self;
+
+    fn mul(self, other: T) -> Self {
+        Self {
+            x: self.x * other,
+            y: self.y * other,
         }
     }
 }
@@ -173,6 +182,14 @@ impl<T> From<(T, T)> for XY<T> {
     }
 }
 
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerStyle {
+    #[default]
+    Squircle,
+    Rounded,
+}
+
 #[derive(Type, Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Crop {
@@ -209,6 +226,8 @@ pub struct BackgroundConfiguration {
     pub blur: f64,
     pub padding: f64,
     pub rounding: f64,
+    #[serde(default)]
+    pub rounding_type: CornerStyle,
     pub inset: u32,
     pub crop: Option<Crop>,
     #[serde(default)]
@@ -237,6 +256,7 @@ impl Default for BackgroundConfiguration {
             blur: 0.0,
             padding: 0.0,
             rounding: 0.0,
+            rounding_type: CornerStyle::default(),
             inset: 0,
             crop: None,
             shadow: 73.6,
@@ -271,20 +291,24 @@ pub struct CameraPosition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Camera {
     pub hide: bool,
     pub mirror: bool,
     pub position: CameraPosition,
     pub size: f32,
+    #[serde(alias = "zoom_size")]
     pub zoom_size: Option<f32>,
     #[serde(default = "Camera::default_rounding")]
     pub rounding: f32,
     #[serde(default)]
     pub shadow: f32,
-    #[serde(default)]
+    #[serde(alias = "advanced_shadow", default)]
     pub advanced_shadow: Option<ShadowConfiguration>,
     #[serde(default)]
     pub shape: CameraShape,
+    #[serde(alias = "rounding_type", default)]
+    pub rounding_type: CornerStyle,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, Default)]
@@ -301,7 +325,7 @@ impl Camera {
     }
 
     fn default_rounding() -> f32 {
-        30.0
+        100.0
     }
 }
 
@@ -321,6 +345,7 @@ impl Default for Camera {
                 blur: 10.5,
             }),
             shape: CameraShape::Square,
+            rounding_type: CornerStyle::default(),
         }
     }
 }
@@ -377,13 +402,39 @@ pub enum CursorType {
     Circle,
 }
 
-#[derive(Type, Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum CursorAnimationStyle {
-    #[default]
-    Regular,
     Slow,
-    Fast,
+    #[default]
+    #[serde(alias = "regular", alias = "quick", alias = "rapid", alias = "fast")]
+    Mellow,
+    Custom,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct CursorSmoothingPreset {
+    pub tension: f32,
+    pub mass: f32,
+    pub friction: f32,
+}
+
+impl CursorAnimationStyle {
+    pub fn preset(self) -> Option<CursorSmoothingPreset> {
+        match self {
+            Self::Slow => Some(CursorSmoothingPreset {
+                tension: 65.0,
+                mass: 1.8,
+                friction: 16.0,
+            }),
+            Self::Mellow => Some(CursorSmoothingPreset {
+                tension: 120.0,
+                mass: 1.1,
+                friction: 18.0,
+            }),
+            Self::Custom => None,
+        }
+    }
 }
 
 #[derive(Type, Serialize, Deserialize, Clone, Debug)]
@@ -391,7 +442,10 @@ pub enum CursorAnimationStyle {
 pub struct CursorConfiguration {
     #[serde(default)]
     pub hide: bool,
-    hide_when_idle: bool,
+    #[serde(default)]
+    pub hide_when_idle: bool,
+    #[serde(default = "CursorConfiguration::default_hide_when_idle_delay")]
+    pub hide_when_idle_delay: f32,
     pub size: u32,
     r#type: CursorType,
     pub animation_style: CursorAnimationStyle,
@@ -412,24 +466,38 @@ fn yes() -> bool {
 
 impl Default for CursorConfiguration {
     fn default() -> Self {
-        Self {
+        let animation_style = CursorAnimationStyle::default();
+        let mut config = Self {
             hide: false,
             hide_when_idle: false,
+            hide_when_idle_delay: Self::default_hide_when_idle_delay(),
             size: 100,
             r#type: CursorType::default(),
-            animation_style: CursorAnimationStyle::Regular,
-            tension: 100.0,
-            mass: 1.0,
-            friction: 20.0,
+            animation_style,
+            tension: 65.0,
+            mass: 1.8,
+            friction: 16.0,
             raw: false,
             motion_blur: 0.5,
             use_svg: true,
+        };
+
+        if let Some(preset) = animation_style.preset() {
+            config.tension = preset.tension;
+            config.mass = preset.mass;
+            config.friction = preset.friction;
         }
+
+        config
     }
 }
 impl CursorConfiguration {
     fn default_raw() -> bool {
         true
+    }
+
+    fn default_hide_when_idle_delay() -> f32 {
+        2.0
     }
 }
 
@@ -442,8 +510,8 @@ pub struct HotkeysConfiguration {
 #[derive(Type, Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineSegment {
-    #[serde(default)]
-    pub recording_segment: u32,
+    #[serde(default, rename = "recordingSegment")]
+    pub recording_clip: u32,
     pub timescale: f64,
     pub start: f64,
     pub end: f64,
@@ -508,14 +576,14 @@ pub struct TimelineConfiguration {
 }
 
 impl TimelineConfiguration {
-    pub fn get_segment_time(&self, frame_time: f64) -> Option<(f64, u32)> {
+    pub fn get_segment_time(&self, frame_time: f64) -> Option<(f64, &TimelineSegment)> {
         let mut accum_duration = 0.0;
 
         for segment in self.segments.iter() {
             if frame_time < accum_duration + segment.duration() {
                 return segment
                     .interpolate_time(frame_time - accum_duration)
-                    .map(|t| (t, segment.recording_segment));
+                    .map(|t| (t, segment));
             }
 
             accum_duration += segment.duration();
@@ -604,6 +672,128 @@ pub struct ClipConfiguration {
     pub offsets: ClipOffsets,
 }
 
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum AnnotationType {
+    Arrow,
+    Circle,
+    Rectangle,
+    Text,
+    Mask,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum MaskType {
+    Blur,
+    Pixelate,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AnnotationValidationError {
+    MaskTypeMissing {
+        id: String,
+    },
+    MaskLevelMissing {
+        id: String,
+    },
+    MaskLevelInvalid {
+        id: String,
+        level: f64,
+    },
+    MaskDataNotAllowed {
+        id: String,
+        annotation_type: AnnotationType,
+    },
+}
+
+impl fmt::Display for AnnotationValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MaskTypeMissing { id } => {
+                write!(f, "annotation {id} of type mask is missing maskType")
+            }
+            Self::MaskLevelMissing { id } => {
+                write!(f, "annotation {id} of type mask is missing maskLevel")
+            }
+            Self::MaskLevelInvalid { id, level } => {
+                write!(f, "annotation {id} has invalid maskLevel {level}")
+            }
+            Self::MaskDataNotAllowed {
+                id,
+                annotation_type,
+            } => write!(
+                f,
+                "annotation {id} with type {:?} cannot include mask data",
+                annotation_type
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AnnotationValidationError {}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Annotation {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub annotation_type: AnnotationType,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub stroke_color: String,
+    pub stroke_width: f64,
+    pub fill_color: String,
+    pub opacity: f64,
+    pub rotation: f64,
+    pub text: Option<String>,
+    #[serde(default)]
+    pub mask_type: Option<MaskType>,
+    #[serde(default)]
+    pub mask_level: Option<f64>,
+}
+
+impl Annotation {
+    pub fn validate(&self) -> Result<(), AnnotationValidationError> {
+        match self.annotation_type {
+            AnnotationType::Mask => {
+                if self.mask_type.is_none() {
+                    return Err(AnnotationValidationError::MaskTypeMissing {
+                        id: self.id.clone(),
+                    });
+                }
+
+                let level =
+                    self.mask_level
+                        .ok_or_else(|| AnnotationValidationError::MaskLevelMissing {
+                            id: self.id.clone(),
+                        })?;
+
+                if !level.is_finite() || level <= 0.0 {
+                    return Err(AnnotationValidationError::MaskLevelInvalid {
+                        id: self.id.clone(),
+                        level,
+                    });
+                }
+
+                Ok(())
+            }
+            _ => {
+                if self.mask_type.is_some() || self.mask_level.is_some() {
+                    return Err(AnnotationValidationError::MaskDataNotAllowed {
+                        id: self.id.clone(),
+                        annotation_type: self.annotation_type,
+                    });
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Type, Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectConfiguration {
@@ -619,29 +809,80 @@ pub struct ProjectConfiguration {
     pub captions: Option<CaptionsData>,
     #[serde(default)]
     pub clips: Vec<ClipConfiguration>,
+    #[serde(default)]
+    pub annotations: Vec<Annotation>,
+}
+
+fn camera_config_needs_migration(value: &Value) -> bool {
+    value
+        .get("camera")
+        .and_then(|camera| camera.as_object())
+        .is_some_and(|camera| {
+            camera.contains_key("zoom_size")
+                || camera.contains_key("advanced_shadow")
+                || camera.contains_key("rounding_type")
+        })
 }
 
 impl ProjectConfiguration {
+    pub fn validate(&self) -> Result<(), AnnotationValidationError> {
+        for annotation in &self.annotations {
+            annotation.validate()?;
+        }
+
+        Ok(())
+    }
+
     pub fn load(project_path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
-        let config_str =
-            std::fs::read_to_string(project_path.as_ref().join("project-config.json"))?;
-        let config: Self = serde_json::from_str(&config_str).unwrap_or_default();
+        let project_path = project_path.as_ref();
+        let config_path = project_path.join("project-config.json");
+        let config_str = std::fs::read_to_string(&config_path)?;
+        let parsed_value = serde_json::from_str::<Value>(&config_str).ok();
+        let config: Self = serde_json::from_str(&config_str)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+        config
+            .validate()
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+
+        if parsed_value
+            .as_ref()
+            .map(camera_config_needs_migration)
+            .unwrap_or(false)
+        {
+            match config.write(project_path) {
+                Ok(_) => {
+                    eprintln!("Updated project-config.json camera keys to camelCase");
+                }
+                Err(error) => {
+                    eprintln!("Failed to migrate project-config.json: {error}");
+                }
+            }
+        }
 
         Ok(config)
     }
 
     pub fn write(&self, project_path: impl AsRef<Path>) -> Result<(), std::io::Error> {
-        std::fs::write(
+        self.validate()
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+
+        let temp_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+
+        // Write to temporary file first to ensure readers don't see partial files
+        std::fs::write(&temp_path, serde_json::to_string_pretty(self)?)?;
+
+        std::fs::rename(
+            &temp_path,
             project_path.as_ref().join("project-config.json"),
-            serde_json::to_string_pretty(self)?,
-        )
+        )?;
+
+        Ok(())
     }
 
-    pub fn get_segment_time(&self, frame_time: f64) -> Option<(f64, u32)> {
+    pub fn get_segment_time(&self, frame_time: f64) -> Option<(f64, &TimelineSegment)> {
         self.timeline
             .as_ref()
-            .map(|t| t.get_segment_time(frame_time))
-            .unwrap_or(Some((frame_time, 0)))
+            .and_then(|t| t.get_segment_time(frame_time))
     }
 }
 

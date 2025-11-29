@@ -47,13 +47,15 @@ const ApiLive = HttpApiBuilder.api(Api).pipe(
 
 				return handlers.handle("getVideoSrc", ({ urlParams }) =>
 					Effect.gen(function* () {
-						const [video] = yield* videos.getById(urlParams.videoId).pipe(
-							Effect.flatten,
-							Effect.catchTag(
-								"NoSuchElementException",
-								() => new HttpApiError.NotFound(),
-							),
-						);
+						const [video] = yield* videos
+							.getByIdForViewing(urlParams.videoId)
+							.pipe(
+								Effect.flatten,
+								Effect.catchTag(
+									"NoSuchElementException",
+									() => new HttpApiError.NotFound(),
+								),
+							);
 
 						return yield* getPlaylistResponse(video, urlParams);
 					}).pipe(
@@ -80,11 +82,13 @@ const getPlaylistResponse = (
 ) =>
 	Effect.gen(function* () {
 		const [s3, customBucket] = yield* S3Buckets.getBucketAccess(video.bucketId);
+		const isMp4Source =
+			video.source.type === "desktopMP4" || video.source.type === "webMP4";
 
 		if (Option.isNone(customBucket)) {
 			let redirect = `${video.ownerId}/${video.id}/combined-source/stream.m3u8`;
 
-			if (video.source.type === "desktopMP4" || urlParams.videoType === "mp4")
+			if (isMp4Source || urlParams.videoType === "mp4")
 				redirect = `${video.ownerId}/${video.id}/result.mp4`;
 			else if (video.source.type === "MediaConvert")
 				redirect = `${video.ownerId}/${video.id}/output/video_recording_000.m3u8`;
@@ -145,7 +149,7 @@ const getPlaylistResponse = (
 				return HttpServerResponse.text(playlist, {
 					headers: CACHE_CONTROL_HEADERS,
 				});
-			} else if (video.source.type === "desktopMP4") {
+			} else if (isMp4Source) {
 				yield* Effect.log(
 					`Returning path ${`${video.ownerId}/${video.id}/result.mp4`}`,
 				);

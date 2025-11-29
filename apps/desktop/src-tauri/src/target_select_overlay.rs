@@ -6,8 +6,13 @@ use std::{
 };
 
 use base64::prelude::*;
+use cap_recording::screen_capture::ScreenCaptureTarget;
 
-use crate::windows::{CapWindowId, ShowCapWindow};
+use crate::{
+    general_settings,
+    window_exclusion::WindowExclusion,
+    windows::{CapWindowId, ShowCapWindow},
+};
 use scap_targets::{
     Display, DisplayId, Window, WindowId,
     bounds::{LogicalBounds, PhysicalSize},
@@ -18,7 +23,7 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcut, GlobalShortcutExt};
 use tauri_specta::Event;
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{error, instrument};
 
 #[derive(tauri_specta::Event, Serialize, Type, Clone)]
 pub struct TargetUnderCursor {
@@ -42,9 +47,11 @@ pub struct DisplayInformation {
 
 #[specta::specta]
 #[tauri::command]
+#[instrument(skip(app, state))]
 pub async fn open_target_select_overlays(
     app: AppHandle,
     state: tauri::State<'_, WindowFocusManager>,
+    focused_target: Option<ScreenCaptureTarget>,
 ) -> Result<(), String> {
     let displays = scap_targets::Display::list()
         .into_iter()
@@ -56,17 +63,35 @@ pub async fn open_target_select_overlays(
             .await;
     }
 
+    let window_exclusions = general_settings::GeneralSettingsStore::get(&app)
+        .ok()
+        .flatten()
+        .map_or_else(general_settings::default_excluded_windows, |settings| {
+            settings.excluded_windows
+        });
+
     let handle = tokio::spawn({
         let app = app.clone();
+
         async move {
             loop {
                 {
-                    let display = scap_targets::Display::get_containing_cursor();
-                    let window = scap_targets::Window::get_topmost_at_cursor();
+                    let display = focused_target
+                        .as_ref()
+                        .map(|v| v.display())
+                        .unwrap_or_else(scap_targets::Display::get_containing_cursor);
+                    let window = focused_target
+                        .as_ref()
+                        .map(|v| v.window().and_then(|id| scap_targets::Window::from_id(&id)))
+                        .unwrap_or_else(scap_targets::Window::get_topmost_at_cursor);
 
                     let _ = TargetUnderCursor {
                         display_id: display.map(|d| d.id()),
                         window: window.and_then(|w| {
+                            if should_skip_window(&w, &window_exclusions) {
+                                return None;
+                            }
+
                             Some(WindowUnderCursor {
                                 id: w.id(),
                                 bounds: w.display_relative_logical_bounds()?,
@@ -100,8 +125,62 @@ pub async fn open_target_select_overlays(
     Ok(())
 }
 
+fn should_skip_window(window: &Window, exclusions: &[WindowExclusion]) -> bool {
+    if exclusions.is_empty() {
+        return false;
+    }
+
+    let owner_name = window.owner_name();
+    let window_title = window.name();
+
+    #[cfg(target_os = "macos")]
+    let bundle_identifier = window.raw_handle().bundle_identifier();
+
+    #[cfg(not(target_os = "macos"))]
+    let bundle_identifier = None::<&str>;
+
+    exclusions.iter().any(|entry| {
+        entry.matches(
+            bundle_identifier.as_deref(),
+            owner_name.as_deref(),
+            window_title.as_deref(),
+        )
+    })
+}
+
 #[specta::specta]
 #[tauri::command]
+#[instrument(skip(app))]
+pub async fn update_camera_overlay_bounds(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window("camera")
+        .ok_or("Camera window not found")?;
+
+    window
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize {
+            width: width as u32,
+            height: height as u32,
+        }))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: x as i32,
+            y: y as i32,
+        }))
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[specta::specta]
+#[tauri::command]
+#[instrument(skip(app))]
 pub async fn close_target_select_overlays(app: AppHandle) -> Result<(), String> {
     for (id, window) in app.webview_windows() {
         if let Ok(CapWindowId::TargetSelectOverlay { .. }) = CapWindowId::from_str(&id) {
@@ -114,10 +193,11 @@ pub async fn close_target_select_overlays(app: AppHandle) -> Result<(), String> 
 
 #[specta::specta]
 #[tauri::command]
+#[instrument]
 pub async fn get_window_icon(window_id: &str) -> Result<Option<String>, String> {
     let window_id = window_id
         .parse::<WindowId>()
-        .map_err(|err| format!("Invalid window ID: {}", err))?;
+        .map_err(|err| format!("Invalid window ID: {err}"))?;
 
     Ok(Window::from_id(&window_id)
         .ok_or("Window not found")?
@@ -127,10 +207,11 @@ pub async fn get_window_icon(window_id: &str) -> Result<Option<String>, String> 
 
 #[specta::specta]
 #[tauri::command]
+#[instrument]
 pub async fn display_information(display_id: &str) -> Result<DisplayInformation, String> {
     let display_id = display_id
         .parse::<DisplayId>()
-        .map_err(|err| format!("Invalid display ID: {}", err))?;
+        .map_err(|err| format!("Invalid display ID: {err}"))?;
     let display = Display::from_id(&display_id).ok_or("Display not found")?;
 
     Ok(DisplayInformation {
@@ -142,6 +223,7 @@ pub async fn display_information(display_id: &str) -> Result<DisplayInformation,
 
 #[specta::specta]
 #[tauri::command]
+#[instrument]
 pub async fn focus_window(window_id: WindowId) -> Result<(), String> {
     let window = Window::from_id(&window_id).ok_or("Window not found")?;
 
@@ -166,14 +248,31 @@ pub async fn focus_window(window_id: WindowId) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::UI::WindowsAndMessaging::{
-            SW_RESTORE, SetForegroundWindow, ShowWindow,
+            GetWindowPlacement, IsIconic, SW_RESTORE, SetForegroundWindow, SetWindowPlacement,
+            ShowWindow, WINDOWPLACEMENT,
         };
 
         let hwnd = window.raw_handle().inner();
 
         unsafe {
-            ShowWindow(hwnd, SW_RESTORE);
-            SetForegroundWindow(hwnd);
+            // Only restore if the window is actually minimized
+            if IsIconic(hwnd).as_bool() {
+                // Get current window placement to preserve size/position
+                let mut wp = WINDOWPLACEMENT::default();
+                wp.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+
+                if GetWindowPlacement(hwnd, &mut wp).is_ok() {
+                    // Restore using the previous placement to avoid resizing
+                    wp.showCmd = SW_RESTORE.0 as u32;
+                    let _ = SetWindowPlacement(hwnd, &wp);
+                } else {
+                    // Fallback to simple restore if placement fails
+                    let _ = ShowWindow(hwnd, SW_RESTORE);
+                }
+            }
+
+            // Always try to bring to foreground
+            let _ = SetForegroundWindow(hwnd);
         }
     }
 
@@ -199,16 +298,11 @@ impl WindowFocusManager {
                     let cap_main = CapWindowId::Main.get(app);
                     let cap_settings = CapWindowId::Settings.get(app);
 
-                    let has_cap_main = cap_main
-                        .as_ref()
-                        .and_then(|v| Some(v.is_minimized().ok()? || !v.is_visible().ok()?))
-                        .unwrap_or(true);
-                    let has_cap_settings = cap_settings
-                        .and_then(|v| Some(v.is_minimized().ok()? || !v.is_visible().ok()?))
-                        .unwrap_or(true);
+                    let main_window_available = cap_main.is_some();
+                    let settings_window_available = cap_settings.is_some();
 
-                    // Close the overlay if the cap main and settings are not available.
-                    if has_cap_main && has_cap_settings {
+                    // Close the overlay if both cap windows are gone.
+                    if !main_window_available && !settings_window_available {
                         window.hide().ok();
                         break;
                     }

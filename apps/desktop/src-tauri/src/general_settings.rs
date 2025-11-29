@@ -1,9 +1,10 @@
+use crate::window_exclusion::WindowExclusion;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
 use tauri::{AppHandle, Wry};
 use tauri_plugin_store::StoreExt;
-use tracing::error;
+use tracing::{error, instrument};
 use uuid::Uuid;
 
 #[derive(Default, Serialize, Deserialize, Type, Debug, Clone, Copy)]
@@ -39,6 +40,24 @@ impl MainWindowRecordingStartBehaviour {
     }
 }
 
+const DEFAULT_EXCLUDED_WINDOW_TITLES: &[&str] = &[
+    "Cap",
+    "Cap Settings",
+    "Cap Recording Controls",
+    "Cap Camera",
+];
+
+pub fn default_excluded_windows() -> Vec<WindowExclusion> {
+    DEFAULT_EXCLUDED_WINDOW_TITLES
+        .iter()
+        .map(|title| WindowExclusion {
+            bundle_identifier: None,
+            owner_name: None,
+            window_title: Some((*title).to_string()),
+        })
+        .collect()
+}
+
 // When adding fields here, #[serde(default)] defines the value to use for existing configurations,
 // and `Default::default` defines the value to use for new configurations.
 // Things that affect the user experience should only be enabled by default for new configurations.
@@ -51,8 +70,6 @@ pub struct GeneralSettingsStore {
     pub upload_individual_files: bool,
     #[serde(default)]
     pub hide_dock_icon: bool,
-    #[serde(default = "true_b")]
-    pub haptics_enabled: bool,
     #[serde(default)]
     pub auto_create_shareable_link: bool,
     #[serde(default = "true_b")]
@@ -96,7 +113,15 @@ pub struct GeneralSettingsStore {
     )]
     pub enable_new_recording_flow: bool,
     #[serde(default)]
+    pub recording_picker_preference_set: bool,
+    #[serde(default)]
     pub post_deletion_behaviour: PostDeletionBehaviour,
+    #[serde(default = "default_excluded_windows")]
+    pub excluded_windows: Vec<WindowExclusion>,
+    #[serde(default)]
+    pub delete_instant_recordings_after_upload: bool,
+    #[serde(default = "default_instant_mode_max_resolution")]
+    pub instant_mode_max_resolution: u32,
 }
 
 fn default_enable_native_camera_preview() -> bool {
@@ -105,7 +130,7 @@ fn default_enable_native_camera_preview() -> bool {
 }
 
 fn default_enable_new_recording_flow() -> bool {
-    cfg!(debug_assertions)
+    true
 }
 
 fn no(_: &bool) -> bool {
@@ -114,6 +139,10 @@ fn no(_: &bool) -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_instant_mode_max_resolution() -> u32 {
+    1920
 }
 
 fn default_server_url() -> String {
@@ -137,7 +166,6 @@ impl Default for GeneralSettingsStore {
             instance_id: uuid::Uuid::new_v4(),
             upload_individual_files: false,
             hide_dock_icon: false,
-            haptics_enabled: true,
             auto_create_shareable_link: false,
             enable_notifications: true,
             disable_auto_open_links: false,
@@ -154,7 +182,11 @@ impl Default for GeneralSettingsStore {
             enable_native_camera_preview: default_enable_native_camera_preview(),
             auto_zoom_on_clicks: false,
             enable_new_recording_flow: default_enable_new_recording_flow(),
+            recording_picker_preference_set: false,
             post_deletion_behaviour: PostDeletionBehaviour::DoNothing,
+            excluded_windows: default_excluded_windows(),
+            delete_instant_recordings_after_upload: false,
+            instant_mode_max_resolution: 1920,
         }
     }
 }
@@ -211,7 +243,7 @@ impl GeneralSettingsStore {
 pub fn init(app: &AppHandle) {
     println!("Initializing GeneralSettingsStore");
 
-    let store = match GeneralSettingsStore::get(app) {
+    let mut store = match GeneralSettingsStore::get(app) {
         Ok(Some(store)) => store,
         Ok(None) => GeneralSettingsStore::default(),
         Err(e) => {
@@ -220,7 +252,21 @@ pub fn init(app: &AppHandle) {
         }
     };
 
-    store.save(app).unwrap();
+    if !store.recording_picker_preference_set {
+        store.enable_new_recording_flow = true;
+        store.recording_picker_preference_set = true;
+    }
+
+    if let Err(e) = store.save(app) {
+        error!("Failed to save general settings: {}", e);
+    }
 
     println!("GeneralSettingsState managed");
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument]
+pub fn get_default_excluded_windows() -> Vec<WindowExclusion> {
+    default_excluded_windows()
 }

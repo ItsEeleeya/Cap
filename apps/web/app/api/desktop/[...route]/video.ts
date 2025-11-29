@@ -11,16 +11,16 @@ import {
 	videoUploads,
 } from "@cap/database/schema";
 import { buildEnv, NODE_ENV, serverEnv } from "@cap/env";
-import { userIsPro } from "@cap/utils";
+import { dub, userIsPro } from "@cap/utils";
 import { S3Buckets } from "@cap/web-backend";
-import { Video } from "@cap/web-domain";
+import { Organisation, Video } from "@cap/web-domain";
 import { zValidator } from "@hono/zod-validator";
-import { and, count, eq, gt, gte, lt, lte, or } from "drizzle-orm";
+import { and, count, eq, lte, or } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Hono } from "hono";
 import { z } from "zod";
 import { runPromise } from "@/lib/server";
-import { dub } from "@/utils/dub";
+import { isFromDesktopSemver, UPLOAD_PROGRESS_VERSION } from "@/utils/desktop";
 import { stringOrNumberOptional } from "@/utils/zod";
 import { withAuth } from "../../utils";
 
@@ -41,7 +41,12 @@ app.get(
 			width: stringOrNumberOptional,
 			height: stringOrNumberOptional,
 			fps: stringOrNumberOptional,
-			orgId: z.string().optional(),
+			orgId: z
+				.string()
+				.optional()
+				.transform((v) =>
+					v ? Organisation.OrganisationId.make(v) : undefined,
+				),
 		}),
 	),
 	async (c) => {
@@ -125,7 +130,7 @@ app.get(
 				.orderBy(organizations.createdAt);
 			const userOrgIds = userOrganizations.map((org) => org.id);
 
-			let videoOrgId: string;
+			let videoOrgId: Organisation.OrganisationId;
 			if (orgId) {
 				// Hard error if the user requested org is non-existent or they don't have access.
 				if (!userOrgIds.includes(orgId))
@@ -182,10 +187,10 @@ app.get(
 					fps,
 				});
 
-			const xCapVersion = c.req.header("X-Cap-Desktop-Version");
-			const clientSupportsUploadProgress = xCapVersion
-				? isAtLeastSemver(xCapVersion, 0, 3, 68)
-				: false;
+			const clientSupportsUploadProgress = isFromDesktopSemver(
+				c.req,
+				UPLOAD_PROGRESS_VERSION,
+			);
 
 			if (clientSupportsUploadProgress)
 				await db().insert(videoUploads).values({
@@ -205,12 +210,7 @@ app.get(
 					.from(videos)
 					.where(eq(videos.ownerId, user.id));
 
-				if (
-					videoCount &&
-					videoCount[0] &&
-					videoCount[0].count === 1 &&
-					user.email
-				) {
+				if (videoCount?.[0] && videoCount[0].count === 1 && user.email) {
 					console.log(
 						"[SendFirstShareableLinkEmail] Sending first shareable link email with 5-minute delay",
 					);
@@ -291,7 +291,7 @@ app.delete(
 					prefix: `${user.id}/${videoId}/`,
 				});
 
-				if (listedObjects.Contents?.length)
+				if (listedObjects.Contents)
 					yield* bucket.deleteObjects(
 						listedObjects.Contents.map((content: any) => ({
 							Key: content.Key,
@@ -335,41 +335,44 @@ app.post(
 
 		try {
 			const [video] = await db()
-				.select({ id: videos.id })
+				.select({ id: videos.id, upload: videoUploads })
 				.from(videos)
-				.where(and(eq(videos.id, videoId), eq(videos.ownerId, user.id)));
+				.where(and(eq(videos.id, videoId), eq(videos.ownerId, user.id)))
+				.leftJoin(videoUploads, eq(videos.id, videoUploads.videoId));
 			if (!video)
 				return c.json(
 					{ error: true, message: "Video not found" },
 					{ status: 404 },
 				);
 
-			const result = await db()
-				.update(videoUploads)
-				.set({
-					uploaded,
-					total,
-					updatedAt,
-				})
-				.where(
-					and(
-						eq(videoUploads.videoId, videoId),
-						lte(videoUploads.updatedAt, updatedAt),
-					),
-				);
-
-			if (result.rowsAffected === 0)
+			if (video.upload) {
+				if (uploaded === total && video.upload.mode === "singlepart") {
+					await db()
+						.delete(videoUploads)
+						.where(eq(videoUploads.videoId, videoId));
+				} else {
+					await db()
+						.update(videoUploads)
+						.set({
+							uploaded,
+							total,
+							updatedAt,
+						})
+						.where(
+							and(
+								eq(videoUploads.videoId, videoId),
+								lte(videoUploads.updatedAt, updatedAt),
+							),
+						);
+				}
+			} else {
 				await db().insert(videoUploads).values({
 					videoId,
 					uploaded,
 					total,
 					updatedAt,
 				});
-
-			if (uploaded === total)
-				await db()
-					.delete(videoUploads)
-					.where(eq(videoUploads.videoId, videoId));
+			}
 
 			return c.json(true);
 		} catch (error) {
@@ -378,27 +381,3 @@ app.post(
 		}
 	},
 );
-
-function isAtLeastSemver(
-	versionString: string,
-	major: number,
-	minor: number,
-	patch: number,
-): boolean {
-	const match = versionString
-		.replace(/^v/, "")
-		.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?/);
-	if (!match) return false;
-	const [, vMajor, vMinor, vPatch, prerelease] = match;
-	const M = vMajor ? parseInt(vMajor, 10) || 0 : 0;
-	const m = vMinor ? parseInt(vMinor, 10) || 0 : 0;
-	const p = vPatch ? parseInt(vPatch, 10) || 0 : 0;
-	if (M > major) return true;
-	if (M < major) return false;
-	if (m > minor) return true;
-	if (m < minor) return false;
-	if (p > patch) return true;
-	if (p < patch) return false;
-	// Equal triplet: accept only non-prerelease
-	return !prerelease;
-}

@@ -5,14 +5,11 @@ import {
 	type PresignedPostOptions,
 } from "@aws-sdk/s3-presigned-post";
 import * as S3Presigner from "@aws-sdk/s3-request-presigner";
+import { S3Error } from "@cap/web-domain";
 import type { RequestPresigningArguments } from "@smithy/types";
-import { type Cause, Effect, Option, Schema, Stream } from "effect";
+import { type Cause, Effect, Option, Stream } from "effect";
 
 import { S3BucketClientProvider } from "./S3BucketClientProvider.ts";
-
-export class S3Error extends Schema.TaggedError<S3Error>()("S3Error", {
-	cause: Schema.Unknown,
-}) {}
 
 const wrapS3Promise = <T>(
 	promise: Promise<T> | Effect.Effect<Promise<T>, Cause.UnknownException>,
@@ -30,7 +27,7 @@ const wrapS3Promise = <T>(
 				Effect.tryPromise({
 					try: () => cbResult,
 					catch: (cause) => new S3Error({ cause }),
-				}),
+				}).pipe(Effect.tapError(Effect.logError)),
 			),
 		);
 	}).pipe(
@@ -41,6 +38,7 @@ export const createS3BucketAccess = Effect.gen(function* () {
 	const provider = yield* S3BucketClientProvider;
 	return {
 		bucketName: provider.bucket,
+		isPathStyle: provider.isPathStyle,
 		getSignedObjectUrl: (key: string) =>
 			wrapS3Promise(
 				provider.getPublic.pipe(
@@ -109,7 +107,7 @@ export const createS3BucketAccess = Effect.gen(function* () {
 				provider.getInternal.pipe(
 					Effect.flatMap((client) =>
 						Effect.gen(function* () {
-							let _body;
+							let _body: S3.PutObjectCommandInput["Body"];
 
 							if (typeof body === "string" || body instanceof Uint8Array) {
 								_body = body;
@@ -184,7 +182,7 @@ export const createS3BucketAccess = Effect.gen(function* () {
 						),
 					),
 				),
-			),
+			).pipe(Effect.when(() => objects.length > 0)),
 		getPresignedPutUrl: (
 			key: string,
 			args?: Omit<S3.PutObjectRequest, "Key" | "Bucket">,
@@ -259,6 +257,7 @@ export const createS3BucketAccess = Effect.gen(function* () {
 									UploadId: uploadId,
 									PartNumber: partNumber,
 								}),
+								{ expiresIn: 3600 },
 							),
 						),
 					),
@@ -276,6 +275,28 @@ export const createS3BucketAccess = Effect.gen(function* () {
 						Effect.map((client) =>
 							client.send(
 								new S3.CompleteMultipartUploadCommand({
+									Bucket: provider.bucket,
+									Key: key,
+									UploadId: uploadId,
+									...args,
+								}),
+							),
+						),
+					),
+				),
+			abort: (
+				key: string,
+				uploadId: string,
+				args?: Omit<
+					S3.AbortMultipartUploadCommandInput,
+					"Key" | "Bucket" | "UploadId"
+				>,
+			) =>
+				wrapS3Promise(
+					provider.getInternal.pipe(
+						Effect.map((client) =>
+							client.send(
+								new S3.AbortMultipartUploadCommand({
 									Bucket: provider.bucket,
 									Key: key,
 									UploadId: uploadId,

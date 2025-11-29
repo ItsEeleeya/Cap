@@ -1,11 +1,9 @@
 "use client";
 
-import { Avatar } from "@cap/ui";
 import { useClickAway } from "@uidotdev/usehooks";
 import clsx from "clsx";
 import { Check, ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +14,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { SignedImageUrl } from "@/components/SignedImageUrl";
 import { useDashboardContext } from "../Contexts";
 import { CapIcon, CogIcon, LayersIcon } from "./AnimatedIcons";
 import { updateActiveOrganization } from "./Navbar/server";
@@ -44,11 +43,13 @@ const MobileTab = () => {
 		}
 	});
 	return (
-		<div className="flex sticky bottom-0 z-50 flex-1 justify-between items-center px-5 w-screen h-16 border-t lg:hidden border-gray-5 bg-gray-1">
-			<AnimatePresence>
-				{open && <OrgsMenu setOpen={setOpen} menuRef={menuRef} />}
-			</AnimatePresence>
-			<Orgs open={open} setOpen={setOpen} containerRef={containerRef} />
+		<div className="flex sticky bottom-0 z-50 flex-1 gap-10 justify-between items-center px-5 w-screen h-16 border-t lg:hidden border-gray-5 bg-gray-1">
+			<div className="relative flex-auto w-fit">
+				<AnimatePresence>
+					{open && <OrgsMenu setOpen={setOpen} menuRef={menuRef} />}
+				</AnimatePresence>
+				<Orgs open={open} setOpen={setOpen} containerRef={containerRef} />
+			</div>
 			<div className="flex gap-6 justify-between items-center h-full text-gray-11">
 				{Tabs.filter((i) => !i.ownerOnly || isOwner).map((tab) => (
 					<Link href={tab.href} key={tab.href}>
@@ -74,25 +75,15 @@ const Orgs = ({
 		<div
 			onClick={() => setOpen((p) => !p)}
 			ref={containerRef}
-			className="flex gap-1.5 items-center p-2 rounded-full border bg-gray-3 border-gray-5"
+			className="flex gap-1.5 items-center flex-auto max-w-[224px] p-2 rounded-full border bg-gray-3 border-gray-5"
 		>
-			{activeOrg?.organization.iconUrl ? (
-				<div className="overflow-hidden relative flex-shrink-0 rounded-full size-[24px]">
-					<Image
-						src={activeOrg.organization.iconUrl}
-						alt={activeOrg.organization.name || "Organization icon"}
-						fill
-						className="object-cover"
-					/>
-				</div>
-			) : (
-				<Avatar
-					letterClass="text-xs"
-					className="relative flex-shrink-0 mx-auto size-6"
-					name={activeOrg?.organization.name ?? "No organization found"}
-				/>
-			)}
-			<p className="text-sm mr-2 text-gray-12 truncate w-fit max-w-[90px]">
+			<SignedImageUrl
+				image={activeOrg?.organization.iconUrl}
+				name={activeOrg?.organization.name ?? "No organization found"}
+				letterClass="text-xs"
+				className="relative flex-shrink-0 mx-auto size-6"
+			/>
+			<p className="flex-1 mr-2 text-sm truncate text-gray-12">
 				{activeOrg?.organization.name}
 			</p>
 			<ChevronDown
@@ -123,7 +114,7 @@ const OrgsMenu = ({
 			transition={{ duration: 0.15 }}
 			ref={menuRef as LegacyRef<HTMLDivElement>}
 			className={
-				"isolate absolute overscroll-contain bottom-14 p-2 space-y-1.5 w-full rounded-xl h-fit border bg-gray-3 max-h-[325px] custom-scroll max-w-[200px] border-gray-4"
+				"isolate absolute overscroll-contain bottom-14 p-2 space-y-1.5 flex-auto w-full rounded-xl h-fit border bg-gray-3 max-h-[325px] custom-scroll border-gray-4"
 			}
 		>
 			{orgData?.map((organization) => {
@@ -145,25 +136,15 @@ const OrgsMenu = ({
 						}}
 					>
 						<div className="flex gap-2 items-center w-full">
-							{organization.organization.iconUrl ? (
-								<div className="overflow-hidden relative flex-shrink-0 rounded-full size-5">
-									<Image
-										src={organization.organization.iconUrl}
-										alt={organization.organization.name || "Organization icon"}
-										fill
-										className="object-cover"
-									/>
-								</div>
-							) : (
-								<Avatar
-									letterClass="text-xs"
-									className="relative flex-shrink-0 size-5"
-									name={organization.organization.name}
-								/>
-							)}
+							<SignedImageUrl
+								image={organization.organization.iconUrl}
+								name={organization.organization.name}
+								letterClass="text-xs"
+								className="relative flex-shrink-0 size-5"
+							/>
 							<p
 								className={clsx(
-									"flex-1 text-sm transition-colors duration-200 group-hover:text-gray-12",
+									"flex-1 text-sm truncate transition-colors duration-200 group-hover:text-gray-12",
 									isSelected ? "text-gray-12" : "text-gray-10",
 								)}
 							>

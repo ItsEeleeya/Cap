@@ -1,7 +1,7 @@
 import { Button } from "@cap/ui-solid";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { useNavigate } from "@solidjs/router";
-import { createMutation, useQuery } from "@tanstack/solid-query";
+import { createMutation, queryOptions, useQuery } from "@tanstack/solid-query";
 import { listen } from "@tauri-apps/api/event";
 import {
 	getAllWebviewWindows,
@@ -14,6 +14,7 @@ import {
 } from "@tauri-apps/api/window";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { type as ostype } from "@tauri-apps/plugin-os";
+import * as shell from "@tauri-apps/plugin-shell";
 import * as updater from "@tauri-apps/plugin-updater";
 import { cx } from "cva";
 import {
@@ -27,11 +28,12 @@ import {
 	Suspense,
 } from "solid-js";
 import { reconcile } from "solid-js/store";
-import { Motion, Presence } from "solid-motionone";
+// Removed solid-motionone in favor of solid-transition-group
 import { Transition } from "solid-transition-group";
+import Mode from "~/components/Mode";
 import Tooltip from "~/components/Tooltip";
 import { Input } from "~/routes/editor/ui";
-import { generalSettingsStore } from "~/store";
+import { authStore, generalSettingsStore } from "~/store";
 import { createSignInMutation } from "~/utils/auth";
 import {
 	createCameraMutation,
@@ -39,6 +41,7 @@ import {
 	createLicenseQuery,
 	listAudioDevices,
 	listDisplaysWithThumbnails,
+	listRecordings,
 	listScreens,
 	listVideoDevices,
 	listWindows,
@@ -52,11 +55,19 @@ import {
 	type CaptureWindowWithThumbnail,
 	commands,
 	type DeviceOrModelID,
+	type RecordingMetaWithMetadata,
+	type RecordingTargetMode,
 	type ScreenCaptureTarget,
 } from "~/utils/tauri";
+import IconCapLogoFull from "~icons/cap/logo-full";
+import IconCapLogoFullDark from "~icons/cap/logo-full-dark";
+import IconCapSettings from "~icons/cap/settings";
 import IconLucideAppWindowMac from "~icons/lucide/app-window-mac";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
+import IconLucideBug from "~icons/lucide/bug";
+import IconLucideImage from "~icons/lucide/image";
 import IconLucideSearch from "~icons/lucide/search";
+import IconLucideSquarePlay from "~icons/lucide/square-play";
 import IconMaterialSymbolsScreenshotFrame2Rounded from "~icons/material-symbols/screenshot-frame-2-rounded";
 import IconMdiMonitor from "~icons/mdi/monitor";
 import { WindowChromeHeader } from "../Context";
@@ -68,14 +79,15 @@ import CameraSelect from "./CameraSelect";
 import ChangelogButton from "./ChangeLogButton";
 import MicrophoneSelect from "./MicrophoneSelect";
 import SystemAudio from "./SystemAudio";
+import type { RecordingWithPath, ScreenshotWithPath } from "./TargetCard";
 import TargetDropdownButton from "./TargetDropdownButton";
 import TargetMenuGrid from "./TargetMenuGrid";
 import TargetTypeButton from "./TargetTypeButton";
 
 function getWindowSize() {
 	return {
-		width: 270,
-		height: 256,
+		width: 290,
+		height: 310,
 	};
 }
 
@@ -137,6 +149,18 @@ type TargetMenuPanelProps =
 			variant: "window";
 			targets?: CaptureWindowWithThumbnail[];
 			onSelect: (target: CaptureWindowWithThumbnail) => void;
+	  }
+	| {
+			variant: "recording";
+			targets?: RecordingWithPath[];
+			onSelect: (target: RecordingWithPath) => void;
+			onViewAll: () => void;
+	  }
+	| {
+			variant: "screenshot";
+			targets?: ScreenshotWithPath[];
+			onSelect: (target: ScreenshotWithPath) => void;
+			onViewAll: () => void;
 	  };
 
 type SharedTargetMenuProps = {
@@ -151,11 +175,21 @@ function TargetMenuPanel(props: TargetMenuPanelProps & SharedTargetMenuProps) {
 	const trimmedSearch = createMemo(() => search().trim());
 	const normalizedQuery = createMemo(() => trimmedSearch().toLowerCase());
 	const placeholder =
-		props.variant === "display" ? "Search displays" : "Search windows";
+		props.variant === "display"
+			? "Search displays"
+			: props.variant === "window"
+				? "Search windows"
+				: props.variant === "recording"
+					? "Search recordings"
+					: "Search screenshots";
 	const noResultsMessage =
 		props.variant === "display"
 			? "No matching displays"
-			: "No matching windows";
+			: props.variant === "window"
+				? "No matching windows"
+				: props.variant === "recording"
+					? "No matching recordings"
+					: "No matching screenshots";
 
 	const filteredDisplayTargets = createMemo<CaptureDisplayWithThumbnail[]>(
 		() => {
@@ -190,45 +224,92 @@ function TargetMenuPanel(props: TargetMenuPanelProps & SharedTargetMenuProps) {
 		);
 	});
 
+	const filteredRecordingTargets = createMemo<RecordingWithPath[]>(() => {
+		if (props.variant !== "recording") return [];
+		const query = normalizedQuery();
+		const targets = props.targets ?? [];
+		if (!query) return targets;
+
+		const matchesQuery = (value?: string | null) =>
+			!!value && value.toLowerCase().includes(query);
+
+		return targets.filter((target) => matchesQuery(target.pretty_name));
+	});
+
+	const filteredScreenshotTargets = createMemo<ScreenshotWithPath[]>(() => {
+		if (props.variant !== "screenshot") return [];
+		const query = normalizedQuery();
+		const targets = props.targets ?? [];
+		if (!query) return targets;
+
+		const matchesQuery = (value?: string | null) =>
+			!!value && value.toLowerCase().includes(query);
+
+		return targets.filter((target) => matchesQuery(target.pretty_name));
+	});
+
 	return (
-		<div class="flex flex-col w-full">
+		<div class="flex flex-col w-full h-full min-h-0">
 			<div class="flex gap-3 justify-between items-center mt-3">
 				<div
 					onClick={() => props.onBack()}
-					class="flex gap-1 items-center rounded-md px-1.5 text-xs 
-					text-gray-11 transition-opacity hover:opacity-70 hover:text-gray-12 
+					class="flex gap-1 items-center rounded-md px-1.5 text-xs
+					text-gray-11 transition-opacity hover:opacity-70 hover:text-gray-12
 					focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-9 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
 				>
 					<IconLucideArrowLeft class="size-3 text-gray-11" />
 					<span class="font-medium text-gray-12">Back</span>
 				</div>
 				<div class="relative flex-1 min-w-0 h-[36px] flex items-center">
-					<IconLucideSearch class="absolute left-2 top-[48%] -translate-y-1/2 pointer-events-none size-3 text-gray-10" />
-					<Input
-						type="search"
-						class="py-2 pl-6 h-full"
-						value={search()}
-						onInput={(event) => setSearch(event.currentTarget.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Escape" && search()) {
-								event.preventDefault();
-								setSearch("");
-							}
-						}}
-						placeholder={placeholder}
-						autoCapitalize="off"
-						autocorrect="off"
-						autocomplete="off"
-						spellcheck={false}
-						aria-label={placeholder}
-					/>
+					<Show
+						when={
+							props.variant === "recording" || props.variant === "screenshot"
+						}
+						fallback={
+							<>
+								<IconLucideSearch class="absolute left-2 top-[48%] -translate-y-1/2 pointer-events-none size-3 text-gray-10" />
+								<Input
+									type="search"
+									class="py-2 pl-6 h-full"
+									value={search()}
+									onInput={(event) => setSearch(event.currentTarget.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Escape" && search()) {
+											event.preventDefault();
+											setSearch("");
+										}
+									}}
+									placeholder={placeholder}
+									autoCapitalize="off"
+									autocorrect="off"
+									autocomplete="off"
+									spellcheck={false}
+									aria-label={placeholder}
+								/>
+							</>
+						}
+					>
+						<button
+							type="button"
+							class="flex w-full items-center justify-start h-full pl-2 text-xs text-gray-11 transition-colors rounded hover:bg-gray-3 hover:text-gray-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-9 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
+							onClick={() => {
+								if ("onViewAll" in props) props.onViewAll();
+							}}
+						>
+							{props.variant === "recording" ? (
+								<IconLucideSquarePlay class="mr-2 size-3" />
+							) : (
+								<IconLucideImage class="mr-2 size-3" />
+							)}
+							{props.variant === "recording"
+								? "View All Recordings"
+								: "View All Screenshots"}
+						</button>
+					</Show>
 				</div>
 			</div>
-			<div class="pt-4">
-				<div
-					class="px-2 custom-scroll"
-					style="max-height: calc(256px - 100px - 1rem)"
-				>
+			<div class="flex flex-col flex-1 min-h-0 pt-4">
+				<div class="px-2 custom-scroll flex-1 overflow-y-auto">
 					{props.variant === "display" ? (
 						<TargetMenuGrid
 							variant="display"
@@ -240,10 +321,32 @@ function TargetMenuPanel(props: TargetMenuPanelProps & SharedTargetMenuProps) {
 							highlightQuery={trimmedSearch()}
 							emptyMessage={trimmedSearch() ? noResultsMessage : undefined}
 						/>
-					) : (
+					) : props.variant === "window" ? (
 						<TargetMenuGrid
 							variant="window"
 							targets={filteredWindowTargets()}
+							isLoading={props.isLoading}
+							errorMessage={props.errorMessage}
+							onSelect={props.onSelect}
+							disabled={props.disabled}
+							highlightQuery={trimmedSearch()}
+							emptyMessage={trimmedSearch() ? noResultsMessage : undefined}
+						/>
+					) : props.variant === "recording" ? (
+						<TargetMenuGrid
+							variant="recording"
+							targets={filteredRecordingTargets()}
+							isLoading={props.isLoading}
+							errorMessage={props.errorMessage}
+							onSelect={props.onSelect}
+							disabled={props.disabled}
+							highlightQuery={trimmedSearch()}
+							emptyMessage={trimmedSearch() ? noResultsMessage : undefined}
+						/>
+					) : (
+						<TargetMenuGrid
+							variant="screenshot"
+							targets={filteredScreenshotTargets()}
 							isLoading={props.isLoading}
 							errorMessage={props.errorMessage}
 							onSelect={props.onSelect}
@@ -302,12 +405,40 @@ function Page() {
 	const { rawOptions, setOptions } = useRecordingOptions();
 	const currentRecording = createCurrentRecordingQuery();
 	const isRecording = () => !!currentRecording.data;
+	const auth = authStore.createQuery();
+
+	const [hasHiddenMainWindowForPicker, setHasHiddenMainWindowForPicker] =
+		createSignal(false);
+	createEffect(() => {
+		const pickerActive = rawOptions.targetMode != null;
+		const hasHidden = hasHiddenMainWindowForPicker();
+		if (pickerActive && !hasHidden) {
+			setHasHiddenMainWindowForPicker(true);
+			void getCurrentWindow().hide();
+		} else if (!pickerActive && hasHidden) {
+			setHasHiddenMainWindowForPicker(false);
+			const currentWindow = getCurrentWindow();
+			void currentWindow.show();
+			void currentWindow.setFocus();
+		}
+	});
+	onCleanup(() => {
+		if (!hasHiddenMainWindowForPicker()) return;
+		setHasHiddenMainWindowForPicker(false);
+		void getCurrentWindow().show();
+	});
 
 	const [displayMenuOpen, setDisplayMenuOpen] = createSignal(false);
 	const [windowMenuOpen, setWindowMenuOpen] = createSignal(false);
-	const activeMenu = createMemo<"display" | "window" | null>(() => {
+	const [recordingsMenuOpen, setRecordingsMenuOpen] = createSignal(false);
+	const [screenshotsMenuOpen, setScreenshotsMenuOpen] = createSignal(false);
+	const activeMenu = createMemo<
+		"display" | "window" | "recording" | "screenshot" | null
+	>(() => {
 		if (displayMenuOpen()) return "display";
 		if (windowMenuOpen()) return "window";
+		if (recordingsMenuOpen()) return "recording";
+		if (screenshotsMenuOpen()) return "screenshot";
 		return null;
 	});
 	const [hasOpenedDisplayMenu, setHasOpenedDisplayMenu] = createSignal(false);
@@ -318,26 +449,82 @@ function Page() {
 
 	const displayTargets = useQuery(() => ({
 		...listDisplaysWithThumbnails,
-		enabled: hasOpenedDisplayMenu(),
 		refetchInterval: false,
 	}));
 
 	const windowTargets = useQuery(() => ({
 		...listWindowsWithThumbnails,
-		enabled: hasOpenedWindowMenu(),
 		refetchInterval: false,
 	}));
+
+	const recordings = useQuery(() => listRecordings);
+	const screenshots = useQuery(() =>
+		queryOptions<ScreenshotWithPath[]>({
+			queryKey: ["screenshots"],
+			queryFn: async () => {
+				const result = await commands
+					.listScreenshots()
+					.catch(() => [] as const);
+
+				return result.map(
+					([path, meta]) => ({ ...meta, path }) as ScreenshotWithPath,
+				);
+			},
+			refetchInterval: 2000,
+			reconcile: (old, next) => reconcile(next)(old),
+			initialData: [],
+		}),
+	);
+
+	const screens = useQuery(() => listScreens);
+	const windows = useQuery(() => listWindows);
 
 	const hasDisplayTargetsData = () => displayTargets.status === "success";
 	const hasWindowTargetsData = () => windowTargets.status === "success";
 
-	const displayTargetsData = createMemo(() =>
-		hasDisplayTargetsData() ? displayTargets.data : undefined,
-	);
+	const existingDisplayIds = createMemo(() => {
+		const currentScreens = screens.data;
+		if (!currentScreens) return undefined;
+		return new Set(currentScreens.map((screen) => screen.id));
+	});
 
-	const windowTargetsData = createMemo(() =>
-		hasWindowTargetsData() ? windowTargets.data : undefined,
-	);
+	const displayTargetsData = createMemo(() => {
+		if (!hasDisplayTargetsData()) return undefined;
+		const ids = existingDisplayIds();
+		if (!ids) return displayTargets.data;
+		return displayTargets.data?.filter((target) => ids.has(target.id));
+	});
+
+	const existingWindowIds = createMemo(() => {
+		const currentWindows = windows.data;
+		if (!currentWindows) return undefined;
+		return new Set(currentWindows.map((win) => win.id));
+	});
+
+	const windowTargetsData = createMemo(() => {
+		if (!hasWindowTargetsData()) return undefined;
+		const ids = existingWindowIds();
+		if (!ids) return windowTargets.data;
+		return windowTargets.data?.filter((target) => ids.has(target.id));
+	});
+
+	const recordingsData = createMemo(() => {
+		const data = recordings.data;
+		if (!data) return [];
+		// The Rust backend sorts files descending by creation time (newest first).
+		// See list_recordings in apps/desktop/src-tauri/src/lib.rs
+		// b_time.cmp(&a_time) ensures newest first.
+		// So we just need to take the top 20.
+		return data
+			.slice(0, 20)
+			.map(([path, meta]) => ({ ...meta, path }) as RecordingWithPath);
+	});
+
+	const screenshotsData = createMemo(() => {
+		const data = screenshots.data;
+		if (!data) return [];
+		return data.slice(0, 20) as ScreenshotWithPath[];
+	});
 
 	const displayMenuLoading = () =>
 		!hasDisplayTargetsData() &&
@@ -364,6 +551,7 @@ function Page() {
 			reconcile({ variant: "display", id: target.id }),
 		);
 		setOptions("targetMode", "display");
+		commands.openTargetSelectOverlays({ variant: "display", id: target.id });
 		setDisplayMenuOpen(false);
 		displayTriggerRef?.focus();
 	};
@@ -374,6 +562,7 @@ function Page() {
 			reconcile({ variant: "window", id: target.id }),
 		);
 		setOptions("targetMode", "window");
+		commands.openTargetSelectOverlays({ variant: "window", id: target.id });
 		setWindowMenuOpen(false);
 		windowTriggerRef?.focus();
 
@@ -388,12 +577,20 @@ function Page() {
 		if (!isRecording()) return;
 		setDisplayMenuOpen(false);
 		setWindowMenuOpen(false);
+		setRecordingsMenuOpen(false);
+		setScreenshotsMenuOpen(false);
 	});
 
 	createUpdateCheck();
 
 	onMount(async () => {
-		setOptions({ targetMode: (window as any).__CAP__.initialTargetMode });
+		const { __CAP__ } = window as typeof window & {
+			__CAP__?: { initialTargetMode?: RecordingTargetMode | null };
+		};
+		const targetMode = __CAP__?.initialTargetMode ?? null;
+		setOptions({ targetMode });
+		if (targetMode) await commands.openTargetSelectOverlays(null);
+		else await commands.closeTargetSelectOverlays();
 
 		const currentWindow = getCurrentWindow();
 
@@ -416,6 +613,8 @@ function Page() {
 			currentWindow.setSize(new LogicalSize(size.width, size.height));
 		});
 
+		commands.updateAuthPlan();
+
 		onCleanup(async () => {
 			(await unlistenFocus)?.();
 			(await unlistenResize)?.();
@@ -425,13 +624,6 @@ function Page() {
 		if (!monitor) return;
 	});
 
-	createEffect(() => {
-		if (rawOptions.targetMode) commands.openTargetSelectOverlays();
-		else commands.closeTargetSelectOverlays();
-	});
-
-	const screens = useQuery(() => listScreens);
-	const windows = useQuery(() => listWindows);
 	const cameras = useQuery(() => listVideoDevices);
 	const mics = useQuery(() => listAudioDevices);
 
@@ -491,7 +683,7 @@ function Page() {
 
 	const options = {
 		screen: () => {
-			let screen;
+			let screen: CaptureDisplay | undefined;
 
 			if (rawOptions.captureTarget.variant === "display") {
 				const screenId = rawOptions.captureTarget.id;
@@ -506,7 +698,7 @@ function Page() {
 			return screen;
 		},
 		window: () => {
-			let win;
+			let win: CaptureWindow | undefined;
 
 			if (rawOptions.captureTarget.variant === "window") {
 				const windowId = rawOptions.captureTarget.id;
@@ -545,6 +737,14 @@ function Page() {
 		},
 	};
 
+	const toggleTargetMode = (mode: "display" | "window" | "area") => {
+		if (isRecording()) return;
+		const nextMode = rawOptions.targetMode === mode ? null : mode;
+		setOptions("targetMode", nextMode);
+		if (nextMode) commands.openTargetSelectOverlays(null);
+		else commands.closeTargetSelectOverlays();
+	};
+
 	createEffect(() => {
 		const target = options.target();
 		if (!target) return;
@@ -569,6 +769,12 @@ function Page() {
 	const setCamera = createCameraMutation();
 
 	onMount(() => {
+		if (rawOptions.micName) {
+			setMicInput
+				.mutateAsync(rawOptions.micName)
+				.catch((error) => console.error("Failed to set mic input:", error));
+		}
+
 		if (rawOptions.cameraID && "ModelID" in rawOptions.cameraID)
 			setCamera.mutate({ ModelID: rawOptions.cameraID.ModelID });
 		else if (rawOptions.cameraID && "DeviceID" in rawOptions.cameraID)
@@ -605,111 +811,102 @@ function Page() {
 	);
 
 	const TargetSelectionHome = () => (
-		<Motion.div
-			initial={{ scale: 0.95 }}
-			animate={{ scale: 1 }}
-			exit={{ scale: 0.95 }}
-			transition={{ duration: 0.2 }}
-			class="flex flex-col gap-2 w-full"
+		<Transition
+			appear
+			enterActiveClass="transition-transform duration-200"
+			enterClass="scale-95"
+			enterToClass="scale-100"
+			exitActiveClass="transition-transform duration-200"
+			exitClass="scale-100"
+			exitToClass="scale-95"
 		>
-			<div class="flex flex-row gap-2 items-stretch w-full text-xs text-gray-11">
-				<div
-					class={cx(
-						"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
-						(rawOptions.targetMode === "display" || displayMenuOpen()) &&
-							"ring-blue-9",
-					)}
-				>
-					<TargetTypeButton
-						selected={rawOptions.targetMode === "display"}
-						Component={IconMdiMonitor}
-						disabled={isRecording()}
-						onClick={() => {
-							if (isRecording()) return;
-							setOptions("targetMode", (v) =>
-								v === "display" ? null : "display",
-							);
-						}}
-						name="Display"
-						class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
-					/>
-					<TargetDropdownButton
+			<div class="flex flex-col gap-2 w-full">
+				<div class="flex flex-row gap-2 items-stretch w-full text-xs text-gray-11">
+					<div
 						class={cx(
-							"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
-							displayMenuOpen() && "bg-gray-5",
+							"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+							(rawOptions.targetMode === "display" || displayMenuOpen()) &&
+								"ring-blue-9",
 						)}
-						ref={(el) => (displayTriggerRef = el)}
+					>
+						<TargetTypeButton
+							selected={rawOptions.targetMode === "display"}
+							Component={IconMdiMonitor}
+							disabled={isRecording()}
+							onClick={() => toggleTargetMode("display")}
+							name="Display"
+							class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+						/>
+						<TargetDropdownButton
+							class={cx(
+								"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+								displayMenuOpen() && "bg-gray-5",
+							)}
+							ref={displayTriggerRef}
+							disabled={isRecording()}
+							expanded={displayMenuOpen()}
+							onClick={() => {
+								setDisplayMenuOpen((prev) => {
+									const next = !prev;
+									if (next) {
+										setWindowMenuOpen(false);
+										setHasOpenedDisplayMenu(true);
+									}
+									return next;
+								});
+							}}
+							aria-haspopup="menu"
+							aria-label="Choose display"
+						/>
+					</div>
+					<div
+						class={cx(
+							"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+							(rawOptions.targetMode === "window" || windowMenuOpen()) &&
+								"ring-blue-9",
+						)}
+					>
+						<TargetTypeButton
+							selected={rawOptions.targetMode === "window"}
+							Component={IconLucideAppWindowMac}
+							disabled={isRecording()}
+							onClick={() => toggleTargetMode("window")}
+							name="Window"
+							class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+						/>
+						<TargetDropdownButton
+							class={cx(
+								"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+								windowMenuOpen() && "bg-gray-5",
+							)}
+							ref={windowTriggerRef}
+							disabled={isRecording()}
+							expanded={windowMenuOpen()}
+							onClick={() => {
+								setWindowMenuOpen((prev) => {
+									const next = !prev;
+									if (next) {
+										setDisplayMenuOpen(false);
+										setHasOpenedWindowMenu(true);
+									}
+									return next;
+								});
+							}}
+							aria-haspopup="menu"
+							aria-label="Choose window"
+						/>
+					</div>
+					<TargetTypeButton
+						selected={rawOptions.targetMode === "area"}
+						Component={IconMaterialSymbolsScreenshotFrame2Rounded}
 						disabled={isRecording()}
-						expanded={displayMenuOpen()}
-						onClick={() => {
-							setDisplayMenuOpen((prev) => {
-								const next = !prev;
-								if (next) {
-									setWindowMenuOpen(false);
-									setHasOpenedDisplayMenu(true);
-								}
-								return next;
-							});
-						}}
-						aria-haspopup="menu"
-						aria-label="Choose display"
+						onClick={() => toggleTargetMode("area")}
+						name="Area"
 					/>
 				</div>
-				<div
-					class={cx(
-						"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
-						(rawOptions.targetMode === "window" || windowMenuOpen()) &&
-							"ring-blue-9",
-					)}
-				>
-					<TargetTypeButton
-						selected={rawOptions.targetMode === "window"}
-						Component={IconLucideAppWindowMac}
-						disabled={isRecording()}
-						onClick={() => {
-							if (isRecording()) return;
-							setOptions("targetMode", (v) =>
-								v === "window" ? null : "window",
-							);
-						}}
-						name="Window"
-						class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
-					/>
-					<TargetDropdownButton
-						class={cx(
-							"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
-							windowMenuOpen() && "bg-gray-5",
-						)}
-						ref={(el) => (windowTriggerRef = el)}
-						disabled={isRecording()}
-						expanded={windowMenuOpen()}
-						onClick={() => {
-							setWindowMenuOpen((prev) => {
-								const next = !prev;
-								if (next) {
-									setDisplayMenuOpen(false);
-									setHasOpenedWindowMenu(true);
-								}
-								return next;
-							});
-						}}
-						aria-haspopup="menu"
-						aria-label="Choose window"
-					/>
-				</div>
-				<TargetTypeButton
-					selected={rawOptions.targetMode === "area"}
-					Component={IconMaterialSymbolsScreenshotFrame2Rounded}
-					disabled={isRecording()}
-					onClick={() => {
-						if (isRecording()) return;
-						setOptions("targetMode", (v) => (v === "area" ? null : "area"));
-					}}
-					name="Area"
-				/>
+				<BaseControls />
 			</div>
-			<BaseControls />
-		</Motion.div>
+		</Transition>
 	);
 
 	const startSignInCleanup = listen("start-sign-in", async () => {
@@ -731,11 +928,7 @@ function Page() {
 	onCleanup(() => startSignInCleanup.then((cb) => cb()));
 
 	return (
-		<div
-			class={`flex relative ${
-				displayMenuOpen() || windowMenuOpen() ? "" : "justify-center"
-			} flex-col px-3 gap-2 h-full text-[--text-primary]`}
-		>
+		<div class="flex relative flex-col px-3 gap-2 h-full min-h-0 text-[--text-primary]">
 			<WindowChromeHeader hideMaximize>
 				<div
 					class={cx(
@@ -757,14 +950,38 @@ function Page() {
 								<IconCapSettings class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
 							</button>
 						</Tooltip>
-						<Tooltip content={<span>Previous Recordings</span>}>
+						<Tooltip content={<span>Screenshots</span>}>
 							<button
 								type="button"
-								onClick={async () => {
-									await commands.showWindow({
-										Settings: { page: "recordings" },
+								onClick={() => {
+									setScreenshotsMenuOpen((prev) => {
+										const next = !prev;
+										if (next) {
+											setDisplayMenuOpen(false);
+											setWindowMenuOpen(false);
+											setRecordingsMenuOpen(false);
+										}
+										return next;
 									});
-									getCurrentWindow().hide();
+								}}
+								class="flex justify-center items-center size-5"
+							>
+								<IconLucideImage class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							</button>
+						</Tooltip>
+						<Tooltip content={<span>Recordings</span>}>
+							<button
+								type="button"
+								onClick={() => {
+									setRecordingsMenuOpen((prev) => {
+										const next = !prev;
+										if (next) {
+											setDisplayMenuOpen(false);
+											setWindowMenuOpen(false);
+											setScreenshotsMenuOpen(false);
+										}
+										return next;
+									});
 								}}
 								class="flex justify-center items-center size-5"
 							>
@@ -787,83 +1004,161 @@ function Page() {
 					{ostype() === "macos" && (
 						<div class="flex-1" data-tauri-drag-region />
 					)}
-					<ErrorBoundary fallback={<></>}>
-						<Suspense>
-							<span
-								onClick={async () => {
-									if (license.data?.type !== "pro") {
-										await commands.showWindow("Upgrade");
-									}
-								}}
-								class={cx(
-									"text-[0.6rem] ml-2 rounded-full px-1.5 py-0.5",
-									license.data?.type === "pro"
-										? "bg-[--blue-300] text-gray-1 dark:text-gray-12"
-										: "bg-gray-4 cursor-pointer hover:bg-gray-5",
-									ostype() === "windows" && "ml-2",
-								)}
-							>
-								{license.data?.type === "commercial"
-									? "Commercial"
-									: license.data?.type === "pro"
-										? "Pro"
-										: "Personal"}
-							</span>
-						</Suspense>
-					</ErrorBoundary>
 				</div>
 			</WindowChromeHeader>
-			<Show when={signIn.isPending}>
-				<div class="flex absolute inset-0 justify-center items-center bg-gray-1 animate-in fade-in">
-					<div class="flex flex-col gap-4 justify-center items-center">
-						<span>Signing In...</span>
-
-						<Button
-							onClick={() => {
-								signIn.variables?.abort();
-								signIn.reset();
-							}}
-							variant="gray"
-							class="w-full"
+			<Show when={!activeMenu()}>
+				<div class="flex items-center justify-between mt-4">
+					<div class="flex items-center space-x-1">
+						<a
+							class="*:w-[92px] *:h-auto text-[--text-primary]"
+							target="_blank"
+							href={
+								auth.data
+									? `${import.meta.env.VITE_SERVER_URL}/dashboard`
+									: import.meta.env.VITE_SERVER_URL
+							}
 						>
-							Cancel Sign In
-						</Button>
+							<IconCapLogoFullDark class="hidden dark:block" />
+							<IconCapLogoFull class="block dark:hidden" />
+						</a>
+						<ErrorBoundary fallback={<></>}>
+							<Suspense>
+								<span
+									onClick={async () => {
+										if (license.data?.type !== "pro") {
+											await commands.showWindow("Upgrade");
+										}
+									}}
+									class={cx(
+										"text-[0.6rem] ml-2 rounded-lg px-1 py-0.5",
+										license.data?.type === "pro"
+											? "bg-[--blue-400] text-gray-1 dark:text-gray-12"
+											: "bg-gray-3 cursor-pointer hover:bg-gray-5",
+									)}
+								>
+									{license.data?.type === "commercial"
+										? "Commercial"
+										: license.data?.type === "pro"
+											? "Pro"
+											: "Personal"}
+								</span>
+							</Suspense>
+						</ErrorBoundary>
 					</div>
+					<Mode />
 				</div>
 			</Show>
-			<Show when={!signIn.isPending}>
-				<Show when={activeMenu()} keyed fallback={<TargetSelectionHome />}>
-					{(variant) =>
-						variant === "display" ? (
-							<TargetMenuPanel
-								variant="display"
-								targets={displayTargetsData()}
-								isLoading={displayMenuLoading()}
-								errorMessage={displayErrorMessage()}
-								onSelect={selectDisplayTarget}
-								disabled={isRecording()}
-								onBack={() => {
-									setDisplayMenuOpen(false);
-									displayTriggerRef?.focus();
+			<div class="flex-1 min-h-0 w-full flex flex-col">
+				<Show when={signIn.isPending}>
+					<div class="flex absolute inset-0 justify-center items-center bg-gray-1 animate-in fade-in">
+						<div class="flex flex-col gap-4 justify-center items-center">
+							<span>Signing In...</span>
+
+							<Button
+								onClick={() => {
+									signIn.variables?.abort();
+									signIn.reset();
 								}}
-							/>
-						) : (
-							<TargetMenuPanel
-								variant="window"
-								targets={windowTargetsData()}
-								isLoading={windowMenuLoading()}
-								errorMessage={windowErrorMessage()}
-								onSelect={selectWindowTarget}
-								disabled={isRecording()}
-								onBack={() => {
-									setWindowMenuOpen(false);
-									windowTriggerRef?.focus();
-								}}
-							/>
-						)
-					}
+								variant="gray"
+								class="w-full"
+							>
+								Cancel Sign In
+							</Button>
+						</div>
+					</div>
 				</Show>
-			</Show>
+				<Show when={!signIn.isPending}>
+					<Show when={activeMenu()} keyed fallback={<TargetSelectionHome />}>
+						{(variant) =>
+							variant === "display" ? (
+								<TargetMenuPanel
+									variant="display"
+									targets={displayTargetsData()}
+									isLoading={displayMenuLoading()}
+									errorMessage={displayErrorMessage()}
+									onSelect={selectDisplayTarget}
+									disabled={isRecording()}
+									onBack={() => {
+										setDisplayMenuOpen(false);
+										displayTriggerRef?.focus();
+									}}
+								/>
+							) : variant === "window" ? (
+								<TargetMenuPanel
+									variant="window"
+									targets={windowTargetsData()}
+									isLoading={windowMenuLoading()}
+									errorMessage={windowErrorMessage()}
+									onSelect={selectWindowTarget}
+									disabled={isRecording()}
+									onBack={() => {
+										setWindowMenuOpen(false);
+										windowTriggerRef?.focus();
+									}}
+								/>
+							) : variant === "recording" ? (
+								<TargetMenuPanel
+									variant="recording"
+									targets={recordingsData()}
+									isLoading={recordings.isPending}
+									errorMessage={
+										recordings.error ? "Failed to load recordings" : undefined
+									}
+									onSelect={async (recording) => {
+										if (recording.mode === "studio") {
+											await commands.showWindow({
+												Editor: { project_path: recording.path },
+											});
+										} else {
+											if (recording.sharing?.link) {
+												await shell.open(recording.sharing.link);
+											}
+										}
+										getCurrentWindow().hide();
+									}}
+									disabled={isRecording()}
+									onBack={() => {
+										setRecordingsMenuOpen(false);
+									}}
+									onViewAll={async () => {
+										await commands.showWindow({
+											Settings: { page: "recordings" },
+										});
+										getCurrentWindow().hide();
+									}}
+								/>
+							) : (
+								<TargetMenuPanel
+									variant="screenshot"
+									targets={screenshotsData()}
+									isLoading={screenshots.isPending}
+									errorMessage={
+										screenshots.error ? "Failed to load screenshots" : undefined
+									}
+									onSelect={async (screenshot) => {
+										await commands.showWindow({
+											ScreenshotEditor: {
+												path: screenshot.path,
+											},
+										});
+										// getCurrentWindow().hide(); // Maybe keep open?
+									}}
+									disabled={isRecording()}
+									onBack={() => {
+										setScreenshotsMenuOpen(false);
+									}}
+									onViewAll={async () => {
+										await commands.showWindow({
+											Settings: { page: "screenshots" },
+										});
+										getCurrentWindow().hide();
+									}}
+								/>
+							)
+						}
+					</Show>
+				</Show>
+			</div>
 		</div>
 	);
 }

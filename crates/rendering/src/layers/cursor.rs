@@ -14,6 +14,14 @@ use crate::{
 const CURSOR_CLICK_DURATION: f64 = 0.25;
 const CURSOR_CLICK_DURATION_MS: f64 = CURSOR_CLICK_DURATION * 1000.0;
 const CLICK_SHRINK_SIZE: f32 = 0.7;
+const CURSOR_IDLE_MIN_DELAY_MS: f64 = 500.0;
+const CURSOR_IDLE_FADE_OUT_MS: f64 = 400.0;
+const CURSOR_VECTOR_CAP: f32 = 320.0;
+const CURSOR_MIN_MOTION_NORMALIZED: f32 = 0.01;
+const CURSOR_MIN_MOTION_PX: f32 = 1.0;
+const CURSOR_BASELINE_FPS: f32 = 60.0;
+const CURSOR_MULTIPLIER: f32 = 3.0;
+const CURSOR_MAX_STRENGTH: f32 = 5.0;
 
 /// The size to render the svg to.
 static SVG_CURSOR_RASTERIZED_HEIGHT: u32 = 200;
@@ -203,14 +211,64 @@ impl CursorLayer {
             return;
         };
 
-        let velocity: [f32; 2] = [0.0, 0.0];
-        // let velocity: [f32; 2] = [
-        //     interpolated_cursor.velocity.x * 75.0,
-        //     interpolated_cursor.velocity.y * 75.0,
-        // ];
+        let fps = uniforms.frame_rate.max(1) as f32;
+        let screen_size = constants.options.screen_size;
+        let screen_diag =
+            (((screen_size.x as f32).powi(2) + (screen_size.y as f32).powi(2)).sqrt()).max(1.0);
+        let fps_scale = fps / CURSOR_BASELINE_FPS;
+        let cursor_strength = (uniforms.motion_blur_amount * CURSOR_MULTIPLIER * fps_scale)
+            .clamp(0.0, CURSOR_MAX_STRENGTH);
+        let parent_motion = uniforms.display_parent_motion_px;
+        let child_motion = uniforms
+            .prev_cursor
+            .as_ref()
+            .filter(|prev| prev.cursor_id == interpolated_cursor.cursor_id)
+            .map(|prev| {
+                let delta_uv = XY::new(
+                    (interpolated_cursor.position.coord.x - prev.position.coord.x) as f32,
+                    (interpolated_cursor.position.coord.y - prev.position.coord.y) as f32,
+                );
+                XY::new(
+                    delta_uv.x * screen_size.x as f32,
+                    delta_uv.y * screen_size.y as f32,
+                )
+            })
+            .unwrap_or_else(|| XY::new(0.0, 0.0));
 
-        let speed = (velocity[0] * velocity[0] + velocity[1] * velocity[1]).sqrt();
-        let motion_blur_amount = (speed * 0.3).min(1.0) * 0.0; // uniforms.project.cursor.motion_blur;
+        let combined_motion_px = if cursor_strength <= f32::EPSILON {
+            XY::new(0.0, 0.0)
+        } else {
+            combine_cursor_motion(parent_motion, child_motion)
+        };
+
+        let normalized_motion = ((combined_motion_px.x / screen_diag).powi(2)
+            + (combined_motion_px.y / screen_diag).powi(2))
+        .sqrt();
+        let has_motion =
+            normalized_motion > CURSOR_MIN_MOTION_NORMALIZED && cursor_strength > f32::EPSILON;
+        let scaled_motion = if has_motion {
+            clamp_cursor_vector(combined_motion_px * cursor_strength)
+        } else {
+            XY::new(0.0, 0.0)
+        };
+
+        let mut cursor_opacity = 1.0f32;
+        if uniforms.project.cursor.hide_when_idle && !cursor.moves.is_empty() {
+            let hide_delay_secs = uniforms
+                .project
+                .cursor
+                .hide_when_idle_delay
+                .max((CURSOR_IDLE_MIN_DELAY_MS / 1000.0) as f32);
+            let hide_delay_ms = (hide_delay_secs as f64 * 1000.0).max(CURSOR_IDLE_MIN_DELAY_MS);
+            cursor_opacity = compute_cursor_idle_opacity(
+                cursor,
+                segment_frames.recording_time as f64 * 1000.0,
+                hide_delay_ms,
+            );
+            if cursor_opacity <= f32::EPSILON {
+                cursor_opacity = 0.0;
+            }
+        }
 
         // Remove all cursor assets if the svg configuration changes.
         // it might change the texture.
@@ -336,20 +394,34 @@ impl CursorLayer {
             zoom,
         ) - zoomed_position;
 
-        let uniforms = CursorUniforms {
-            position: [zoomed_position.x as f32, zoomed_position.y as f32],
-            size: [zoomed_size.x as f32, zoomed_size.y as f32],
-            output_size: [uniforms.output_size.0 as f32, uniforms.output_size.1 as f32],
+        let effective_strength = if has_motion { cursor_strength } else { 0.0 };
+
+        let cursor_uniforms = CursorUniforms {
+            position_size: [
+                zoomed_position.x as f32,
+                zoomed_position.y as f32,
+                zoomed_size.x as f32,
+                zoomed_size.y as f32,
+            ],
+            output_size: [
+                uniforms.output_size.0 as f32,
+                uniforms.output_size.1 as f32,
+                0.0,
+                0.0,
+            ],
             screen_bounds: uniforms.display.target_bounds,
-            velocity,
-            motion_blur_amount,
-            _alignment: [0.0; 3],
+            motion_vector_strength: [
+                scaled_motion.x,
+                scaled_motion.y,
+                effective_strength,
+                cursor_opacity,
+            ],
         };
 
         constants.queue.write_buffer(
             &self.statics.uniform_buffer,
             0,
-            bytemuck::cast_slice(&[uniforms]),
+            bytemuck::cast_slice(&[cursor_uniforms]),
         );
 
         self.bind_group = Some(
@@ -367,16 +439,109 @@ impl CursorLayer {
     }
 }
 
-#[repr(C, align(16))]
+fn combine_cursor_motion(parent: XY<f32>, child: XY<f32>) -> XY<f32> {
+    fn combine_axis(parent: f32, child: f32) -> f32 {
+        if parent.abs() > CURSOR_MIN_MOTION_PX
+            && child.abs() > CURSOR_MIN_MOTION_PX
+            && parent.signum() != child.signum()
+        {
+            0.0
+        } else {
+            parent + child
+        }
+    }
+
+    XY::new(
+        combine_axis(parent.x, child.x),
+        combine_axis(parent.y, child.y),
+    )
+}
+
+fn clamp_cursor_vector(vec: XY<f32>) -> XY<f32> {
+    let len = (vec.x * vec.x + vec.y * vec.y).sqrt();
+    if len <= CURSOR_VECTOR_CAP || len <= f32::EPSILON {
+        vec
+    } else {
+        vec * (CURSOR_VECTOR_CAP / len)
+    }
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
 pub struct CursorUniforms {
-    position: [f32; 2],
-    size: [f32; 2],
-    output_size: [f32; 2],
+    position_size: [f32; 4],
+    output_size: [f32; 4],
     screen_bounds: [f32; 4],
-    velocity: [f32; 2],
-    motion_blur_amount: f32,
-    _alignment: [f32; 3],
+    motion_vector_strength: [f32; 4],
+}
+
+fn compute_cursor_idle_opacity(
+    cursor: &CursorEvents,
+    current_time_ms: f64,
+    hide_delay_ms: f64,
+) -> f32 {
+    if cursor.moves.is_empty() {
+        return 0.0;
+    }
+
+    if current_time_ms <= cursor.moves[0].time_ms {
+        return 1.0;
+    }
+
+    let Some(last_index) = cursor
+        .moves
+        .iter()
+        .rposition(|event| event.time_ms <= current_time_ms)
+    else {
+        return 1.0;
+    };
+
+    let last_move = &cursor.moves[last_index];
+
+    let time_since_move = (current_time_ms - last_move.time_ms).max(0.0);
+
+    let mut opacity = compute_cursor_fade_in(cursor, current_time_ms, hide_delay_ms);
+
+    let fade_out = if time_since_move <= hide_delay_ms {
+        1.0
+    } else {
+        let delta = time_since_move - hide_delay_ms;
+        let fade = 1.0 - smoothstep64(0.0, CURSOR_IDLE_FADE_OUT_MS, delta);
+        fade.clamp(0.0, 1.0) as f32
+    };
+
+    opacity *= fade_out;
+    opacity.clamp(0.0, 1.0)
+}
+
+fn smoothstep64(edge0: f64, edge1: f64, x: f64) -> f64 {
+    if edge1 <= edge0 {
+        return if x < edge0 { 0.0 } else { 1.0 };
+    }
+
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn compute_cursor_fade_in(cursor: &CursorEvents, current_time_ms: f64, hide_delay_ms: f64) -> f32 {
+    let resume_time = cursor
+        .moves
+        .windows(2)
+        .rev()
+        .find(|pair| {
+            let prev = &pair[0];
+            let next = &pair[1];
+            next.time_ms <= current_time_ms && next.time_ms - prev.time_ms > hide_delay_ms
+        })
+        .map(|pair| pair[1].time_ms);
+
+    let Some(resume_time_ms) = resume_time else {
+        return 1.0;
+    };
+
+    let time_since_resume = (current_time_ms - resume_time_ms).max(0.0);
+
+    smoothstep64(0.0, CURSOR_IDLE_FADE_OUT_MS, time_since_resume) as f32
 }
 
 fn get_click_t(clicks: &[CursorClickEvent], time_ms: f64) -> f32 {
@@ -521,5 +686,72 @@ impl CursorTexture {
             (pixmap.width(), pixmap.height()),
             hotspot,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn move_event(time_ms: f64, x: f64, y: f64) -> CursorMoveEvent {
+        CursorMoveEvent {
+            active_modifiers: vec![],
+            cursor_id: "pointer".into(),
+            time_ms,
+            x,
+            y,
+        }
+    }
+
+    fn cursor_events(times: &[(f64, f64, f64)]) -> CursorEvents {
+        CursorEvents {
+            moves: times
+                .iter()
+                .map(|(time, x, y)| move_event(*time, *x, *y))
+                .collect(),
+            clicks: vec![],
+        }
+    }
+
+    #[test]
+    fn opacity_stays_visible_with_recent_move() {
+        let cursor = cursor_events(&[(0.0, 0.0, 0.0), (1500.0, 0.1, 0.1)]);
+
+        let opacity = compute_cursor_idle_opacity(&cursor, 2000.0, 2000.0);
+
+        assert_eq!(opacity, 1.0);
+    }
+
+    #[test]
+    fn opacity_fades_once_past_delay() {
+        let cursor = cursor_events(&[(0.0, 0.0, 0.0)]);
+
+        let opacity = compute_cursor_idle_opacity(&cursor, 3000.0, 1000.0);
+
+        assert_eq!(opacity, 0.0);
+    }
+
+    #[test]
+    fn opacity_fades_in_after_long_inactivity() {
+        let cursor = cursor_events(&[(0.0, 0.0, 0.0), (5000.0, 0.5, 0.5)]);
+
+        let hide_delay_ms = 2000.0;
+
+        let at_resume = compute_cursor_idle_opacity(&cursor, 5000.0, hide_delay_ms);
+        assert_eq!(at_resume, 0.0);
+
+        let halfway = compute_cursor_idle_opacity(
+            &cursor,
+            5000.0 + CURSOR_IDLE_FADE_OUT_MS / 2.0,
+            hide_delay_ms,
+        );
+        assert!((halfway - 0.5).abs() < 0.05);
+
+        let after_fade = compute_cursor_idle_opacity(
+            &cursor,
+            5000.0 + CURSOR_IDLE_FADE_OUT_MS * 2.0,
+            hide_delay_ms,
+        );
+        assert_eq!(after_fade, 1.0);
     }
 }

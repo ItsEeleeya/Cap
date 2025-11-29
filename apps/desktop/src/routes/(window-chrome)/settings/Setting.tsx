@@ -1,6 +1,6 @@
 import { Toggle } from "~/components/Toggle";
 
-export function Setting(props: {
+export function SettingItem(props: {
 	pro?: boolean;
 	label: string;
 	description?: string;
@@ -21,7 +21,7 @@ export function Setting(props: {
 	);
 }
 
-export function ToggleSetting(props: {
+export function ToggleSettingItem(props: {
 	pro?: boolean;
 	label: string;
 	description?: string;
@@ -29,22 +29,12 @@ export function ToggleSetting(props: {
 	onChange(v: boolean): void;
 }) {
 	return (
-		<Setting {...props}>
-			<div class="w-9 h-[1.25rem] p-[0.125rem]">
-				<input
-					type="checkbox"
-					class="p-[0.08rem]"
-					checked={props.value}
-					ref={(el) => {
-						el.setAttribute("switch", "true");
-					}}
-				/>
-			</div>
-			{/* <Toggle
+		<SettingItem {...props}>
+			<Toggle
 				size="sm"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
-			/> */}
-		</Setting>
+			/>
+		</SettingItem>
 	);
 }

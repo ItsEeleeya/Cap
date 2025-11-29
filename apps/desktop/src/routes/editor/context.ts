@@ -6,7 +6,6 @@ import { createContextProvider } from "@solid-primitives/context";
 import { trackStore } from "@solid-primitives/deep";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { createUndoHistory } from "@solid-primitives/history";
-import { debounce } from "@solid-primitives/scheduled";
 import { createQuery, skipToken } from "@tanstack/solid-query";
 import {
 	type Accessor,
@@ -15,6 +14,7 @@ import {
 	createResource,
 	createSignal,
 	on,
+	onCleanup,
 } from "solid-js";
 import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 
@@ -51,6 +51,7 @@ export const OUTPUT_SIZE = {
 };
 
 export const MAX_ZOOM_IN = 3;
+const PROJECT_SAVE_DEBOUNCE_MS = 250;
 
 export type RenderState =
 	| { type: "starting" }
@@ -61,6 +62,62 @@ export type CustomDomainResponse = {
 	domain_verified: boolean | null;
 };
 
+export type CornerRoundingType = "rounded" | "squircle";
+
+type WithCornerStyle<T> = T & { roundingType: CornerRoundingType };
+
+export type EditorProjectConfiguration = Omit<
+	ProjectConfiguration,
+	"background" | "camera"
+> & {
+	background: WithCornerStyle<ProjectConfiguration["background"]>;
+	camera: WithCornerStyle<ProjectConfiguration["camera"]>;
+};
+
+function withCornerDefaults<
+	T extends {
+		roundingType?: CornerRoundingType;
+		rounding_type?: CornerRoundingType;
+	},
+>(value: T): T & { roundingType: CornerRoundingType } {
+	const roundingType = value.roundingType ?? value.rounding_type ?? "squircle";
+	return {
+		...value,
+		roundingType,
+	};
+}
+
+export function normalizeProject(
+	config: ProjectConfiguration,
+): EditorProjectConfiguration {
+	return {
+		...config,
+		background: withCornerDefaults(config.background),
+		camera: withCornerDefaults(config.camera),
+	};
+}
+
+export function serializeProjectConfiguration(
+	project: EditorProjectConfiguration,
+): ProjectConfiguration {
+	const { background, camera, ...rest } = project;
+	const { roundingType: backgroundRoundingType, ...backgroundRest } =
+		background;
+	const { roundingType: cameraRoundingType, ...cameraRest } = camera;
+
+	return {
+		...rest,
+		background: {
+			...backgroundRest,
+			roundingType: backgroundRoundingType,
+		},
+		camera: {
+			...cameraRest,
+			roundingType: cameraRoundingType,
+		},
+	};
+}
+
 export const [EditorContextProvider, useEditorContext] = createContextProvider(
 	(props: {
 		meta: () => TransformedMeta;
@@ -68,8 +125,8 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 		refetchMeta(): Promise<void>;
 	}) => {
 		const editorInstanceContext = useEditorInstanceContext();
-		const [project, setProject] = createStore<ProjectConfiguration>(
-			props.editorInstance.savedProjectConfig,
+		const [project, setProject] = createStore<EditorProjectConfiguration>(
+			normalizeProject(props.editorInstance.savedProjectConfig),
 		);
 
 		const projectActions = {
@@ -95,10 +152,9 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						const segment = segments[currentSegmentIndex];
 
 						segments.splice(currentSegmentIndex + 1, 0, {
+							...segment,
 							start: segment.start + searchTime,
 							end: segment.end,
-							timescale: 1,
-							recordingSegment: segment.recordingSegment,
 						});
 						segments[currentSegmentIndex].end = segment.start + searchTime;
 					}),
@@ -128,6 +184,27 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 					setEditorState("timeline", "selection", null);
 				});
 			},
+			splitZoomSegment: (index: number, time: number) => {
+				setProject(
+					"timeline",
+					"zoomSegments",
+					produce((segments) => {
+						const segment = segments[index];
+						if (!segment) return;
+
+						const newLengths = [segment.end - segment.start - time, time];
+
+						if (newLengths.some((l) => l < 1)) return;
+
+						segments.splice(index + 1, 0, {
+							...segment,
+							start: segment.start + time,
+							end: segment.end,
+						});
+						segments[index].end = segment.start + time;
+					}),
+				);
+			},
 			deleteZoomSegments: (segmentIndices: number[]) => {
 				batch(() => {
 					setProject(
@@ -146,6 +223,27 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 					setEditorState("timeline", "selection", null);
 				});
 			},
+			splitSceneSegment: (index: number, time: number) => {
+				setProject(
+					"timeline",
+					"sceneSegments",
+					produce((segments) => {
+						const segment = segments?.[index];
+						if (!segment) return;
+
+						const newLengths = [segment.end - segment.start - time, time];
+
+						if (newLengths.some((l) => l < 1)) return;
+
+						segments.splice(index + 1, 0, {
+							...segment,
+							start: segment.start + time,
+							end: segment.end,
+						});
+						segments[index].end = segment.start + time;
+					}),
+				);
+			},
 			deleteSceneSegment: (segmentIndex: number) => {
 				batch(() => {
 					setProject(
@@ -159,16 +257,101 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 					setEditorState("timeline", "selection", null);
 				});
 			},
+			setClipSegmentTimescale: (index: number, timescale: number) => {
+				setProject(
+					produce((project) => {
+						const timeline = project.timeline;
+						if (!timeline) return;
+
+						const segment = timeline.segments[index];
+						if (!segment) return;
+
+						const currentLength =
+							(segment.end - segment.start) / segment.timescale;
+						const nextLength = (segment.end - segment.start) / timescale;
+
+						const lengthDiff = nextLength - currentLength;
+
+						const absoluteStart = timeline.segments.reduce((acc, curr, i) => {
+							if (i >= index) return acc;
+							return acc + (curr.end - curr.start) / curr.timescale;
+						}, 0);
+
+						const diff = (v: number) => {
+							const diff = (lengthDiff * (v - absoluteStart)) / currentLength;
+
+							if (v > absoluteStart + currentLength) return lengthDiff;
+							else if (v > absoluteStart) return diff;
+							else return 0;
+						};
+
+						for (const zoomSegment of timeline.zoomSegments) {
+							zoomSegment.start += diff(zoomSegment.start);
+							zoomSegment.end += diff(zoomSegment.end);
+						}
+
+						segment.timescale = timescale;
+					}),
+				);
+			},
 		};
+
+		let projectSaveTimeout: number | undefined;
+		let saveInFlight = false;
+		let shouldResave = false;
+		let hasPendingProjectSave = false;
+
+		const flushProjectConfig = async () => {
+			if (!hasPendingProjectSave && !saveInFlight) return;
+			if (saveInFlight) {
+				if (hasPendingProjectSave) {
+					shouldResave = true;
+				}
+				return;
+			}
+			saveInFlight = true;
+			shouldResave = false;
+			hasPendingProjectSave = false;
+			try {
+				await commands.setProjectConfig(serializeProjectConfiguration(project));
+			} catch (error) {
+				console.error("Failed to persist project config", error);
+			} finally {
+				saveInFlight = false;
+				if (shouldResave) {
+					shouldResave = false;
+					void flushProjectConfig();
+				}
+			}
+		};
+
+		const scheduleProjectConfigSave = () => {
+			hasPendingProjectSave = true;
+			if (projectSaveTimeout) {
+				clearTimeout(projectSaveTimeout);
+			}
+			projectSaveTimeout = window.setTimeout(() => {
+				projectSaveTimeout = undefined;
+				void flushProjectConfig();
+			}, PROJECT_SAVE_DEBOUNCE_MS);
+		};
+
+		onCleanup(() => {
+			if (projectSaveTimeout) {
+				clearTimeout(projectSaveTimeout);
+				projectSaveTimeout = undefined;
+			}
+			void flushProjectConfig();
+		});
 
 		createEffect(
 			on(
 				() => {
 					trackStore(project);
 				},
-				debounce(() => {
-					commands.setProjectConfig(project);
-				}),
+				() => {
+					scheduleProjectConfigSave();
+				},
 				{ defer: true },
 			),
 		);
@@ -256,8 +439,8 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 				selection: null as
 					| null
 					| { type: "zoom"; indices: number[] }
-					| { type: "clip"; index: number }
-					| { type: "scene"; index: number },
+					| { type: "clip"; indices: number[] }
+					| { type: "scene"; indices: number[] },
 				transform: {
 					// visible seconds
 					zoom: zoomOutLimit(),
@@ -294,6 +477,7 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						);
 					},
 				},
+				hoveredTrack: null as null | "clip" | "zoom" | "scene",
 			},
 		});
 

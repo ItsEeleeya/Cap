@@ -1,131 +1,83 @@
 use crate::{
-    MediaError,
-    feeds::camera::{self, CameraFeedLock, RawCameraFrame},
-    pipeline::{control::Control, task::PipelineSourceTask},
+    feeds::camera::{self, CameraFeedLock},
+    ffmpeg::FFmpegVideoFrame,
+    output_pipeline::{SetupCtx, VideoSource},
 };
+use anyhow::anyhow;
 use cap_media_info::VideoInfo;
-use cap_timestamp::Timestamp;
-use ffmpeg::frame;
-use flume::{Receiver, Sender};
+use futures::{SinkExt, channel::mpsc};
 use std::sync::Arc;
-use tracing::{error, info};
 
-pub struct CameraSource {
-    feed: Arc<CameraFeedLock>,
-    video_info: VideoInfo,
-    output: Sender<(frame::Video, Timestamp)>,
+pub struct Camera(Arc<CameraFeedLock>);
+
+struct LogDrop<T>(T, &'static str);
+impl<T> Drop for LogDrop<T> {
+    fn drop(&mut self) {
+        tracing::debug!("Dropping {}", self.1);
+    }
 }
-
-impl CameraSource {
-    pub fn init(feed: Arc<CameraFeedLock>, output: Sender<(frame::Video, Timestamp)>) -> Self {
-        Self {
-            video_info: *feed.video_info(),
-            feed,
-            output,
-        }
+impl<T> std::ops::Deref for LogDrop<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
-
-    pub fn info(&self) -> VideoInfo {
-        self.video_info
-    }
-
-    fn process_frame(
-        &self,
-        camera_frame: RawCameraFrame,
-        // first_frame_instant: Instant,
-        // first_frame_timestamp: Duration,
-    ) -> Result<(), MediaError> {
-        let check_skip_send = || {
-            cap_fail::fail_err!("media::sources::camera::skip_send", ());
-
-            Ok::<(), ()>(())
-        };
-
-        if check_skip_send().is_err() {
-            return Ok(());
-        }
-
-        // let relative_timestamp = camera_frame.timestamp - first_frame_timestamp;
-
-        if self
-            .output
-            .send((
-                camera_frame.frame,
-                camera_frame.timestamp, // (first_frame_instant + relative_timestamp - self.start_instant).as_secs_f64(),
-            ))
-            .is_err()
-        {
-            return Err(MediaError::Any(
-                "Pipeline is unreachable! Stopping capture".into(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn pause_and_drain_frames(&mut self, frames_rx: Receiver<RawCameraFrame>) {
-        let frames: Vec<RawCameraFrame> = frames_rx.drain().collect();
-        drop(frames_rx);
-
-        for frame in frames {
-            // let first_frame_instant = *self.first_frame_instant.get_or_insert(frame.reference_time);
-            // let first_frame_timestamp = *self.first_frame_timestamp.get_or_insert(frame.timestamp);
-
-            if let Err(error) = self.process_frame(frame) {
-                eprintln!("{error}");
-                break;
-            }
-        }
+}
+impl<T> std::ops::DerefMut for LogDrop<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
-impl PipelineSourceTask for CameraSource {
-    fn run(
-        &mut self,
-        ready_signal: crate::pipeline::task::PipelineReadySignal,
-        mut control_signal: crate::pipeline::control::PipelineControlSignal,
-    ) -> Result<(), String> {
-        let mut frames_rx: Option<Receiver<RawCameraFrame>> = None;
+impl VideoSource for Camera {
+    type Config = Arc<CameraFeedLock>;
+    type Frame = FFmpegVideoFrame;
 
-        info!("Camera source ready");
+    async fn setup(
+        feed_lock: Self::Config,
+        video_tx: mpsc::Sender<Self::Frame>,
+        _: &mut SetupCtx,
+    ) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        let (tx, rx) = flume::bounded(32);
 
-        let frames = frames_rx.get_or_insert_with(|| {
-            let (tx, rx) = flume::bounded(5);
-            let _ = self.feed.ask(camera::AddSender(tx)).blocking_send();
-            rx
-        });
+        feed_lock
+            .ask(camera::AddSender(tx))
+            .await
+            .map_err(|e| anyhow!("Failed to add camera sender: {e}"))?;
 
-        ready_signal.send(Ok(())).unwrap();
+        let mut video_tx = LogDrop(video_tx, "camera_video_tx");
 
-        loop {
-            match control_signal.last() {
-                Some(Control::Play) => match frames.drain().last().or_else(|| frames.recv().ok()) {
-                    Some(frame) => {
-                        // let first_frame_instant =
-                        //     *self.first_frame_instant.get_or_insert(frame.reference_time);
-                        // let first_frame_timestamp =
-                        //     *self.first_frame_timestamp.get_or_insert(frame.timestamp);
-
-                        if let Err(error) = self.process_frame(frame) {
-                            eprintln!("{error}");
+        tokio::spawn(async move {
+            tracing::debug!("Camera source task started");
+            loop {
+                match rx.recv_async().await {
+                    Ok(frame) => {
+                        // tracing::trace!("Sending camera frame");
+                        if let Err(e) = video_tx.send(frame).await {
+                            tracing::warn!("Failed to send to video pipeline: {e}");
+                            // If pipeline is closed, we should stop?
+                            // But lets continue to keep rx alive for now to see if it helps,
+                            // or maybe break?
+                            // If we break, we disconnect from CameraFeed.
+                            // If pipeline is closed, we SHOULD disconnect.
                             break;
                         }
                     }
-                    None => {
-                        error!("Lost connection with the camera feed");
+                    Err(e) => {
+                        tracing::debug!("Camera feed disconnected (rx closed): {e}");
                         break;
                     }
-                },
-                Some(Control::Shutdown) | None => {
-                    if let Some(rx) = frames_rx.take() {
-                        self.pause_and_drain_frames(rx);
-                    }
-                    info!("Camera source stopped");
-                    break;
                 }
             }
-        }
+            tracing::debug!("Camera source task finished");
+        });
 
-        Ok(())
+        Ok(Self(feed_lock))
+    }
+
+    fn video_info(&self) -> VideoInfo {
+        *self.0.video_info()
     }
 }

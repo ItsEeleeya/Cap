@@ -33,7 +33,10 @@ import {
 	type UploadProgress,
 	type UploadResult,
 } from "~/utils/tauri";
+import IconCapEditor from "~icons/cap/editor";
+import IconCapUpload from "~icons/cap/upload";
 import IconLucideClock from "~icons/lucide/clock";
+import IconLucideEye from "~icons/lucide/eye";
 import { FPS, OUTPUT_SIZE } from "./editor/context";
 
 type MediaEntry = {
@@ -772,10 +775,9 @@ function createRecordingMutations(
 
 				res = await commands.uploadExportedVideo(
 					media.path,
-					{
-						Initial: { pre_created_video: null },
-					},
+					{ Initial: { pre_created_video: null } },
 					uploadChannel,
+					null,
 				);
 			} else {
 				setActionState({

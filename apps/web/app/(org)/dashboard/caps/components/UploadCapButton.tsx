@@ -2,7 +2,7 @@
 
 import { Button } from "@cap/ui";
 import { userIsPro } from "@cap/utils";
-import type { Folder } from "@cap/web-domain";
+import type { Folder, Organisation } from "@cap/web-domain";
 import { faUpload } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,8 @@ import {
 	useUploadingContext,
 } from "@/app/(org)/dashboard/caps/UploadingContext";
 import { UpgradeModal } from "@/components/UpgradeModal";
-import { imageUrlQuery } from "@/components/VideoThumbnail";
+import { ThumbnailRequest } from "@/lib/Requests/ThumbnailRequest";
+import { sendProgressUpdate } from "./sendProgressUpdate";
 
 export const UploadCapButton = ({
 	size = "md",
@@ -38,9 +39,7 @@ export const UploadCapButton = ({
 	const handleClick = () => {
 		if (!user) return;
 
-		const isCapPro = userIsPro(user);
-
-		if (!isCapPro) {
+		if (!user.isPro) {
 			setUpgradeModalOpen(true);
 			return;
 		}
@@ -100,7 +99,7 @@ export const UploadCapButton = ({
 async function legacyUploadCap(
 	file: File,
 	folderId: Folder.FolderId | undefined,
-	orgId: string,
+	orgId: Organisation.OrganisationId,
 	setUploadStatus: (state: UploadStatus | undefined) => void,
 	queryClient: QueryClient,
 ) {
@@ -495,7 +494,9 @@ async function legacyUploadCap(
 				xhr.onload = () => {
 					if (xhr.status >= 200 && xhr.status < 300) {
 						resolve();
-						queryClient.refetchQueries(imageUrlQuery(uploadId));
+						queryClient.refetchQueries({
+							queryKey: ThumbnailRequest.queryKey(uploadId),
+						});
 					} else {
 						reject(
 							new Error(`Screenshot upload failed with status ${xhr.status}`),
@@ -517,29 +518,3 @@ async function legacyUploadCap(
 	setUploadStatus(undefined);
 	return false;
 }
-
-const sendProgressUpdate = async (
-	videoId: string,
-	uploaded: number,
-	total: number,
-) => {
-	try {
-		const response = await fetch("/api/desktop/video/progress", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				videoId,
-				uploaded,
-				total,
-				updatedAt: new Date().toISOString(),
-			}),
-		});
-
-		if (!response.ok)
-			console.error("Failed to send progress update:", response.status);
-	} catch (err) {
-		console.error("Error sending progress update:", err);
-	}
-};

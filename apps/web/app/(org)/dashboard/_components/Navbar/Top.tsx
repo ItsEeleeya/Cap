@@ -2,7 +2,6 @@
 
 import { buildEnv } from "@cap/env";
 import {
-	Avatar,
 	Command,
 	CommandGroup,
 	CommandItem,
@@ -10,16 +9,15 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@cap/ui";
-import { faBell, faMoon, faSun } from "@fortawesome/free-solid-svg-icons";
+import { faBell } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useClickAway } from "@uidotdev/usehooks";
 import clsx from "clsx";
 import { AnimatePresence } from "framer-motion";
 import { MoreVertical } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
 	cloneElement,
@@ -32,6 +30,8 @@ import {
 } from "react";
 import { markAsRead } from "@/actions/notifications/mark-as-read";
 import Notifications from "@/app/(org)/dashboard/_components/Notifications";
+import { SignedImageUrl } from "@/components/SignedImageUrl";
+import { ThemeToggleIcon } from "@/components/theme-toggle-icon";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { useDashboardContext, useTheme } from "../../Contexts";
 import {
@@ -47,30 +47,30 @@ import type { DownloadIconHandle } from "../AnimatedIcons/Download";
 import type { ReferIconHandle } from "../AnimatedIcons/Refer";
 
 const Top = () => {
-	const { activeSpace, anyNewNotifications, activeOrganization } =
-		useDashboardContext();
+	const { activeSpace, anyNewNotifications } = useDashboardContext();
 	const [toggleNotifications, setToggleNotifications] = useState(false);
 	const bellRef = useRef<HTMLDivElement>(null);
 	const { theme, setThemeHandler } = useTheme();
 	const queryClient = useQueryClient();
 
 	const pathname = usePathname();
+	const params = useParams();
 
 	const titles: Record<string, string> = {
 		"/dashboard/caps": "Caps",
 		"/dashboard/folder": "Caps",
 		"/dashboard/shared-caps": "Shared Caps",
+		"/dashboard/caps/record": "Record a Cap",
 		"/dashboard/settings/organization": "Organization Settings",
 		"/dashboard/settings/account": "Account Settings",
 		"/dashboard/spaces": "Spaces",
 		"/dashboard/spaces/browse": "Browse Spaces",
+		"/dashboard/analytics": "Analytics",
+		[`/dashboard/folder/${params.id}`]: "Caps",
+		[`/dashboard/analytics/s/${params.id}`]: "Analytics: Cap video title",
 	};
 
-	const title = activeSpace
-		? activeSpace.name
-		: pathname.includes("/dashboard/folder")
-			? "Caps"
-			: titles[pathname] || "";
+	const title = activeSpace ? activeSpace.name : titles[pathname] || "";
 
 	const notificationsRef: MutableRefObject<HTMLDivElement> = useClickAway(
 		(e) => {
@@ -102,22 +102,14 @@ const Top = () => {
 			<div className="flex flex-col gap-0.5">
 				{activeSpace && <span className="text-xs text-gray-11">Space</span>}
 				<div className="flex gap-1.5 items-center">
-					{activeSpace &&
-						(activeSpace.iconUrl ? (
-							<Image
-								src={activeSpace?.iconUrl}
-								alt={activeSpace?.name || "Space"}
-								width={20}
-								height={20}
-								className="rounded-full"
-							/>
-						) : (
-							<Avatar
-								letterClass="text-xs"
-								className="relative flex-shrink-0 size-5"
-								name={activeSpace?.name}
-							/>
-						))}
+					{activeSpace && (
+						<SignedImageUrl
+							image={activeSpace.iconUrl}
+							name={activeSpace?.name}
+							letterClass="text-xs"
+							className="relative flex-shrink-0 size-5"
+						/>
+					)}
 					<p className="relative text-lg truncate text-gray-12 lg:text-2xl">
 						{title}
 					</p>
@@ -180,10 +172,7 @@ const Top = () => {
 					}}
 					className="hidden justify-center items-center rounded-full transition-colors cursor-pointer bg-gray-3 lg:flex hover:bg-gray-5 size-9"
 				>
-					<FontAwesomeIcon
-						className="text-gray-12 size-3.5 view-transition-theme-icon"
-						icon={theme === "dark" ? faMoon : faSun}
-					/>
+					<ThemeToggleIcon />
 				</div>
 				<User />
 			</div>
@@ -194,7 +183,7 @@ const Top = () => {
 const User = () => {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-	const { user, isSubscribed } = useDashboardContext();
+	const { user } = useDashboardContext();
 
 	const menuItems = useMemo(
 		() => [
@@ -214,7 +203,7 @@ const User = () => {
 					setUpgradeModalOpen(true);
 				},
 				iconClassName: "text-amber-400 group-hover:text-amber-500",
-				showCondition: !isSubscribed && buildEnv.NEXT_PUBLIC_IS_CAP,
+				showCondition: buildEnv.NEXT_PUBLIC_IS_CAP && !user.isPro,
 			},
 			{
 				name: "Earn 40% Referral",
@@ -270,21 +259,12 @@ const User = () => {
 						className="flex gap-2 justify-between  items-center p-2 rounded-xl border data-[state=open]:border-gray-3 data-[state=open]:bg-gray-3 border-transparent transition-colors cursor-pointer group lg:gap-6 hover:border-gray-3"
 					>
 						<div className="flex items-center">
-							{user.image ? (
-								<Image
-									src={user.image}
-									alt={user.name ?? "User"}
-									width={24}
-									height={24}
-									className="rounded-full"
-								/>
-							) : (
-								<Avatar
-									letterClass="text-xs lg:text-md"
-									name={user.name ?? "User"}
-									className="size-[24px] text-gray-12"
-								/>
-							)}
+							<SignedImageUrl
+								image={user.imageUrl}
+								name={user.name ?? "User"}
+								letterClass="text-xs lg:text-md"
+								className="flex-shrink-0 size-[24px] text-gray-12"
+							/>
 							<span className="ml-2 text-sm truncate lg:ml-2 lg:text-md text-gray-12">
 								{user.name ?? "User"}
 							</span>
@@ -347,6 +327,7 @@ const MenuItem = memo(({ icon, name, href, onClick, iconClassName }: Props) => {
 			<Link
 				className="flex gap-2 items-center w-full"
 				href={href ?? "#"}
+				prefetch={true}
 				onClick={onClick}
 			>
 				<div className="flex-shrink-0 flex items-center justify-center w-3.5 h-3.5">

@@ -4,6 +4,9 @@ use objc2_app_kit::{NSToolbar, NSWindowToolbarStyle};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 
 pub mod delegates;
+mod sc_shareable_content;
+
+pub use sc_shareable_content::*;
 
 pub fn add_toolbar_shell(window: &tauri::Window, compact: bool) -> tauri::Result<()> {
     let mtm = MainThreadMarker::new()

@@ -17,6 +17,8 @@ const nextConfig = {
 		"@cap/utils",
 		"@cap/web-api-contract",
 		"@cap/web-domain",
+		"@cap/env",
+		"@cap/database",
 		"next-mdx-remote",
 	],
 	eslint: {
@@ -29,8 +31,10 @@ const nextConfig = {
 		optimizePackageImports: [
 			"@cap/ui",
 			"@cap/utils",
-			"@cap/web-api-contract",
-			"@cap/web-domain",
+			// "@cap/web-api-contract",
+			// "@cap/web-domain",
+			// "@cap/web-backend",
+			"@cap/database",
 		],
 	},
 	images: {
@@ -105,7 +109,7 @@ const nextConfig = {
 	env: {
 		appVersion: version,
 	},
-	// If the DOCKER_BUILD environment variable is set to true, we are output nextjs to standalone ready for docker deployment
+	// If the NEXT_PUBLIC_DOCKER_BUILD environment variable is set to true, we are output nextjs to standalone ready for docker deployment
 	output:
 		process.env.NEXT_PUBLIC_DOCKER_BUILD === "true" ? "standalone" : undefined,
 	// webpack: (config) => {

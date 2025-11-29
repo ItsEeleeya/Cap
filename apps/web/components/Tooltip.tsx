@@ -11,6 +11,7 @@ const Tooltip = ({
 	position = "top",
 	kbd,
 	disable,
+	delayDuration,
 }: {
 	children: React.ReactNode;
 	content: string;
@@ -18,12 +19,13 @@ const Tooltip = ({
 	position?: "top" | "bottom" | "left" | "right";
 	kbd?: string[];
 	disable?: boolean;
+	delayDuration?: number;
 }) => {
 	if (disable) {
 		return <>{children}</>;
 	}
 	return (
-		<TooltipPrimitive.Root>
+		<TooltipPrimitive.Root delayDuration={delayDuration}>
 			<TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
 			<TooltipPrimitive.Portal>
 				<TooltipPrimitive.Content
@@ -40,7 +42,7 @@ const Tooltip = ({
 							{kbd.map((key, index) => (
 								<div
 									className="flex justify-center items-center px-1 rounded-md border shadow-sm bg-gray-3 border-gray-4 size-5 min-w-fit shadow-gray-3/50"
-									key={index}
+									key={index.toString()}
 								>
 									<kbd className="text-[11px] text-gray-10">{key}</kbd>
 								</div>

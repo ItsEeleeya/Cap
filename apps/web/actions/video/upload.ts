@@ -9,14 +9,21 @@ import { getCurrentUser } from "@cap/database/auth/session";
 import { nanoId } from "@cap/database/helpers";
 import { s3Buckets, videos, videoUploads } from "@cap/database/schema";
 import { buildEnv, NODE_ENV, serverEnv } from "@cap/env";
-import { userIsPro } from "@cap/utils";
-import { S3Buckets } from "@cap/web-backend";
-import { type Folder, Video } from "@cap/web-domain";
+import { dub, userIsPro } from "@cap/utils";
+import { AwsCredentials, S3Buckets } from "@cap/web-backend";
+import {
+	type Folder,
+	type Organisation,
+	S3Bucket,
+	Video,
+} from "@cap/web-domain";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { revalidatePath } from "next/cache";
 import { runPromise } from "@/lib/server";
-import { dub } from "@/utils/dub";
+
+const MAX_S3_DELETE_ATTEMPTS = 3;
+const S3_DELETE_RETRY_BACKOFF_MS = 250;
 
 async function getVideoUploadPresignedUrl({
 	fileKey,
@@ -61,10 +68,9 @@ async function getVideoUploadPresignedUrl({
 			if (distributionId) {
 				const cloudfront = new CloudFrontClient({
 					region: serverEnv().CAP_AWS_REGION || "us-east-1",
-					credentials: {
-						accessKeyId: serverEnv().CAP_AWS_ACCESS_KEY || "",
-						secretAccessKey: serverEnv().CAP_AWS_SECRET_KEY || "",
-					},
+					credentials: await runPromise(
+						Effect.map(AwsCredentials, (c) => c.credentials),
+					),
 				});
 
 				const pathToInvalidate = "/" + fileKey;
@@ -114,37 +120,11 @@ async function getVideoUploadPresignedUrl({
 				Option.fromNullable(customBucket?.id),
 			);
 
-			const presignedPostData = yield* bucket.getPresignedPostUrl(fileKey, {
+			return yield* bucket.getPresignedPostUrl(fileKey, {
 				Fields,
 				Expires: 1800,
 			});
-
-			const customEndpoint = serverEnv().CAP_AWS_ENDPOINT;
-			if (customEndpoint && !customEndpoint.includes("amazonaws.com")) {
-				if (serverEnv().S3_PATH_STYLE) {
-					presignedPostData.url = `${customEndpoint}/${bucket.bucketName}`;
-				} else {
-					presignedPostData.url = customEndpoint;
-				}
-			}
-
-			return presignedPostData;
 		}).pipe(runPromise);
-
-		const videoId = fileKey.split("/")[1];
-		if (videoId) {
-			try {
-				await fetch(`${serverEnv().WEB_URL}/api/revalidate`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({ videoId }),
-				});
-			} catch (revalidateError) {
-				console.error("Failed to revalidate page:", revalidateError);
-			}
-		}
 
 		return { presignedPostData };
 	} catch (error) {
@@ -165,6 +145,7 @@ export async function createVideoAndGetUploadUrl({
 	isUpload = false,
 	folderId,
 	orgId,
+	supportsUploadProgress = false,
 }: {
 	videoId?: Video.VideoId;
 	duration?: number;
@@ -174,18 +155,17 @@ export async function createVideoAndGetUploadUrl({
 	isScreenshot?: boolean;
 	isUpload?: boolean;
 	folderId?: Folder.FolderId;
-	orgId: string;
+	orgId: Organisation.OrganisationId;
+	// TODO: Remove this once we are happy with it's stability
+	supportsUploadProgress?: boolean;
 }) {
 	const user = await getCurrentUser();
 
-	if (!user) {
-		throw new Error("Unauthorized");
-	}
+	if (!user) throw new Error("Unauthorized");
 
 	try {
-		if (!userIsPro(user) && duration && duration > 300) {
+		if (!userIsPro(user) && duration && duration > 300)
 			throw new Error("upgrade_required");
-		}
 
 		const [customBucket] = await db()
 			.select()
@@ -231,7 +211,7 @@ export async function createVideoAndGetUploadUrl({
 			} - ${formattedDate}`,
 			ownerId: user.id,
 			orgId,
-			source: { type: "desktopMP4" as const },
+			source: { type: "webMP4" as const },
 			isScreenshot,
 			bucket: customBucket?.id,
 			public: serverEnv().CAP_VIDEOS_DEFAULT_PUBLIC,
@@ -240,9 +220,10 @@ export async function createVideoAndGetUploadUrl({
 
 		await db().insert(videos).values(videoData);
 
-		await db().insert(videoUploads).values({
-			videoId: idToUse,
-		});
+		if (supportsUploadProgress)
+			await db().insert(videoUploads).values({
+				videoId: idToUse,
+			});
 
 		const fileKey = `${user.id}/${idToUse}/${
 			isScreenshot ? "screenshot/screen-capture.jpg" : "result.mp4"
@@ -281,4 +262,132 @@ export async function createVideoAndGetUploadUrl({
 			error instanceof Error ? error.message : "Failed to create video",
 		);
 	}
+}
+
+export async function deleteVideoResultFile({
+	videoId,
+}: {
+	videoId: Video.VideoId;
+}) {
+	const user = await getCurrentUser();
+
+	if (!user) throw new Error("Unauthorized");
+
+	const [video] = await db()
+		.select({
+			id: videos.id,
+			ownerId: videos.ownerId,
+			bucketId: videos.bucket,
+		})
+		.from(videos)
+		.where(eq(videos.id, videoId));
+
+	if (!video) throw new Error("Video not found");
+	if (video.ownerId !== user.id) throw new Error("Forbidden");
+
+	const bucketIdOption = Option.fromNullable(video.bucketId).pipe(
+		Option.map((id) => S3Bucket.S3BucketId.make(id)),
+	);
+	const fileKey = `${video.ownerId}/${video.id}/result.mp4`;
+	const logContext = {
+		videoId: video.id,
+		ownerId: video.ownerId,
+		bucketId: video.bucketId ?? null,
+		fileKey,
+	};
+
+	try {
+		await db().transaction(async (tx) => {
+			await tx.delete(videoUploads).where(eq(videoUploads.videoId, videoId));
+		});
+	} catch (error) {
+		console.error("video.result.delete.transaction_failure", {
+			...logContext,
+			error: serializeError(error),
+		});
+		throw error;
+	}
+
+	try {
+		await deleteResultObjectWithRetry({
+			bucketIdOption,
+			fileKey,
+			logContext,
+		});
+	} catch (error) {
+		console.error("video.result.delete.s3_failure", {
+			...logContext,
+			error: serializeError(error),
+		});
+		throw error;
+	}
+
+	revalidatePath(`/s/${videoId}`);
+	revalidatePath("/dashboard/caps");
+	revalidatePath("/dashboard/folder");
+	revalidatePath("/dashboard/spaces");
+
+	return { success: true };
+}
+
+async function deleteResultObjectWithRetry({
+	bucketIdOption,
+	fileKey,
+	logContext,
+}: {
+	bucketIdOption: Option.Option<S3Bucket.S3BucketId>;
+	fileKey: string;
+	logContext: {
+		videoId: Video.VideoId;
+		ownerId: string;
+		bucketId: string | null;
+		fileKey: string;
+	};
+}) {
+	let attempt = 0;
+	let lastError: unknown;
+	while (attempt < MAX_S3_DELETE_ATTEMPTS) {
+		attempt += 1;
+		try {
+			await Effect.gen(function* () {
+				const [bucket] = yield* S3Buckets.getBucketAccess(bucketIdOption);
+				yield* bucket.deleteObject(fileKey);
+			}).pipe(runPromise);
+			return;
+		} catch (error) {
+			lastError = error;
+			console.error("video.result.delete.s3_failure", {
+				...logContext,
+				attempt,
+				maxAttempts: MAX_S3_DELETE_ATTEMPTS,
+				error: serializeError(error),
+			});
+
+			if (attempt < MAX_S3_DELETE_ATTEMPTS) {
+				await sleep(S3_DELETE_RETRY_BACKOFF_MS * attempt);
+			}
+		}
+	}
+
+	throw lastError instanceof Error
+		? lastError
+		: new Error("Failed to delete video result from S3");
+}
+
+function serializeError(error: unknown) {
+	if (error instanceof Error) {
+		return {
+			name: error.name,
+			message: error.message,
+			stack: error.stack,
+		};
+	}
+
+	return { name: "UnknownError", message: String(error) };
+}
+
+function sleep(durationMs: number) {
+	return new Promise<void>((resolve) => {
+		setTimeout(resolve, durationMs);
+	});
 }

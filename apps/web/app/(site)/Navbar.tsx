@@ -1,5 +1,6 @@
 "use client";
 
+import { buildEnv } from "@cap/env";
 import {
 	Button,
 	Logo,
@@ -17,9 +18,9 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import MobileMenu from "@/components/ui/MobileMenu";
-import { useAuthContext } from "../Layout/AuthContext";
+import { useCurrentUser } from "../Layout/AuthContext";
 
 const Links = [
 	{
@@ -115,7 +116,7 @@ const Links = [
 export const Navbar = () => {
 	const pathname = usePathname();
 	const [showMobileMenu, setShowMobileMenu] = useState(false);
-	const auth = use(useAuthContext().user);
+	const auth = useCurrentUser();
 
 	const [hideLogoName, setHideLogoName] = useState(false);
 
@@ -131,14 +132,21 @@ export const Navbar = () => {
 
 	return (
 		<>
-			<header className="fixed top-4 left-0 right-0 z-[51] lg:top-10  animate-in fade-in slide-in-from-top-4 duration-500">
+			<header
+				className={classNames(
+					"fixed left-0 right-0 z-[51] animate-in fade-in slide-in-from-top-4 duration-500",
+					buildEnv.NEXT_PUBLIC_IS_CAP === "true"
+						? "top-[60px] lg:top-[65px]"
+						: "top-4 lg:top-10",
+				)}
+			>
 				<nav className="p-2 mx-auto w-full max-w-[calc(100%-20px)] bg-white rounded-full border backdrop-blur-md lg:max-w-fit border-zinc-200 h-fit">
 					<div className="flex gap-12 justify-between items-center mx-auto max-w-4xl h-full transition-all">
 						<div className="flex items-center">
 							<Link passHref href="/home">
 								<Logo
 									hideLogoName={hideLogoName}
-									className="transition-all duration-[0.2s] ease-out"
+									className="transition-all duration-200 ease-out"
 									viewBoxDimensions={hideLogoName ? "0 0 60 40" : "0 0 120 40"}
 									style={{
 										width: hideLogoName ? 45.5 : 90,
@@ -295,7 +303,7 @@ export const Navbar = () => {
 };
 
 function LoginOrDashboard() {
-	const auth = use(useAuthContext().user);
+	const auth = useCurrentUser();
 
 	return (
 		<Button

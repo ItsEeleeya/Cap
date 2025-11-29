@@ -1,11 +1,13 @@
+import { HttpApiSchema } from "@effect/platform";
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { Context, Effect, Option, Schema } from "effect";
-
 import { RpcAuthMiddleware } from "./Authentication.ts";
 import { InternalError } from "./Errors.ts";
 import { FolderId } from "./Folder.ts";
+import { OrganisationId } from "./Organisation.ts";
 import { PolicyDeniedError } from "./Policy.ts";
 import { S3BucketId } from "./S3Bucket.ts";
+import { UserId } from "./User.ts";
 
 export const VideoId = Schema.String.pipe(Schema.brand("VideoId"));
 export type VideoId = typeof VideoId.Type;
@@ -13,12 +15,12 @@ export type VideoId = typeof VideoId.Type;
 // Purposefully doesn't include password as this is a public class
 export class Video extends Schema.Class<Video>("Video")({
 	id: VideoId,
-	ownerId: Schema.String,
-	orgId: Schema.OptionFromNullOr(Schema.String),
+	ownerId: UserId,
+	orgId: OrganisationId,
 	name: Schema.String,
 	public: Schema.Boolean,
 	source: Schema.Struct({
-		type: Schema.Literal("MediaConvert", "local", "desktopMP4"),
+		type: Schema.Literal("MediaConvert", "local", "desktopMP4", "webMP4"),
 	}),
 	metadata: Schema.OptionFromNullOr(
 		Schema.Record({ key: Schema.String, value: Schema.Any }),
@@ -26,7 +28,7 @@ export class Video extends Schema.Class<Video>("Video")({
 	bucketId: Schema.OptionFromNullOr(S3BucketId),
 	folderId: Schema.OptionFromNullOr(FolderId),
 	transcriptionStatus: Schema.OptionFromNullOr(
-		Schema.Literal("PROCESSING", "COMPLETE", "ERROR"),
+		Schema.Literal("PROCESSING", "COMPLETE", "ERROR", "SKIPPED"),
 	),
 	width: Schema.OptionFromNullOr(Schema.Number),
 	height: Schema.OptionFromNullOr(Schema.Number),
@@ -35,8 +37,6 @@ export class Video extends Schema.Class<Video>("Video")({
 	updatedAt: Schema.Date,
 }) {
 	static decodeSync = Schema.decodeSync(Video);
-
-	static toJS = (self: Video) => Schema.encode(Video)(self).pipe(Effect.orDie);
 
 	static getSource(self: Video) {
 		if (self.source.type === "MediaConvert")
@@ -53,7 +53,7 @@ export class Video extends Schema.Class<Video>("Video")({
 				subpath: "combined-source/stream.m3u8",
 			});
 
-		if (self.source.type === "desktopMP4")
+		if (self.source.type === "desktopMP4" || self.source.type === "webMP4")
 			return new Mp4Source({ videoId: self.id, ownerId: self.ownerId });
 	}
 }
@@ -66,6 +66,36 @@ export class UploadProgress extends Schema.Class<UploadProgress>(
 	startedAt: Schema.Date,
 	updatedAt: Schema.Date,
 }) {}
+
+export const UploadProgressUpdateInput = Schema.Struct({
+	videoId: VideoId,
+	uploaded: Schema.Int.pipe(Schema.greaterThanOrEqualTo(0)),
+	total: Schema.Int.pipe(Schema.greaterThanOrEqualTo(0)),
+	updatedAt: Schema.Date,
+});
+
+export const PresignedPost = Schema.Struct({
+	url: Schema.String,
+	fields: Schema.Record({ key: Schema.String, value: Schema.String }),
+});
+
+export const InstantRecordingCreateInput = Schema.Struct({
+	orgId: OrganisationId,
+	folderId: Schema.OptionFromUndefinedOr(FolderId),
+	durationSeconds: Schema.optional(Schema.Number),
+	resolution: Schema.optional(Schema.String),
+	width: Schema.optional(Schema.Number),
+	height: Schema.optional(Schema.Number),
+	videoCodec: Schema.optional(Schema.String),
+	audioCodec: Schema.optional(Schema.String),
+	supportsUploadProgress: Schema.optional(Schema.Boolean),
+});
+
+export const InstantRecordingCreateSuccess = Schema.Struct({
+	id: VideoId,
+	shareUrl: Schema.String,
+	upload: PresignedPost,
+});
 
 export class ImportSource extends Schema.Class<ImportSource>("ImportSource")({
 	source: Schema.Literal("loom"),
@@ -135,6 +165,7 @@ export const verifyPassword = (video: Video, password: Option.Option<string>) =>
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
 	"VideoNotFoundError",
 	{},
+	HttpApiSchema.annotations({ status: 404 }),
 ) {}
 
 export class VideoRpcs extends RpcGroup.make(
@@ -156,6 +187,16 @@ export class VideoRpcs extends RpcGroup.make(
 			VerifyVideoPasswordError,
 		),
 	}),
+	Rpc.make("VideoInstantCreate", {
+		payload: InstantRecordingCreateInput,
+		success: InstantRecordingCreateSuccess,
+		error: Schema.Union(InternalError, PolicyDeniedError),
+	}).middleware(RpcAuthMiddleware),
+	Rpc.make("VideoUploadProgressUpdate", {
+		payload: UploadProgressUpdateInput,
+		success: Schema.Boolean,
+		error: Schema.Union(NotFoundError, InternalError, PolicyDeniedError),
+	}).middleware(RpcAuthMiddleware),
 	Rpc.make("VideoGetDownloadInfo", {
 		payload: VideoId,
 		success: Schema.Option(
@@ -167,5 +208,39 @@ export class VideoRpcs extends RpcGroup.make(
 			PolicyDeniedError,
 			VerifyVideoPasswordError,
 		),
+	}),
+	Rpc.make("VideosGetThumbnails", {
+		payload: Schema.Array(VideoId).pipe(
+			Schema.filter((a) => a.length <= 50 || "Maximum of 50 videos at a time"),
+		),
+		success: Schema.Array(
+			Schema.Exit({
+				success: Schema.Option(Schema.String),
+				failure: Schema.Union(
+					NotFoundError,
+					PolicyDeniedError,
+					VerifyVideoPasswordError,
+				),
+				defect: Schema.Unknown,
+			}),
+		),
+		error: InternalError,
+	}),
+	Rpc.make("VideosGetAnalytics", {
+		payload: Schema.Array(VideoId).pipe(
+			Schema.filter((a) => a.length <= 50 || "Maximum of 50 videos at a time"),
+		),
+		success: Schema.Array(
+			Schema.Exit({
+				success: Schema.Struct({ count: Schema.Int }),
+				failure: Schema.Union(
+					NotFoundError,
+					PolicyDeniedError,
+					VerifyVideoPasswordError,
+				),
+				defect: Schema.Unknown,
+			}),
+		),
+		error: InternalError,
 	}),
 ) {}

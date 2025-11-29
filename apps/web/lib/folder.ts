@@ -1,7 +1,5 @@
 import "server-only";
 
-import { db } from "@cap/database";
-import { getCurrentUser } from "@cap/database/auth/session";
 import {
 	comments,
 	folders,
@@ -13,19 +11,18 @@ import {
 	videos,
 	videoUploads,
 } from "@cap/database/schema";
-import { Database } from "@cap/web-backend";
-import type { Video } from "@cap/web-domain";
+import { Database, ImageUploads } from "@cap/web-backend";
+import type { ImageUpload, Organisation, Space, Video } from "@cap/web-domain";
 import { CurrentUser, Folder } from "@cap/web-domain";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm/sql";
 import { Effect } from "effect";
-import { revalidatePath } from "next/cache";
 
 export const getFolderById = Effect.fn(function* (folderId: string) {
 	if (!folderId) throw new Error("Folder ID is required");
 	const db = yield* Database;
 
-	const [folder] = yield* db.execute((db) =>
+	const [folder] = yield* db.use((db) =>
 		db
 			.select()
 			.from(folders)
@@ -72,7 +69,7 @@ const getSharedSpacesForVideos = Effect.fn(function* (
 	const db = yield* Database;
 
 	// Fetch space-level sharing
-	const spaceSharing = yield* db.execute((db) =>
+	const spaceSharing = yield* db.use((db) =>
 		db
 			.select({
 				videoId: spaceVideos.videoId,
@@ -93,7 +90,7 @@ const getSharedSpacesForVideos = Effect.fn(function* (
 	);
 
 	// Fetch organization-level sharing
-	const orgSharing = yield* db.execute((db) =>
+	const orgSharing = yield* db.use((db) =>
 		db
 			.select({
 				videoId: sharedVideos.videoId,
@@ -159,11 +156,16 @@ const getSharedSpacesForVideos = Effect.fn(function* (
 
 export const getVideosByFolderId = Effect.fn(function* (
 	folderId: Folder.FolderId,
+	root:
+		| { variant: "user" }
+		| { variant: "space"; spaceId: Space.SpaceIdOrOrganisationId }
+		| { variant: "org"; organizationId: Organisation.OrganisationId },
 ) {
 	if (!folderId) throw new Error("Folder ID is required");
 	const db = yield* Database;
+	const imageUploads = yield* ImageUploads;
 
-	const videoData = yield* db.execute((db) =>
+	const videoData = yield* db.use((db) =>
 		db
 			.select({
 				id: videos.id,
@@ -176,7 +178,11 @@ export const getVideosByFolderId = Effect.fn(function* (
 				totalComments: sql<number>`COUNT(DISTINCT CASE WHEN ${comments.type} = 'text' THEN ${comments.id} END)`,
 				totalReactions: sql<number>`COUNT(DISTINCT CASE WHEN ${comments.type} = 'emoji' THEN ${comments.id} END)`,
 				sharedOrganizations: sql<
-					{ id: string; name: string; iconUrl: string }[]
+					{
+						id: string;
+						name: string;
+						iconUrl: ImageUpload.ImageUrlOrKey | null;
+					}[]
 				>`
         COALESCE(
           JSON_ARRAYAGG(
@@ -191,12 +197,7 @@ export const getVideosByFolderId = Effect.fn(function* (
       `,
 
 				ownerName: users.name,
-				effectiveDate: sql<string>`
-        COALESCE(
-          JSON_UNQUOTE(JSON_EXTRACT(${videos.metadata}, '$.customCreatedAt')),
-          ${videos.createdAt}
-        )
-      `,
+				effectiveDate: videos.effectiveCreatedAt,
 				hasPassword: sql`${videos.password} IS NOT NULL`.mapWith(Boolean),
 				hasActiveUpload: sql`${videoUploads.videoId} IS NOT NULL`.mapWith(
 					Boolean,
@@ -205,13 +206,26 @@ export const getVideosByFolderId = Effect.fn(function* (
 			.from(videos)
 			.leftJoin(comments, eq(videos.id, comments.videoId))
 			.leftJoin(sharedVideos, eq(videos.id, sharedVideos.videoId))
+			.leftJoin(spaceVideos, eq(videos.id, spaceVideos.videoId))
 			.leftJoin(
 				organizations,
 				eq(sharedVideos.organizationId, organizations.id),
 			)
 			.leftJoin(users, eq(videos.ownerId, users.id))
 			.leftJoin(videoUploads, eq(videos.id, videoUploads.videoId))
-			.where(eq(videos.folderId, folderId))
+			.where(
+				root.variant === "space"
+					? and(
+							eq(spaceVideos.folderId, folderId),
+							isNull(organizations.tombstoneAt),
+						)
+					: root.variant === "org"
+						? and(
+								eq(sharedVideos.folderId, folderId),
+								isNull(organizations.tombstoneAt),
+							)
+						: eq(videos.folderId, folderId),
+			)
 			.groupBy(
 				videos.id,
 				videos.ownerId,
@@ -221,12 +235,7 @@ export const getVideosByFolderId = Effect.fn(function* (
 				videos.metadata,
 				users.name,
 			)
-			.orderBy(
-				desc(sql`COALESCE(
-      JSON_UNQUOTE(JSON_EXTRACT(${videos.metadata}, '$.customCreatedAt')),
-      ${videos.createdAt}
-    )`),
-			),
+			.orderBy(desc(videos.effectiveCreatedAt)),
 	);
 
 	// Fetch shared spaces data for all videos
@@ -234,35 +243,48 @@ export const getVideosByFolderId = Effect.fn(function* (
 	const sharedSpacesMap = yield* getSharedSpacesForVideos(videoIds);
 
 	// Process the video data to match the expected format
-	const processedVideoData = videoData.map((video) => {
-		return {
-			id: video.id as Video.VideoId, // Cast to Video.VideoId branded type
-			ownerId: video.ownerId,
-			name: video.name,
-			createdAt: video.createdAt,
-			public: video.public,
-			totalComments: video.totalComments,
-			totalReactions: video.totalReactions,
-			sharedOrganizations: Array.isArray(video.sharedOrganizations)
-				? video.sharedOrganizations.filter(
-						(organization) => organization.id !== null,
-					)
-				: [],
-			sharedSpaces: Array.isArray(sharedSpacesMap[video.id])
-				? sharedSpacesMap[video.id]
-				: [],
-			ownerName: video.ownerName ?? "",
-			metadata: video.metadata as
-				| {
-						customCreatedAt?: string;
-						[key: string]: unknown;
-				  }
-				| undefined,
-			hasPassword: video.hasPassword,
-			hasActiveUpload: video.hasActiveUpload,
-			foldersData: [], // Empty array since videos in a folder don't need folder data
-		};
-	});
+	const processedVideoData = yield* Effect.all(
+		videoData.map(
+			Effect.fn(function* (video) {
+				return {
+					id: video.id as Video.VideoId, // Cast to Video.VideoId branded type
+					ownerId: video.ownerId,
+					name: video.name,
+					createdAt: video.createdAt,
+					public: video.public,
+					totalComments: video.totalComments,
+					totalReactions: video.totalReactions,
+					sharedOrganizations: yield* Effect.all(
+						(video.sharedOrganizations ?? [])
+							.filter((organization) => organization.id !== null)
+							.map(
+								Effect.fn(function* (org) {
+									return {
+										...org,
+										iconUrl: org.iconUrl
+											? yield* imageUploads.resolveImageUrl(org.iconUrl)
+											: null,
+									};
+								}),
+							),
+					),
+					sharedSpaces: Array.isArray(sharedSpacesMap[video.id])
+						? sharedSpacesMap[video.id]
+						: [],
+					ownerName: video.ownerName ?? "",
+					metadata: video.metadata as
+						| {
+								customCreatedAt?: string;
+								[key: string]: unknown;
+						  }
+						| undefined,
+					hasPassword: video.hasPassword,
+					hasActiveUpload: video.hasActiveUpload,
+					foldersData: [], // Empty array since videos in a folder don't need folder data
+				};
+			}),
+		),
+	);
 
 	return processedVideoData;
 });
@@ -271,15 +293,15 @@ export const getChildFolders = Effect.fn(function* (
 	folderId: Folder.FolderId,
 	root:
 		| { variant: "user" }
-		| { variant: "space"; spaceId: string }
-		| { variant: "org"; organizationId: string },
+		| { variant: "space"; spaceId: Space.SpaceIdOrOrganisationId }
+		| { variant: "org"; organizationId: Organisation.OrganisationId },
 ) {
 	const db = yield* Database;
 
 	const user = yield* CurrentUser;
 	if (!user.activeOrganizationId) throw new Error("No active organization");
 
-	const childFolders = yield* db.execute((db) =>
+	const childFolders = yield* db.use((db) =>
 		db
 			.select({
 				id: folders.id,
