@@ -679,6 +679,84 @@ impl TextSegment {
 
 #[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default)]
 #[serde(rename_all = "camelCase")]
+pub enum MagnifierShape {
+    #[default]
+    Circle,
+    Ellipse,
+    RoundedRectangle,
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MagnifierSegment {
+    pub start: f64,
+    pub end: f64,
+    #[serde(default = "MagnifierSegment::default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "MagnifierSegment::default_center")]
+    pub center: XY<f64>,
+    #[serde(default = "MagnifierSegment::default_radius")]
+    pub radius: f64,
+    #[serde(default = "MagnifierSegment::default_zoom_amount")]
+    pub zoom_amount: f64,
+    #[serde(default = "MagnifierSegment::default_shape")]
+    pub shape: MagnifierShape,
+    #[serde(default = "MagnifierSegment::default_glass_strength")]
+    pub glass_strength: f64,
+    #[serde(default = "MagnifierSegment::default_glass_radius")]
+    pub glass_radius: f64,
+    #[serde(default = "MagnifierSegment::default_border_width")]
+    pub border_width: f32,
+    #[serde(default = "MagnifierSegment::default_border_color")]
+    pub border_color: String,
+    #[serde(default = "MagnifierSegment::default_feather")]
+    pub feather: f32,
+}
+
+impl MagnifierSegment {
+    fn default_enabled() -> bool {
+        true
+    }
+
+    fn default_center() -> XY<f64> {
+        XY::new(0.5, 0.5)
+    }
+
+    fn default_radius() -> f64 {
+        0.15
+    }
+
+    fn default_zoom_amount() -> f64 {
+        2.0
+    }
+
+    fn default_shape() -> MagnifierShape {
+        MagnifierShape::Circle
+    }
+
+    fn default_glass_strength() -> f64 {
+        0.02
+    }
+
+    fn default_glass_radius() -> f64 {
+        0.25
+    }
+
+    fn default_border_width() -> f32 {
+        3.0
+    }
+
+    fn default_border_color() -> String {
+        "#ffffff".to_string()
+    }
+
+    fn default_feather() -> f32 {
+        2.0
+    }
+}
+
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub enum SceneMode {
     #[default]
     Default,
@@ -706,6 +784,8 @@ pub struct TimelineConfiguration {
     pub mask_segments: Vec<MaskSegment>,
     #[serde(default)]
     pub text_segments: Vec<TextSegment>,
+    #[serde(default)]
+    pub magnifier_segments: Vec<MagnifierSegment>,
 }
 
 impl TimelineConfiguration {

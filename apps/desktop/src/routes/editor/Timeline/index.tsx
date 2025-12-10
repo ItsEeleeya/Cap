@@ -21,6 +21,7 @@ import { FPS, type TimelineTrackType, useEditorContext } from "../context";
 import { formatTime } from "../utils";
 import { ClipTrack } from "./ClipTrack";
 import { TimelineContextProvider, useTimelineContext } from "./context";
+import { MagnifierTrack } from "./MagnifierTrack";
 import { type MaskSegmentDragState, MaskTrack } from "./MaskTrack";
 import { type SceneSegmentDragState, SceneTrack } from "./SceneTrack";
 import { type TextSegmentDragState, TextTrack } from "./TextTrack";
@@ -37,6 +38,7 @@ const trackIcons: Record<TimelineTrackType, JSX.Element> = {
 	mask: <IconLucideBoxSelect class="size-4" />,
 	zoom: <IconLucideSearch class="size-4" />,
 	scene: <IconLucideVideo class="size-4" />,
+	magnifier: <IconLucideEyeOff class="size-4" />,
 };
 
 type TrackDefinition = {
@@ -77,6 +79,12 @@ const trackDefinitions: TrackDefinition[] = [
 		icon: trackIcons.scene,
 		locked: false,
 	},
+	{
+		type: "magnifier",
+		label: "Magnifier",
+		icon: trackIcons.magnifier,
+		locked: false,
+	},
 ];
 
 export function Timeline() {
@@ -113,7 +121,9 @@ export function Timeline() {
 						? trackState().mask
 						: definition.type === "text"
 							? trackState().text
-							: true,
+							: definition.type === "magnifier"
+								? trackState().magnifier
+								: true,
 			available: definition.type === "scene" ? sceneAvailable() : true,
 		}));
 	const sceneTrackVisible = () => trackState().scene && sceneAvailable();
@@ -121,6 +131,7 @@ export function Timeline() {
 		2 +
 		(trackState().text ? 1 : 0) +
 		(trackState().mask ? 1 : 0) +
+		(trackState().magnifier ? 1 : 0) +
 		(sceneTrackVisible() ? 1 : 0);
 	const trackHeight = () => (visibleTrackCount() > 2 ? "3rem" : "3.25rem");
 
@@ -143,6 +154,10 @@ export function Timeline() {
 			if (!next && editorState.timeline.selection?.type === "mask") {
 				setEditorState("timeline", "selection", null);
 			}
+		}
+
+		if (type === "magnifier") {
+			setEditorState("timeline", "tracks", "magnifier", next);
 		}
 	}
 
@@ -202,11 +217,13 @@ export function Timeline() {
 					sceneSegments: [],
 					maskSegments: [],
 					textSegments: [],
+					magnifierSegments: [],
 				};
 				project.timeline.sceneSegments ??= [];
 				project.timeline.maskSegments ??= [];
 				project.timeline.textSegments ??= [];
 				project.timeline.zoomSegments ??= [];
+				project.timeline.magnifierSegments ??= [];
 			}),
 		);
 	}
@@ -520,6 +537,11 @@ export function Timeline() {
 										}}
 										handleUpdatePlayhead={handleUpdatePlayhead}
 									/>
+								</TrackRow>
+							</Show>
+							<Show when={trackState().magnifier}>
+								<TrackRow icon={trackIcons.magnifier}>
+									<MagnifierTrack />
 								</TrackRow>
 							</Show>
 							<TrackRow icon={trackIcons.zoom}>

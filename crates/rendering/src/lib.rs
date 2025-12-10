@@ -12,7 +12,7 @@ use futures::FutureExt;
 use futures::future::OptionFuture;
 use layers::{
     Background, BackgroundLayer, BlurLayer, CameraLayer, CaptionsLayer, CursorLayer, DisplayLayer,
-    MaskLayer, TextLayer,
+    MaskLayer, MagnifierLayer, TextLayer,
 };
 use specta::Type;
 use spring_mass_damper::SpringMassDamperSimulationConfig;
@@ -412,6 +412,7 @@ pub struct ProjectUniforms {
     pub output_size: (u32, u32),
     pub cursor_size: f32,
     pub frame_rate: u32,
+    pub time: f64,
     display: CompositeVideoFrameUniforms,
     camera: Option<CompositeVideoFrameUniforms>,
     camera_only: Option<CompositeVideoFrameUniforms>,
@@ -1496,6 +1497,7 @@ impl ProjectUniforms {
         Self {
             output_size,
             cursor_size: project.cursor.size as f32,
+            time: frame_time as f64,
             resolution_base,
             display,
             camera,
@@ -1575,6 +1577,7 @@ pub struct RendererLayers {
     camera: CameraLayer,
     camera_only: CameraLayer,
     mask: MaskLayer,
+    magnifier: MagnifierLayer,
     text: TextLayer,
     captions: CaptionsLayer,
 }
@@ -1589,6 +1592,7 @@ impl RendererLayers {
             camera: CameraLayer::new(device),
             camera_only: CameraLayer::new(device),
             mask: MaskLayer::new(device),
+            magnifier: MagnifierLayer::new(device),
             text: TextLayer::new(device, queue),
             captions: CaptionsLayer::new(device, queue),
         }
@@ -1654,6 +1658,8 @@ impl RendererLayers {
             })(),
         );
 
+        self.magnifier.prepare(&constants.queue, uniforms, uniforms.time);
+
         self.text.prepare(
             &constants.device,
             &constants.queue,
@@ -1672,7 +1678,7 @@ impl RendererLayers {
     }
 
     pub fn render(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
@@ -1722,6 +1728,12 @@ impl RendererLayers {
         if uniforms.scene.should_render_screen() {
             let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
             self.cursor.render(&mut pass);
+        }
+
+        // Render magnifier effects
+        if !self.magnifier.active_magnifiers.is_empty() {
+            let mut pass = render_pass!(session.current_texture_view(), wgpu::LoadOp::Load);
+            self.magnifier.render(&mut pass, device, queue, session.current_texture_view());
         }
 
         // Render camera-only layer when transitioning with CameraOnly mode

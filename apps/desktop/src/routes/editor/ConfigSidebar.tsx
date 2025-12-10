@@ -72,6 +72,7 @@ import {
 	DEFAULT_GRADIENT_TO,
 	type RGBColor,
 } from "./projectConfig";
+import { MagnifierSegmentConfig } from "./MagnifierSegmentConfig";
 import ShadowSettings from "./ShadowSettings";
 import { TextInput } from "./TextInput";
 import type { TextSegment } from "./text";
@@ -1183,6 +1184,82 @@ export function ConfigSidebar() {
 											</div>
 										</div>
 									</Show>
+								)}
+							</Show>
+							<Show
+								when={(() => {
+									const magnifierSelection = selection();
+									if (magnifierSelection?.type !== "magnifier") return;
+
+									const segments = magnifierSelection.indices
+										.map((index) => ({
+											index,
+											segment: project.timeline?.magnifierSegments?.[index],
+										}))
+										.filter(
+											(
+												item,
+											): item is { index: number; segment: MagnifierSegment } =>
+												item.segment !== undefined,
+										);
+
+									if (segments.length === 0) {
+										setEditorState("timeline", "selection", null);
+										return;
+									}
+									return { selection: magnifierSelection, segments };
+								})()}
+							>
+								{(value) => (
+									<div class="space-y-4">
+										<div class="flex flex-row justify-between items-center">
+											<div class="flex gap-2 items-center">
+												<EditorButton
+													onClick={() =>
+														setEditorState("timeline", "selection", null)
+													}
+													leftIcon={<IconLucideCheck />}
+												>
+													Done
+												</EditorButton>
+												<span class="text-sm text-gray-10">
+													{value().segments.length} magnifier{" "}
+													{value().segments.length === 1
+														? "segment"
+														: "segments"}{" "}
+													selected
+												</span>
+											</div>
+											<EditorButton
+												variant="danger"
+												onClick={() =>
+													setProject(
+														"timeline",
+														"magnifierSegments",
+														produce((segments = []) =>
+															segments.filter(
+																(_, index) =>
+																	!value().selection.indices.includes(index),
+															),
+														),
+													)
+												}
+												leftIcon={<IconCapTrash />}
+											>
+												Delete
+											</EditorButton>
+										</div>
+										<For each={value().segments}>
+											{(item) => (
+												<div class="p-4 rounded-lg border border-gray-200">
+													<MagnifierSegmentConfig
+														segment={item.segment}
+														segmentIndex={item.index}
+													/>
+												</div>
+											)}
+										</For>
+									</div>
 								)}
 							</Show>
 						</Suspense>
