@@ -63,8 +63,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       '@rive-app/canvas':
-        specifier: ^2.26.7
-        version: 2.27.1
+        specifier: ^2.32.2
+        version: 2.33.0
       '@solid-primitives/bounds':
         specifier: ^0.0.122
         version: 0.0.122(solid-js@1.9.6)
@@ -5253,6 +5253,9 @@ packages:
 
   '@rive-app/canvas@2.27.1':
     resolution: {integrity: sha512-TnRZdwS/y6RvoTwaZJVlG91NP+m97WcXgSY08wY8R8m8iyVQtpvkRN9oNKwlh46YHPAqGTafaqOzxc7H7ijZDw==}
+
+  '@rive-app/canvas@2.33.0':
+    resolution: {integrity: sha512-LwM8Ue97PQpccRv9dzrwVahDzFXCSzLkBPIZM4PqjQQOrrwCJ3rxHo6uAwqcUkMrIUAKaJsRktIPdA8EYLFJDw==}
 
   '@rive-app/react-canvas@4.19.0':
     resolution: {integrity: sha512-jyho5d2nYpjAEkh7a/fEUUzzSR3BlIowXt/Iv+AXGGdC4Y/Kzz0DgnLpdlBtOGedTERZjUYBLXHpnJRMY/LPAQ==}
@@ -14585,7 +14588,7 @@ snapshots:
 
   '@aerofoil/rive-solid-canvas@2.1.4':
     dependencies:
-      '@rive-app/canvas': 2.27.1
+      '@rive-app/canvas': 2.33.0
       solid-js: 1.9.6
 
   '@alloc/quick-lru@5.2.0': {}
@@ -19143,6 +19146,8 @@ snapshots:
 
   '@rive-app/canvas@2.27.1': {}
 
+  '@rive-app/canvas@2.33.0': {}
+
   '@rive-app/react-canvas@4.19.0(react@19.1.1)':
     dependencies:
       '@rive-app/canvas': 2.27.1
@@ -21676,7 +21681,7 @@ snapshots:
     dependencies:
       '@vitest/spy': 3.2.4
       estree-walker: 3.0.3
-      magic-string: 0.30.19
+      magic-string: 0.30.21
     optionalDependencies:
       vite: 6.3.5(@types/node@22.15.17)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.0)(yaml@2.8.1)
 
