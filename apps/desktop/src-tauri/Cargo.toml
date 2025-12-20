@@ -127,6 +127,7 @@ objc2-foundation = "0.3.2"
 objc2-application-services = "0.3.2"
 objc2-core-foundation = "0.3.2"
 objc2-core-graphics = "0.3.2"
+objc2-web-kit = "0.3.2"
 objc2-app-kit = { version = "0.3.2", features = [
     "NSWindow",
     "NSResponder",

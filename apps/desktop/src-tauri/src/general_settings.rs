@@ -125,6 +125,18 @@ pub struct GeneralSettingsStore {
     pub default_project_name_template: Option<String>,
     #[serde(default)]
     pub crash_recovery_recording: bool,
+    // Use Solarium design when macOS 26.0 is available
+    #[serde(default = "default_true")]
+    pub use_solarium: bool,
+    // Allows for substituting the Glass Effect with Blur Material
+    #[serde(default = "default_true")]
+    pub use_solarium_glass: bool,
+    // Enables Glass Effect on unsupportd solarium systems
+    // On Windows, uses SVG filters to achieve that look.
+    // On macOS there will be a custom glass effect implementation using Core Animation Filter.
+    // TODO (Ilya): Cleanup these comments
+    #[serde(default = "default_true")]
+    pub experimental_use_solarium_like: bool,
 }
 
 fn default_enable_native_camera_preview() -> bool {

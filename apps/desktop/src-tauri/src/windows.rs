@@ -208,6 +208,7 @@ impl CapWindowDef {
             _ => None,
         }
     }
+
     pub const fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Setup => (600.0, 600.0),
@@ -938,13 +939,57 @@ impl CapWindow {
         }
 
         #[cfg(target_os = "macos")]
-        if def.undecorated() {
-            builder = builder.decorations(false);
-        } else {
-            builder = builder
-                .hidden_title(true)
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .traffic_light_position(def.pre_solarium_traffic_lights_position());
+        {
+            if def.undecorated() {
+                builder = builder.decorations(false);
+            } else {
+                builder = builder
+                    .hidden_title(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .traffic_light_position(def.pre_solarium_traffic_lights_position());
+            }
+
+            if objc2::available!(macos = 26.0) {
+                builder = dispatch2::run_on_main(move |mtm| {
+                    use objc2_foundation::{NSObjectNSKeyValueCoding, NSObjectProtocol, ns_string};
+                    use objc2_web_kit::WKPreferences;
+
+                    // SAFETY: Running on the main thread
+                    let preferences = unsafe { WKPreferences::new(mtm) };
+
+                    println!("Checking responds to");
+                    if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
+                        let yes = objc2_foundation::NSNumber::numberWithBool(true);
+
+                        println!("It does");
+
+                        builder = builder.with_webview_configuration(
+                            // SAFETY: We are on the main thread, WKPreferences object is valid, we're checking for the existence of the selector
+                            unsafe {
+                                preferences
+                                    .setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                                let target_configuration =
+                                    objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                                target_configuration.setPreferences(&preferences);
+                                target_configuration
+                            },
+                        );
+
+                        // TODO (Ilya): Refactor CapWindow again to be more concise, especially better handling for setting init values
+                        // init_script +=
+                        //     r#"
+                        //      Object.defineProperty(window, 'APPLE_WKWV_SUPPORTS_MATERIAL_HOSTING', {
+                        //          value: true,
+                        //          writable: false,
+                        //          configurable: false
+                        //      });
+                        //  "#,
+                        //
+                    }
+
+                    builder
+                });
+            }
         }
 
         #[cfg(windows)]
@@ -1026,6 +1071,37 @@ pub fn refresh_window_content_protection(app: AppHandle<Wry>) -> Result<(), Stri
     }
 
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn add_toolbar_shell(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    dispatch2::run_on_main(move |mtm| {
+        use objc2_app_kit::{NSToolbar, NSWindowToolbarStyle};
+
+        let nswindow = window.objc2_nswindow();
+
+        let toolbar = NSToolbar::new(mtm);
+        toolbar.setAllowsUserCustomization(false);
+        toolbar.setAutosavesConfiguration(false);
+        toolbar.setDisplayMode(objc2_app_kit::NSToolbarDisplayMode::IconOnly);
+        toolbar.setAllowsDisplayModeCustomization(false);
+
+        nswindow.setToolbar(Some(&toolbar));
+        nswindow.setToolbarStyle(NSWindowToolbarStyle::Unified);
+    });
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn remove_toolbar_shell(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    dispatch2::run_on_main(move |_| {
+        window.objc2_nswindow().setToolbar(None);
+    });
 }
 
 // Credits: tauri-plugin-window-state

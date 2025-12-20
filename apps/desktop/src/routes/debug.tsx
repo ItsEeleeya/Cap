@@ -13,7 +13,7 @@ export default function Debug() {
 	return (
 		<main class="w-full h-full bg-gray-2 text-(--text-primary) p-4">
 			<h2 class="text-2xl font-bold">Debug Windows</h2>
-			<div class="p-2 mb-4">
+			<div class="py-4 gap-3 inline-flex">
 				<button
 					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
 					onClick={() => commands.showWindow("Setup")}
