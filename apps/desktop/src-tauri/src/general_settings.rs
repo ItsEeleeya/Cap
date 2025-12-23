@@ -204,6 +204,9 @@ impl Default for GeneralSettingsStore {
             instant_mode_max_resolution: 1920,
             default_project_name_template: None,
             crash_recovery_recording: true,
+            use_solarium: true,
+            use_solarium_glass: true,
+            experimental_use_solarium_like: false,
         }
     }
 }

@@ -1,4 +1,11 @@
 import { createQuery } from "@tanstack/solid-query";
+import type { WebviewOptions } from "@tauri-apps/api/webview";
+import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import {
+	Effect,
+	EffectState,
+	type WindowOptions,
+} from "@tauri-apps/api/window";
 import { createUniqueId, For } from "solid-js";
 import { commands } from "~/utils/tauri";
 
@@ -57,6 +64,40 @@ export default function Debug() {
 					}}
 				</For>
 			</ul>
+
+			<h2 class="text-2xl font-bold">Solarium</h2>
+			<div class="py-4 gap-3 inline-flex">
+				<button
+					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+					onClick={() => {
+						createSolariumWindow({
+							decorations: false,
+							shadow: false,
+							label: "recording-controls-solarium",
+							title: "Recording Controls",
+							url: "/solarium-recording-controls",
+							transparent: true,
+						});
+					}}
+				>
+					Show Recording Controls
+				</button>
+				<button
+					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+					onClick={() => {
+						//
+					}}
+				>
+					Show Editor
+				</button>
+			</div>
 		</main>
 	);
+}
+
+function createSolariumWindow(
+	options: Omit<WebviewOptions, "x" | "y" | "width" | "height"> &
+		WindowOptions & { label: string },
+) {
+	commands.createWindowTryWithMaterialHosting(JSON.stringify(options));
 }

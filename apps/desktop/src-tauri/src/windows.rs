@@ -954,39 +954,21 @@ impl CapWindow {
                     use objc2_foundation::{NSObjectNSKeyValueCoding, NSObjectProtocol, ns_string};
                     use objc2_web_kit::WKPreferences;
 
-                    // SAFETY: Running on the main thread
                     let preferences = unsafe { WKPreferences::new(mtm) };
+                    let yes = objc2_foundation::NSNumber::numberWithBool(true);
 
-                    println!("Checking responds to");
                     if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
-                        let yes = objc2_foundation::NSNumber::numberWithBool(true);
-
-                        println!("It does");
-
-                        builder = builder.with_webview_configuration(
-                            // SAFETY: We are on the main thread, WKPreferences object is valid, we're checking for the existence of the selector
-                            unsafe {
-                                preferences
-                                    .setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
-                                let target_configuration =
-                                    objc2_web_kit::WKWebViewConfiguration::new(mtm);
-                                target_configuration.setPreferences(&preferences);
-                                target_configuration
-                            },
-                        );
-
-                        // TODO (Ilya): Refactor CapWindow again to be more concise, especially better handling for setting init values
-                        // init_script +=
-                        //     r#"
-                        //      Object.defineProperty(window, 'APPLE_WKWV_SUPPORTS_MATERIAL_HOSTING', {
-                        //          value: true,
-                        //          writable: false,
-                        //          configurable: false
-                        //      });
-                        //  "#,
-                        //
+                        builder = builder.with_webview_configuration(unsafe {
+                            preferences
+                                .setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                            let target_configuration =
+                                objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                            target_configuration.setPreferences(&preferences);
+                            target_configuration
+                        });
                     }
 
+                    // TODO (Ilya): Refactor CapWindow again to be more concise, especially better handling for setting init values
                     builder
                 });
             }
@@ -1031,6 +1013,46 @@ impl CapWindow {
             }
         }
     }
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(app))]
+pub fn create_window_try_with_material_hosting(
+    app: AppHandle,
+    config_string: String,
+) -> Result<(), String> {
+    let config: tauri::utils::config::WindowConfig =
+        serde_json::from_str(&config_string).map_err(|e| e.to_string())?;
+    let mut builder = WebviewWindowBuilder::from_config(&app, &config)
+        .map_err(|e| e.to_string())?
+        .decorations(config.decorations);
+
+    #[cfg(target_os = "macos")]
+    if objc2::available!(macos = 26.0) {
+        builder = dispatch2::run_on_main(move |mtm| {
+            use objc2_foundation::{NSObjectNSKeyValueCoding, NSObjectProtocol, ns_string};
+            use objc2_web_kit::WKPreferences;
+
+            let preferences = unsafe { WKPreferences::new(mtm) };
+            let yes = objc2_foundation::NSNumber::numberWithBool(true);
+
+            if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
+                builder = builder.with_webview_configuration(unsafe {
+                    preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                    let target_configuration = objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                    target_configuration.setPreferences(&preferences);
+                    target_configuration
+                });
+            }
+
+            // TODO (Ilya): Refactor CapWindow again to be more concise, especially better handling for setting init values
+            builder
+        });
+    }
+
+    builder.build().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

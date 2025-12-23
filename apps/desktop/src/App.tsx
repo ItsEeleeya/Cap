@@ -13,6 +13,7 @@ import "unfonts.css";
 import "./styles/theme.css";
 
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
+import SolariumRecordingControls from "./routes/solarium/recording-controls";
 import { generalSettingsStore } from "./store";
 import { initAnonymousUser } from "./utils/analytics";
 import { type AppTheme, commands } from "./utils/tauri";
@@ -199,6 +200,10 @@ function Inner() {
 					<Route
 						path="/window-capture-occluder"
 						component={WindowCaptureOccluderPage}
+					/>
+					<Route
+						path="/solarium-recording-controls"
+						component={SolariumRecordingControls}
 					/>
 				</Router>
 			</CapErrorBoundary>

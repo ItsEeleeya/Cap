@@ -1,0 +1,75 @@
+.apple-blur-ultra-thin {
+	-apple-visual-effect: -apple-system-blur-material-ultra-thin;
+}
+
+.apple-blur-thin {
+	-apple-visual-effect: -apple-system-blur-material-thin;
+}
+
+.apple-blur {
+	-apple-visual-effect: -apple-system-blur-material;
+}
+
+.apple-blur-thick {
+	-apple-visual-effect: -apple-system-blur-material-thick;
+}
+
+.apple-blur-chrome {
+	-apple-visual-effect: -apple-system-blur-material-chrome;
+}
+
+.apple-glass {
+	-apple-visual-effect: -apple-system-glass-material;
+}
+
+.apple-glass-clear {
+	-apple-visual-effect: -apple-system-glass-material-clear;
+}
+
+.apple-glass-subdued {
+	-apple-visual-effect: -apple-system-glass-material-subdued;
+}
+
+.apple-glass-media-controls {
+	-apple-visual-effect: -apple-system-glass-material-media-controls;
+}
+
+.apple-glass-media-controls-subdued {
+	-apple-visual-effect: -apple-system-glass-material-media-controls-subdued;
+}
+
+.apple-vibrancy-label {
+	-apple-visual-effect: -apple-system-vibrancy-label;
+}
+
+.apple-vibrancy-secondary-label {
+	-apple-visual-effect: -apple-system-vibrancy-secondary-label;
+}
+
+.apple-vibrancy-tertiary-label {
+	-apple-visual-effect: -apple-system-vibrancy-tertiary-label;
+}
+
+.apple-vibrancy-quaternary-label {
+	-apple-visual-effect: -apple-system-vibrancy-quaternary-label;
+}
+
+.apple-vibrancy-fill {
+	-apple-visual-effect: -apple-system-vibrancy-fill;
+}
+
+.apple-vibrancy-secondary-fill {
+	-apple-visual-effect: -apple-system-vibrancy-secondary-fill;
+}
+
+.apple-vibrancy-tertiary-fill {
+	-apple-visual-effect: -apple-system-vibrancy-tertiary-fill;
+}
+
+.apple-vibrancy-separator {
+	-apple-visual-effect: -apple-system-vibrancy-separator;
+}
+
+.apple-vibrancy-overlay {
+	-apple-visual-effect: -apple-system-vibrancy-overlay;
+}
