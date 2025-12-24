@@ -4,6 +4,8 @@ import { createElementSize } from "@solid-primitives/resize-observer";
 import { useMutation, useQuery } from "@tanstack/solid-query";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { children, createEffect, type ParentProps, untrack } from "solid-js";
+import { Transition } from "solid-transition-group";
+import { generalSettingsStore } from "~/store";
 import {
 	createCameraMutation,
 	createCurrentRecordingQuery,
@@ -40,7 +42,17 @@ export default function SolariumRecordingControls() {
 	return (
 		<RecordingOptionsProvider>
 			<div data-tauri-drag-region class="size-fit" ref={mainRef}>
+			<Transition
+				appear
+				enterClass="translate-y-5 scale-75 opacity-0 blur-lg"
+				enterActiveClass="duration-1000 ease-[cubic-bezier(0.175,0.885,0.12,1.175)]"
+				enterToClass="translate-y-0 scale-100 opacity-100"
+				exitClass="translate-y-0 scale-100 opacity-100"
+				exitActiveClass="duration-1000 ease-[cubic-bezier(0.275,0.05,0.22,1.3)]"
+				exitToClass="translate-y-5 scale-75 opacity-0 blur-lg"
+			>
 				<Inner />
+			</Transition>
 			</div>
 		</RecordingOptionsProvider>
 	);
@@ -53,7 +65,7 @@ function Inner() {
 			class="flex items-center justify-center gap-2 h-15 m-10 mb-18 size-fit"
 		>
 			<div
-				class="recording-controls gap apple-glass size-11 aspect-square rounded-full inline-flex items-center justify-center hover:bg-blue-4/30"
+				class="recording-controls gap apple-glass h-11 aspect-square rounded-full inline-flex items-center justify-center hover:bg-blue-4/30"
 				onClick={() => webview.close()}
 			>
 				<IconCapX class="apple-vibrancy-fill size-3 pointer-events-none" />
@@ -85,6 +97,12 @@ function Inner() {
 				class="recording-controls gap apple-glass h-14 rounded-full inline-flex items-center justify-center"
 			>
 				<RecordingInputs />
+			</div>
+			<div
+				data-tauri-drag-region
+				class="recording-controls gap apple-glass h-11 rounded-full inline-flex items-center justify-center"
+			>
+				<OptionsGroup />
 			</div>
 		</div>
 	);
@@ -135,6 +153,31 @@ function Mode() {
 		</div>
 	);
 }
+
+function OptionsGroup() {
+	const { rawOptions, setOptions } = useRecordingOptions();
+	const generalSetings = generalSettingsStore.createQuery();
+
+    const countdown = () => generalSetings.data?.recordingCountdown ?? null;
+
+	return (
+		<div
+			data-tauri-drag-region
+			class="flex gap-1 relative justify-end items-center p-1.5 rounded-full w-fit h-full"
+		>
+		    <button
+			    type="button"
+			    class="flex justify-center items-center transition-colors duration-200 ease-in-out rounded-full aspect-square h-full"
+		    >
+		        <div class="absolute">
+					<IconLucideCog class="invert size-5.5 dark:invert-0 pointer-events-none apple-vibrancy-fill" />
+					{/*<div class="absolute -bottom-2 -right-2 rounded-full apple-glass size-5 text-xs flex items-center justify-center brightness-80">3s</div>*/}
+				</div>
+		    </button>
+		</div>
+	);
+}
+
 
 function TargetSelectMode() {
 	const { rawOptions, setOptions } = useRecordingOptions();
@@ -194,7 +237,6 @@ function TargetSelectMode() {
 function RecordingInputs() {
 	const { rawOptions, setOptions } = useRecordingOptions();
 	const currentRecording = createCurrentRecordingQuery();
-	const isRecording = () => !!currentRecording.data;
 
 	const cameras = useQuery(() => listVideoDevices);
 	const mics = useQuery(() => listAudioDevices);
@@ -224,7 +266,7 @@ function RecordingInputs() {
 	return (
 		<div class="inline-flex gap-2 px-3">
 			<CameraSelectBase
-				class="inline-flex items-center justify-center h-full gap-1.5 apple-vibrancy-fill w-32"
+				class="inline-flex items-center justify-center h-full apple-vibrancy-fill w-36"
 				iconClass="apple-vibrancy-fill"
 				disabled={cameras.isPending}
 				options={cameras.data ?? []}
@@ -236,17 +278,17 @@ function RecordingInputs() {
 				}}
 			/>
 			<div class="apple-vibrancy-tertiary-fill border-l h-8" />
-			{/*<MicrophoneSelectBase
-				class="relative inline-flex items-center justify-center h-full gap-1.5 apple-vibrancy-fill w-32"
+			<MicrophoneSelectBase
+				class="relative inline-flex items-center justify-center h-full apple-vibrancy-fill w-36"
 				iconClass="apple-vibrancy-fill"
-				levelIndicatorClass="bg-white/50 h-1 top-auto bottom-0 rounded-full -m-1.5"
+				levelIndicatorClass="bg-white/40 h-1 rounded-full"
 				disabled={mics.isPending}
 				options={mics.isPending ? [] : (mics.data ?? [])}
 				value={
 					mics.isPending ? rawOptions.micName : (options.micName() ?? null)
 				}
 				onChange={(v) => setMicInput.mutate(v)}
-			/>*/}
+			/>
 		</div>
 	);
 }

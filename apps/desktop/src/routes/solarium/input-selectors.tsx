@@ -1,7 +1,18 @@
 import { useQuery } from "@tanstack/solid-query";
 import { CheckMenuItem, Menu, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { cx } from "cva";
-import { createEffect, createSignal, For, Show } from "solid-js";
+import {
+	type Accessor,
+	createEffect,
+	createRoot,
+	createSignal,
+	For,
+	getOwner,
+	onCleanup,
+	onMount,
+	runWithOwner,
+	Show,
+} from "solid-js";
 import { trackEvent } from "~/utils/analytics";
 import { createTauriEventListener } from "~/utils/createEventListener";
 import { createCurrentRecordingQuery, getPermissions } from "~/utils/queries";
@@ -72,7 +83,6 @@ export function CameraSelectBase(props: {
 }
 
 const NO_MICROPHONE = "No Microphone";
-
 export function MicrophoneSelectBase(props: {
 	disabled?: boolean;
 	options: string[];
@@ -98,7 +108,7 @@ export function MicrophoneSelectBase(props: {
 
 	type Option = { name: string };
 
-	const handleMicrophoneChange = async (item: Option | null) => {
+	function handleMicrophoneChange(item: Option | null) {
 		if (!props.options) return;
 		props.onChange(item ? item.name : null);
 		if (!item) setDbs();
@@ -107,30 +117,41 @@ export function MicrophoneSelectBase(props: {
 			microphone_name: item?.name ?? null,
 			enabled: !!item,
 		});
-	};
+	}
 
-	createTauriEventListener(events.audioInputLevelChange, (dbs) => {
-		if (!props.value) setDbs();
-		else setDbs(dbs);
+	onMount(() => {
+		let active = true;
+
+		const unlisten = events.audioInputLevelChange.listen((event) => {
+			if (!active) return;
+			setDbs(event.payload);
+		});
+
+		onCleanup(() => {
+			active = false;
+			unlisten.then((fn) => fn());
+		});
 	});
 
-	// visual audio level from 0 -> 1
-	const audioLevel = () =>
-		(1 - Math.max((dbs() ?? 0) + DB_SCALE, 0) / DB_SCALE) ** 0.5;
+	// visual audio level from 0 -> 1 (original calculation)
+	function audioLevel() {
+		return (1 - Math.max((dbs() ?? 0) + DB_SCALE, 0) / DB_SCALE) ** 0.5;
+	}
 
 	createEffect(() => {
 		if (!props.value || !permissionGranted() || isInitialized()) return;
 
 		setIsInitialized(true);
-		void handleMicrophoneChange({ name: props.value });
+		handleMicrophoneChange({ name: props.value });
 	});
 
 	return (
 		<div class="inline-flex items-center justify-stretch">
 			<IconCapMicrophone class={props.iconClass} />
-			<div class="flex flex-col gap-1 items-stretch text-(--text-primary)">
+
+			<div class="relative flex flex-col gap-1 items-stretch text-(--text-primary)">
 				<select
-					class={`flex-1 text-sm text-left truncate outline-none ${props.class}`}
+					class={`relative z-10 flex-1 text-sm text-left truncate outline-none ${props.class}`}
 					disabled={!!currentRecording.data || props.disabled}
 					value={props.value ?? "none"}
 					onClick={() => {
@@ -153,22 +174,19 @@ export function MicrophoneSelectBase(props: {
 					<For each={props.options}>
 						{(option) => <option value={option}>{option}</option>}
 					</For>
-					<Show when={props.value !== null && dbs()}>
-						{(_) => {
-							return (
-								<div
-									class={cx(
-										"left-0 inset-y-0 absolute transition-[right] ease-in-out duration-100",
-										props.levelIndicatorClass,
-									)}
-									style={{ right: `${audioLevel() * 100}%` }}
-								>
-									Hello
-								</div>
-							);
-						}}
-					</Show>
 				</select>
+
+				{/* Audio level meter - positioned below */}
+				<Show when={props.value !== null && dbs() !== undefined}>
+					<div class="h-1 absolute -mb-3 bottom-0 overflow-hidden backdrop-brightness-125 w-28 rounded-full">
+						<div
+							class={`absolute left-0 transition-[right] duration-100 ease-in-out ${props.levelIndicatorClass}`}
+							style={{
+								right: `${audioLevel() * 100}%`,
+							}}
+						/>
+					</div>
+				</Show>
 			</div>
 		</div>
 	);
