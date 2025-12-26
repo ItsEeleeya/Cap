@@ -1,6 +1,6 @@
 import { createQuery } from "@tanstack/solid-query";
 import type { WebviewOptions } from "@tauri-apps/api/webview";
-import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
 	Effect,
 	EffectState,
@@ -84,11 +84,27 @@ export default function Debug() {
 				</button>
 				<button
 					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
-					onClick={() => {
-						//
+					onClick={async () => {
+						await WebviewWindow.getByLabel("solarium-cap-main").then((w) =>
+							w?.close(),
+						);
+						createSolariumWindow({
+							label: "solarium-cap-main",
+							title: "Recording Controls",
+							url: "/solarium-cap-main",
+							hiddenTitle: true,
+							titleBarStyle: "overlay",
+							resizable: false,
+							alwaysOnTop: true,
+							// windowEffects: {
+							// 	effects: [Effect.UnderWindowBackground, Effect.Mica],
+							// 	state: EffectState.Active,
+							// },
+							transparent: true,
+						});
 					}}
 				>
-					Show Editor
+					Show Solarium Main
 				</button>
 			</div>
 		</main>

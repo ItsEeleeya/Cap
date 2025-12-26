@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use futures::pin_mut;
 use scap_targets::{Display, DisplayId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::{
     ops::Deref,
@@ -14,7 +14,7 @@ use std::{
 };
 use tauri::{
     AppHandle, LogicalPosition, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, Wry,
+    WebviewWindow, WebviewWindowBuilder, Wry, window::Effect,
 };
 use tauri_specta::Event;
 use tokio::sync::RwLock;
@@ -164,6 +164,11 @@ impl CapWindowDef {
             Self::Editor { .. } | Self::ScreenshotEditor { .. } => LogicalPosition::new(20.0, 25.0),
             _ => LogicalPosition::new(12.0, 16.0),
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub const fn conforms_to_solarium(&self) -> bool {
+        matches!(self, Self::Main,)
     }
 
     pub fn get(&self, app: &AppHandle<Wry>) -> Option<WebviewWindow> {
@@ -348,6 +353,12 @@ impl CapWindow {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .center()
+                    .effects(
+                        tauri::window::EffectsBuilder::new()
+                            .effects([Effect::UnderWindowBackground, Effect::Mica])
+                            .state(tauri::window::EffectState::Active)
+                            .build(),
+                    )
                     .initialization_script(format!(
                         "
                         window.__CAP__ = window.__CAP__ ?? {{}};
@@ -366,6 +377,11 @@ impl CapWindow {
                             move || window.objc2_nswindow().setLevel(50)
                         });
                     }
+
+                    let _ = window.run_on_main_thread({
+                        let window = window.clone();
+                        move || add_toolbar_shell(window)
+                    });
 
                     let app_handle = app.clone();
                     tauri::async_runtime::spawn(async move {
@@ -945,8 +961,12 @@ impl CapWindow {
             } else {
                 builder = builder
                     .hidden_title(true)
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .traffic_light_position(def.pre_solarium_traffic_lights_position());
+                    .title_bar_style(tauri::TitleBarStyle::Overlay);
+
+                if !objc2::available!(macos = 26) && !def.conforms_to_solarium() {
+                    builder =
+                        builder.traffic_light_position(def.pre_solarium_traffic_lights_position());
+                }
             }
 
             if objc2::available!(macos = 26.0) {
@@ -1113,6 +1133,40 @@ pub fn add_toolbar_shell(window: tauri::WebviewWindow) {
 
         nswindow.setToolbar(Some(&toolbar));
         nswindow.setToolbarStyle(NSWindowToolbarStyle::Unified);
+    });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Type)]
+pub enum GlassEffectStyle {
+    #[default]
+    Regular,
+    Clear,
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn add_glass_backdrop(
+    window: tauri::WebviewWindow,
+    style: Option<GlassEffectStyle>,
+    radius: Option<f64>,
+) {
+    #[cfg(target_os = "macos")]
+    dispatch2::run_on_main(move |mtm| {
+        use objc2::MainThreadMarker;
+        use objc2_app_kit::{NSGlassEffectViewStyle, NSToolbar, NSWindowToolbarStyle};
+
+        // let nswindow = window.objc2_nswindow();
+        platform::add_glass_effect_backdrop_to_nswindow(
+            mtm,
+            &window.objc2_nswindow(),
+            match style {
+                Some(GlassEffectStyle::Clear) => NSGlassEffectViewStyle::Clear,
+                Some(GlassEffectStyle::Regular) | None => NSGlassEffectViewStyle::Regular,
+            },
+            None,
+            radius,
+        );
     });
 }
 

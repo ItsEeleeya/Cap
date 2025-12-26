@@ -1,7 +1,7 @@
 import { createQuery } from "@tanstack/solid-query";
 import type { Component, ComponentProps, JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
-
+import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/components/Material";
 import {
 	createCurrentRecordingQuery,
 	isSystemAudioSupported,
@@ -12,9 +12,15 @@ import InfoPill from "./InfoPill";
 export default function SystemAudio() {
 	return (
 		<SystemAudioToggleRoot
-			class="flex flex-row gap-2 items-center px-2 w-full h-10 rounded-lg transition-colors cursor-default disabled:opacity-70 bg-gray-3 disabled:text-gray-11 KSelect"
+			class={
+				APPLE_SUPPORTS_HOSTED_MATERIALS
+					? "backdrop-opacity-25 hover:bg-gray-2/40 flex flex-row gap-2 items-center px-2 w-full h-10 rounded-full transition-colors cursor-default disabled:opacity-70 disabled:text-gray-11 KSelect"
+					: "flex flex-row gap-2 items-center px-2 w-full h-10 rounded-lg transition-colors cursor-default disabled:opacity-70 bg-gray-3 disabled:text-gray-11 KSelect"
+			}
 			PillComponent={InfoPill}
-			icon={<IconPhMonitorBold class="text-gray-10 size-4" />}
+			icon={
+				<IconPhMonitorBold class="text-gray-10 size-4 apple-vibrancy-fill" />
+			}
 		/>
 	);
 }
@@ -56,7 +62,9 @@ export function SystemAudioToggleRoot(
 			disabled={isDisabled()}
 		>
 			{props.icon}
-			<p class="flex-1 text-sm text-left truncate">
+			<p
+				class={`flex-1 text-sm text-left truncate ${APPLE_SUPPORTS_HOSTED_MATERIALS ? "apple-vibrancy-fill" : ""}`}
+			>
 				{rawOptions.captureSystemAudio
 					? "Record System Audio"
 					: "No System Audio"}

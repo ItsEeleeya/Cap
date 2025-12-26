@@ -7,6 +7,7 @@ import { cx } from "cva";
 import type { ComponentProps } from "solid-js";
 import { createMemo, createSignal, Show, splitProps } from "solid-js";
 import toast from "solid-toast";
+import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/components/Material";
 import Tooltip from "~/components/Tooltip";
 import {
 	type CaptureDisplayWithThumbnail,
@@ -314,7 +315,9 @@ export default function TargetCard(props: TargetCardProps) {
 			disabled={local.disabled}
 			data-variant={local.variant}
 			class={cx(
-				"group flex flex-col overflow-hidden rounded-lg border border-transparent bg-gray-3 text-left outline-none transition-colors duration-100 hover:bg-gray-4 focus-visible:ring-2 focus-visible:ring-blue-9 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
+				APPLE_SUPPORTS_HOSTED_MATERIALS
+					? "group flex flex-col overflow-hidden rounded-xl border border-gray-5/50 bg-gray-1/30 text-left outline-none transition-colors duration-100 hover:bg-gray-4 focus-visible:ring-2 focus-visible:ring-blue-9 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1"
+					: "group flex flex-col overflow-hidden rounded-lg border border-transparent bg-gray-3 text-left outline-none transition-colors duration-100 hover:bg-gray-4 focus-visible:ring-2 focus-visible:ring-blue-9 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-1",
 				local.disabled && "pointer-events-none opacity-60",
 				local.class,
 			)}

@@ -2360,6 +2360,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             windows::add_toolbar_shell,
             windows::remove_toolbar_shell,
             windows::create_window_try_with_material_hosting,
+            windows::add_glass_backdrop,
             general_settings::get_default_excluded_windows,
             list_audio_devices,
             close_recordings_overlay_window,

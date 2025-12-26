@@ -2,6 +2,7 @@ import { Tooltip as KTooltip } from "@kobalte/core/tooltip";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { cx } from "cva";
 import type { ComponentProps, JSX } from "solid-js";
+import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "./Material";
 
 interface Props extends ComponentProps<typeof KTooltip> {
 	content?: JSX.Element;
@@ -28,7 +29,14 @@ export default function Tooltip(props: Props) {
 				{props.children}
 			</KTooltip.Trigger>
 			<KTooltip.Portal>
-				<KTooltip.Content class="z-50 px-1.5 flex items-center py-1 text-xs border border-gray-3 bg-gray-12 text-gray-1 rounded-md shadow-lg duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center">
+				<KTooltip.Content
+					class={
+						APPLE_SUPPORTS_HOSTED_MATERIALS
+							? "apple-glass animte-in z-50 px-1.5 flex items-center py-1 text-xs duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center rounded-full"
+							: "z-50 px-1.5 flex items-center py-1 text-xs border border-gray-3 bg-gray-12 text-gray-1 rounded-md shadow-lg duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center"
+					}
+				>
+					{!APPLE_SUPPORTS_HOSTED_MATERIALS && <KTooltip.Arrow size={16} />}
 					<span>{props.content}</span>
 					{props.kbd && props.kbd.length > 0 && (
 						<div class="space-x-1">
@@ -39,7 +47,6 @@ export default function Tooltip(props: Props) {
 							))}
 						</div>
 					)}
-					<KTooltip.Arrow size={16} />
 				</KTooltip.Content>
 			</KTooltip.Portal>
 		</KTooltip>

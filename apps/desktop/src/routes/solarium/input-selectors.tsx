@@ -52,7 +52,7 @@ export function CameraSelectBase(props: {
 	return (
 		<div class="inline-flex items-center justify-stretch">
 			<IconCapCamera class={props.iconClass} />
-			<div class="flex flex-col gap-1 items-stretch text-(--text-primary)">
+			<div class="w-full flex flex-col gap-1 items-stretch text-(--text-primary)">
 				<select
 					class={`flex-1 text-sm text-left truncate outline-none ${props.class}`}
 					disabled={!!currentRecording.data || props.disabled}
@@ -149,7 +149,7 @@ export function MicrophoneSelectBase(props: {
 		<div class="inline-flex items-center justify-stretch">
 			<IconCapMicrophone class={props.iconClass} />
 
-			<div class="relative flex flex-col gap-1 items-stretch text-(--text-primary)">
+			<div class="w-full relative flex flex-col gap-1 items-stretch text-(--text-primary)">
 				<select
 					class={`relative z-10 flex-1 text-sm text-left truncate outline-none ${props.class}`}
 					disabled={!!currentRecording.data || props.disabled}

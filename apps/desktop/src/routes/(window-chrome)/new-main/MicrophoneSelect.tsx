@@ -6,6 +6,8 @@ import {
 	type ComponentProps,
 	createEffect,
 	createSignal,
+	onCleanup,
+	onMount,
 	Show,
 } from "solid-js";
 import { trackEvent } from "~/utils/analytics";
@@ -74,9 +76,22 @@ export function MicrophoneSelectBase(props: {
 		});
 	};
 
-	createTauriEventListener(events.audioInputLevelChange, (dbs) => {
-		if (!props.value) setDbs();
-		else setDbs(dbs);
+	// createTauriEventListener(events.audioInputLevelChange, (dbs) => {
+	// 	if (!props.value) setDbs();
+	// 	else setDbs(dbs);
+	// });
+	onMount(() => {
+		let active = true;
+
+		const unlisten = events.audioInputLevelChange.listen((event) => {
+			if (!active) return;
+			setDbs(event.payload);
+		});
+
+		onCleanup(() => {
+			active = false;
+			unlisten.then((fn) => fn());
+		});
 	});
 
 	// visual audio level from 0 -> 1

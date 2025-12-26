@@ -42,17 +42,17 @@ export default function SolariumRecordingControls() {
 	return (
 		<RecordingOptionsProvider>
 			<div data-tauri-drag-region class="size-fit" ref={mainRef}>
-			<Transition
-				appear
-				enterClass="translate-y-5 scale-75 opacity-0 blur-lg"
-				enterActiveClass="duration-1000 ease-[cubic-bezier(0.175,0.885,0.12,1.175)]"
-				enterToClass="translate-y-0 scale-100 opacity-100"
-				exitClass="translate-y-0 scale-100 opacity-100"
-				exitActiveClass="duration-1000 ease-[cubic-bezier(0.275,0.05,0.22,1.3)]"
-				exitToClass="translate-y-5 scale-75 opacity-0 blur-lg"
-			>
-				<Inner />
-			</Transition>
+				<Transition
+					appear
+					enterClass="translate-y-5 scale-75 opacity-0 blur-lg"
+					enterActiveClass="duration-1000 ease-[cubic-bezier(0.175,0.885,0.12,1.175)]"
+					enterToClass="translate-y-0 scale-100 opacity-100"
+					exitClass="translate-y-0 scale-100 opacity-100"
+					exitActiveClass="duration-1000 ease-[cubic-bezier(0.275,0.05,0.22,1.3)]"
+					exitToClass="translate-y-5 scale-75 opacity-0 blur-lg"
+				>
+					<Inner />
+				</Transition>
 			</div>
 		</RecordingOptionsProvider>
 	);
@@ -108,7 +108,7 @@ function Inner() {
 	);
 }
 
-function Mode() {
+export function Mode() {
 	const { rawOptions, setOptions } = useRecordingOptions();
 
 	function ModeButton(props: ParentProps<{ forMode: RecordingMode }>) {
@@ -158,26 +158,25 @@ function OptionsGroup() {
 	const { rawOptions, setOptions } = useRecordingOptions();
 	const generalSetings = generalSettingsStore.createQuery();
 
-    const countdown = () => generalSetings.data?.recordingCountdown ?? null;
+	const countdown = () => generalSetings.data?.recordingCountdown ?? null;
 
 	return (
 		<div
 			data-tauri-drag-region
 			class="flex gap-1 relative justify-end items-center p-1.5 rounded-full w-fit h-full"
 		>
-		    <button
-			    type="button"
-			    class="flex justify-center items-center transition-colors duration-200 ease-in-out rounded-full aspect-square h-full"
-		    >
-		        <div class="absolute">
+			<button
+				type="button"
+				class="flex justify-center items-center transition-colors duration-200 ease-in-out rounded-full aspect-square h-full"
+			>
+				<div class="absolute">
 					<IconLucideCog class="invert size-5.5 dark:invert-0 pointer-events-none apple-vibrancy-fill" />
 					{/*<div class="absolute -bottom-2 -right-2 rounded-full apple-glass size-5 text-xs flex items-center justify-center brightness-80">3s</div>*/}
 				</div>
-		    </button>
+			</button>
 		</div>
 	);
 }
-
 
 function TargetSelectMode() {
 	const { rawOptions, setOptions } = useRecordingOptions();

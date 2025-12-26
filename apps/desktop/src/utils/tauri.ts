@@ -68,6 +68,9 @@ async removeToolbarShell() : Promise<void> {
 async createWindowTryWithMaterialHosting(configString: string) : Promise<null> {
     return await TAURI_INVOKE("create_window_try_with_material_hosting", { configString });
 },
+async addGlassBackdrop(style: GlassEffectStyle | null, radius: number | null) : Promise<void> {
+    await TAURI_INVOKE("add_glass_backdrop", { style, radius });
+},
 async getDefaultExcludedWindows() : Promise<WindowExclusion[]> {
     return await TAURI_INVOKE("get_default_excluded_windows");
 },
@@ -430,6 +433,7 @@ quality: number | null;
  * Whether to prioritize speed over quality (default: false)
  */
 fast: boolean | null }
+export type GlassEffectStyle = "Regular" | "Clear"
 export type HapticPattern = "alignment" | "levelChange" | "generic"
 export type HapticPerformanceTime = "default" | "now" | "drawCompleted"
 export type Hotkey = { code: string; meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }
