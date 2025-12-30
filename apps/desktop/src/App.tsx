@@ -13,6 +13,7 @@ import "unfonts.css";
 import "./styles/theme.css";
 
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
+import SolariumDebugLibrary from "./routes/debug-library";
 import SolariumCapMain from "./routes/solarium/cap-main";
 import SolariumRecordingControls from "./routes/solarium/recording-controls";
 import { generalSettingsStore } from "./store";
@@ -207,6 +208,7 @@ function Inner() {
 						component={SolariumRecordingControls}
 					/>
 					<Route path="/solarium-cap-main" component={SolariumCapMain} />
+					<Route path="/solarium-debug" component={SolariumDebugLibrary} />
 				</Router>
 			</CapErrorBoundary>
 		</>

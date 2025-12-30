@@ -2,7 +2,12 @@ import { Button } from "@cap/ui-solid";
 import { useNavigate } from "@solidjs/router";
 import { createMutation, createQuery } from "@tanstack/solid-query";
 import { getVersion } from "@tauri-apps/api/app";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import {
+	Effect,
+	getCurrentWindow,
+	LogicalSize,
+	WindowOptions,
+} from "@tauri-apps/api/window";
 import { cx } from "cva";
 import {
 	type ComponentProps,
@@ -318,6 +323,26 @@ function Page() {
 							<IconLucideBug class="text-gray-11 size-5 hover:text-gray-12" />
 						</button>
 					)}
+
+					{import.meta.env.DEV && (
+						<button
+							type="button"
+							onClick={() => {
+								createSolariumWindow({
+									label: "debug-library",
+									title: "Component Library",
+									url: "/solarium-debug",
+									transparent: true,
+									windowEffects: {
+										effects: [Effect.WindowBackground],
+									},
+								});
+							}}
+							class="flex justify-center items-center w-5 h-5"
+						>
+							<IconLucideShapes class="text-gray-11 size-5 hover:text-gray-12" />
+						</button>
+					)}
 				</div>
 			</WindowChromeHeader>
 			<div class="flex items-center justify-between pb-1">
@@ -556,6 +581,7 @@ function Page() {
 import { createEventListener } from "@solid-primitives/event-listener";
 import { makePersisted } from "@solid-primitives/storage";
 import { CheckMenuItem, Menu } from "@tauri-apps/api/menu";
+import { WebviewOptions } from "@tauri-apps/api/webview";
 import {
 	getCurrentWebviewWindow,
 	WebviewWindow,
@@ -569,6 +595,7 @@ import { authStore, generalSettingsStore } from "~/store";
 import { createTauriEventListener } from "~/utils/createEventListener";
 import { handleRecordingResult } from "~/utils/recording";
 import { apiClient } from "~/utils/web-api";
+import { createSolariumWindow } from "../debug";
 import { WindowChromeHeader } from "./Context";
 import { CameraSelectBase } from "./new-main/CameraSelect";
 import { MicrophoneSelectBase } from "./new-main/MicrophoneSelect";

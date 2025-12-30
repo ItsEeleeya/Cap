@@ -111,7 +111,7 @@ export default function Debug() {
 	);
 }
 
-function createSolariumWindow(
+export function createSolariumWindow(
 	options: Omit<WebviewOptions, "x" | "y" | "width" | "height"> &
 		WindowOptions & { label: string },
 ) {

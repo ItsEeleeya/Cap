@@ -8,7 +8,7 @@ import {
 	getAllWebviewWindows,
 	WebviewWindow,
 } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { Effect, getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import * as shell from "@tauri-apps/plugin-shell";
 import * as updater from "@tauri-apps/plugin-updater";
@@ -83,6 +83,8 @@ import {
 	RecordingOptionsProvider,
 	useRecordingOptions,
 } from "../(window-chrome)/OptionsContext";
+import { createSolariumWindow } from "../debug";
+import { openDebugLibrary } from "../debug-library";
 import { CameraSelectBase, MicrophoneSelectBase } from "./input-selectors";
 
 const WINDOW_SIZE = { width: 310, height: 320 } as const;
@@ -1345,6 +1347,15 @@ function Page() {
 										</button>
 									</Tooltip>
 									<ChangelogButton />
+									{import.meta.env.DEV && (
+										<button
+											type="button"
+											onClick={() => openDebugLibrary()}
+											class="flex justify-center items-center w-5 h-5"
+										>
+											<IconLucideShapes class="text-gray-11 size-4 hover:text-gray-12" />
+										</button>
+									)}
 									{import.meta.env.DEV && (
 										<button
 											type="button"

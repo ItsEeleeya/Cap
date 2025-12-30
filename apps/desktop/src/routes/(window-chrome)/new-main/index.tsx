@@ -8,7 +8,7 @@ import {
 	getAllWebviewWindows,
 	WebviewWindow,
 } from "@tauri-apps/api/webviewWindow";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { Effect, getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import * as shell from "@tauri-apps/plugin-shell";
@@ -29,6 +29,8 @@ import { Transition } from "solid-transition-group";
 import Mode from "~/components/Mode";
 import { RecoveryToast } from "~/components/RecoveryToast";
 import Tooltip from "~/components/Tooltip";
+import { createSolariumWindow } from "~/routes/debug";
+import { openDebugLibrary } from "~/routes/debug-library";
 import { Input } from "~/routes/editor/ui";
 import { authStore, generalSettingsStore } from "~/store";
 import { createSignInMutation } from "~/utils/auth";
@@ -1017,6 +1019,15 @@ function Page() {
 								class="flex justify-center items-center"
 							>
 								<IconLucideBug class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							</button>
+						)}
+						{import.meta.env.DEV && (
+							<button
+								type="button"
+								onClick={() => openDebugLibrary()}
+								class="flex justify-center items-center w-5 h-5"
+							>
+								<IconLucideShapes class="text-gray-11 size-4 hover:text-gray-12" />
 							</button>
 						)}
 					</div>
