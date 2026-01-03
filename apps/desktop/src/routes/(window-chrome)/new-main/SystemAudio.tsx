@@ -14,7 +14,7 @@ export default function SystemAudio() {
 		<SystemAudioToggleRoot
 			class={
 				APPLE_SUPPORTS_HOSTED_MATERIALS
-					? "backdrop-opacity-25 hover:bg-gray-2/40 flex flex-row gap-2 items-center px-2 w-full h-10 rounded-full transition-colors cursor-default disabled:opacity-70 disabled:text-gray-11 KSelect"
+					? "backdrop-opacity-25 hover:bg-gray-2/40 flex flex-row gap-2 items-center px-2 w-full h-[42px] rounded-full transition-colors cursor-default disabled:opacity-70 disabled:text-gray-11 KSelect"
 					: "flex flex-row gap-2 items-center px-2 w-full h-10 rounded-lg transition-colors cursor-default disabled:opacity-70 bg-gray-3 disabled:text-gray-11 KSelect"
 			}
 			PillComponent={InfoPill}

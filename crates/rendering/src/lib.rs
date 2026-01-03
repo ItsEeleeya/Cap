@@ -205,14 +205,6 @@ impl RecordingSegmentDecoders {
 
         let camera_frame = camera.flatten();
 
-        if needs_camera && camera_frame.is_none() {
-            tracing::debug!(
-                segment_time,
-                has_camera_decoder = self.camera.is_some(),
-                "camera frame missing"
-            );
-        }
-
         Some(DecodedSegmentFrames {
             screen_frame: screen?,
             camera_frame,
@@ -464,6 +456,7 @@ pub struct ProjectUniforms {
     pub output_size: (u32, u32),
     pub cursor_size: f32,
     pub frame_rate: u32,
+    pub frame_number: u32,
     display: CompositeVideoFrameUniforms,
     camera: Option<CompositeVideoFrameUniforms>,
     camera_only: Option<CompositeVideoFrameUniforms>,
@@ -1256,9 +1249,7 @@ impl ProjectUniforms {
                         0.0
                     },
                     border_width: project.background.border.as_ref().map_or(5.0, |b| b.width),
-                    _padding0: 0.0,
-                    _padding1: [0.0; 2],
-                    _padding1b: [0.0; 2],
+                    _padding1: [0.0; 4],
                     border_color: if let Some(b) = project.background.border.as_ref() {
                         [
                             b.color[0] as f32 / 255.0,
@@ -1269,7 +1260,6 @@ impl ProjectUniforms {
                     } else {
                         [0.0, 0.0, 0.0, 0.0]
                     },
-                    _padding2: [0.0; 4],
                 },
                 display_parent_motion_px,
             )
@@ -1378,12 +1368,15 @@ impl ProjectUniforms {
 
                 let crop_bounds = match project.camera.shape {
                     CameraShape::Source => [0.0, 0.0, frame_size[0], frame_size[1]],
-                    CameraShape::Square => [
-                        (frame_size[0] - frame_size[1]) / 2.0,
-                        0.0,
-                        frame_size[0] - (frame_size[0] - frame_size[1]) / 2.0,
-                        frame_size[1],
-                    ],
+                    CameraShape::Square => {
+                        if frame_size[0] > frame_size[1] {
+                            let offset = (frame_size[0] - frame_size[1]) / 2.0;
+                            [offset, 0.0, frame_size[0] - offset, frame_size[1]]
+                        } else {
+                            let offset = (frame_size[1] - frame_size[0]) / 2.0;
+                            [0.0, offset, frame_size[0], frame_size[1] - offset]
+                        }
+                    }
                 };
 
                 CompositeVideoFrameUniforms {
@@ -1425,11 +1418,8 @@ impl ProjectUniforms {
                     opacity: scene.regular_camera_transition_opacity() as f32,
                     border_enabled: 0.0,
                     border_width: 0.0,
-                    _padding0: 0.0,
-                    _padding1: [0.0; 2],
-                    _padding1b: [0.0; 2],
+                    _padding1: [0.0; 4],
                     border_color: [0.0, 0.0, 0.0, 0.0],
-                    _padding2: [0.0; 4],
                 }
             });
 
@@ -1512,11 +1502,8 @@ impl ProjectUniforms {
                     opacity: scene.camera_only_transition_opacity() as f32,
                     border_enabled: 0.0,
                     border_width: 0.0,
-                    _padding0: 0.0,
-                    _padding1: [0.0; 2],
-                    _padding1b: [0.0; 2],
+                    _padding1: [0.0; 4],
                     border_color: [0.0, 0.0, 0.0, 0.0],
-                    _padding2: [0.0; 4],
                 }
             });
 
@@ -1557,6 +1544,7 @@ impl ProjectUniforms {
             scene,
             interpolated_cursor,
             frame_rate: fps,
+            frame_number,
             prev_cursor: prev_interpolated_cursor,
             display_parent_motion_px: display_motion_parent,
             motion_blur_amount: user_motion_blur,

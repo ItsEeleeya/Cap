@@ -105,14 +105,6 @@ pub struct GeneralSettingsStore {
     pub enable_native_camera_preview: bool,
     #[serde(default)]
     pub auto_zoom_on_clicks: bool,
-    // #[deprecated = "can be removed when new recording flow is the default"]
-    #[serde(
-        default = "default_enable_new_recording_flow",
-        skip_serializing_if = "no"
-    )]
-    pub enable_new_recording_flow: bool,
-    #[serde(default)]
-    pub recording_picker_preference_set: bool,
     #[serde(default)]
     pub post_deletion_behaviour: PostDeletionBehaviour,
     #[serde(default = "default_excluded_windows")]
@@ -123,7 +115,7 @@ pub struct GeneralSettingsStore {
     pub instant_mode_max_resolution: u32,
     #[serde(default)]
     pub default_project_name_template: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub crash_recovery_recording: bool,
     // Use Solarium design when macOS 26.0 is available
     #[serde(default = "default_true")]
@@ -137,15 +129,12 @@ pub struct GeneralSettingsStore {
     // TODO (Ilya): Cleanup these comments
     #[serde(default = "default_true")]
     pub experimental_use_solarium_like: bool,
+    #[serde(default = "default_max_fps")]
+    pub max_fps: u32,
 }
 
 fn default_enable_native_camera_preview() -> bool {
-    // This will help us with testing it
     cfg!(all(debug_assertions, target_os = "macos"))
-}
-
-fn default_enable_new_recording_flow() -> bool {
-    false
 }
 
 fn no(_: &bool) -> bool {
@@ -158,6 +147,10 @@ fn default_true() -> bool {
 
 fn default_instant_mode_max_resolution() -> u32 {
     1920
+}
+
+fn default_max_fps() -> u32 {
+    60
 }
 
 fn default_server_url() -> String {
@@ -196,8 +189,6 @@ impl Default for GeneralSettingsStore {
             recording_countdown: Some(3),
             enable_native_camera_preview: default_enable_native_camera_preview(),
             auto_zoom_on_clicks: false,
-            enable_new_recording_flow: default_enable_new_recording_flow(),
-            recording_picker_preference_set: false,
             post_deletion_behaviour: PostDeletionBehaviour::DoNothing,
             excluded_windows: default_excluded_windows(),
             delete_instant_recordings_after_upload: false,
@@ -207,6 +198,7 @@ impl Default for GeneralSettingsStore {
             use_solarium: true,
             use_solarium_glass: true,
             experimental_use_solarium_like: false,
+            max_fps: 60,
         }
     }
 }
@@ -259,7 +251,7 @@ impl GeneralSettingsStore {
 pub fn init(app: &AppHandle) {
     println!("Initializing GeneralSettingsStore");
 
-    let mut store = match GeneralSettingsStore::get(app) {
+    let store = match GeneralSettingsStore::get(app) {
         Ok(Some(store)) => store,
         Ok(None) => GeneralSettingsStore::default(),
         Err(e) => {
@@ -267,11 +259,6 @@ pub fn init(app: &AppHandle) {
             GeneralSettingsStore::default()
         }
     };
-
-    if !store.recording_picker_preference_set {
-        store.enable_new_recording_flow = false;
-        store.recording_picker_preference_set = true;
-    }
 
     if let Err(e) = store.save(app) {
         error!("Failed to save general settings: {}", e);

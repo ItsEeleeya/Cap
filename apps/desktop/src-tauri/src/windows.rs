@@ -217,10 +217,10 @@ impl CapWindowDef {
     pub const fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Setup => (600.0, 600.0),
-            Self::Main => (310.0, 320.0),
+            Self::Main => (330.0, 345.0),
             Self::Editor { .. } => (1275.0, 800.0),
             Self::ScreenshotEditor { .. } => (800.0, 600.0),
-            Self::Settings => (600.0, 465.0),
+            Self::Settings => (700.0, 540.0),
             Self::Camera => (200.0, 200.0),
             Self::Upgrade => (950.0, 850.0),
             Self::ModeSelect => (580.0, 340.0),
@@ -338,14 +338,8 @@ impl CapWindow {
                     return Box::pin(Self::Setup.show(app)).await;
                 }
 
-                let new_recording_flow = GeneralSettingsStore::get(app)
-                    .ok()
-                    .flatten()
-                    .map(|s| s.enable_new_recording_flow)
-                    .unwrap_or_default();
-
                 let window = self
-                    .window_builder(app, if new_recording_flow { "/new-main" } else { "/" })
+                    .window_builder(app, "/")
                     .resizable(false)
                     .maximized(false)
                     .maximizable(false)
@@ -369,6 +363,11 @@ impl CapWindow {
                     ))
                     .build()?;
 
+                #[cfg(target_os = "macos")]
+                crate::platform::set_window_level(window.as_ref().window(), 50);
+
+                #[cfg(target_os = "macos")]
+                {
                 #[cfg(target_os = "macos")]
                 {
                     if new_recording_flow {
@@ -675,32 +674,36 @@ impl CapWindow {
 
                     let window = builder.build()?;
 
-                    if enable_native_camera_preview {
-                        if let Some(id) = state.selected_camera_id.clone()
-                            && !state.camera_in_use
-                        {
-                            match state.camera_feed.ask(feeds::camera::SetInput { id }).await {
-                                Ok(ready_future) => {
-                                    if let Err(err) = ready_future.await {
-                                        error!("Camera failed to initialize: {err}");
-                                    }
-                                }
-                                Err(err) => {
-                                    error!("Failed to send SetInput to camera feed: {err}");
+                    if let Some(id) = state.selected_camera_id.clone()
+                        && !state.camera_in_use
+                    {
+                        match state.camera_feed.ask(feeds::camera::SetInput { id }).await {
+                            Ok(ready_future) => {
+                                if let Err(err) = ready_future.await {
+                                    error!("Camera failed to initialize: {err}");
                                 }
                             }
-                            state.camera_in_use = true;
+                            Err(err) => {
+                                error!("Failed to send SetInput to camera feed: {err}");
+                            }
                         }
+                        state.camera_in_use = true;
+                    }
 
+                    if enable_native_camera_preview {
                         let camera_feed = state.camera_feed.clone();
                         if let Err(err) = state
                             .camera_preview
                             .init_window(window.clone(), camera_feed)
                             .await
                         {
-                            error!("Error initializing camera preview: {err}");
-                            window.close().ok();
+                            error!(
+                                "Error initializing camera preview, falling back to WebSocket preview: {err}"
+                            );
+                            window.show().ok();
                         }
+                    } else {
+                        window.show().ok();
                     }
 
                     #[cfg(target_os = "macos")]
@@ -941,12 +944,22 @@ impl CapWindow {
         let def = self.def(app);
         let should_protect = should_protect_window(app, def.title());
 
-        let mut builder = WebviewWindow::builder(app, def.label(), WebviewUrl::App(url.into()))
-            .title(def.title())
+        let theme = GeneralSettingsStore::get(app)
+            .ok()
+            .flatten()
+            .map(|s| match s.theme {
+                AppTheme::System => None,
+                AppTheme::Light => Some(tauri::Theme::Light),
+                AppTheme::Dark => Some(tauri::Theme::Dark),
+            })
+            .unwrap_or(None);
+
+        let mut builder = WebviewWindow::builder(app, id.label(), WebviewUrl::App(url.into()))
+            .title(id.title())
             .visible(false)
             .accept_first_mouse(true)
-            .shadow(true)
-            .content_protected(should_protect);
+            .content_protected(should_protect)
+            .theme(theme);
 
         if let Some(min) = def.min_size() {
             builder = builder

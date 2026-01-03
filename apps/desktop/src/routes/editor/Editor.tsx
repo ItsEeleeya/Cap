@@ -90,8 +90,19 @@ export function Editor() {
 }
 
 function Inner() {
-	const { project, editorState, setEditorState, previewResolutionBase } =
-		useEditorContext();
+	const {
+		project,
+		editorState,
+		setEditorState,
+		previewResolutionBase,
+		dialog,
+		canvasControls,
+	} = useEditorContext();
+
+	const isExportMode = () => {
+		const d = dialog();
+		return "type" in d && d.type === "export" && d.open;
+	};
 
 	const [layoutRef, setLayoutRef] = createSignal<HTMLDivElement>();
 	const layoutBounds = createElementBounds(layoutRef);
@@ -183,14 +194,30 @@ function Inner() {
 				if (editorState.playing) return;
 				renderFrame(number as number);
 			},
+			{ defer: false },
 		),
 	);
 
-	const updateConfigAndRender = throttle(async (time: number) => {
+	createEffect(
+		on(isExportMode, (exportMode, prevExportMode) => {
+			if (prevExportMode === true && exportMode === false) {
+				emitRenderFrame(frameNumberToRender());
+			}
+		}),
+	);
+
+	const doConfigUpdate = async (time: number) => {
 		const config = serializeProjectConfiguration(project);
 		await commands.updateProjectConfigInMemory(config);
+		canvasControls()?.resetFrameState();
 		renderFrame(time);
-	}, 1000 / FPS);
+	};
+	const throttledConfigUpdate = throttle(doConfigUpdate, 1000 / FPS);
+	const trailingConfigUpdate = debounce(doConfigUpdate, 1000 / FPS + 16);
+	const updateConfigAndRender = (time: number) => {
+		throttledConfigUpdate(time);
+		trailingConfigUpdate(time);
+	};
 	createEffect(
 		on(
 			() => trackDeep(project),
@@ -199,13 +226,6 @@ function Inner() {
 			},
 		),
 	);
-
-	const { dialog } = useEditorContext();
-
-	const isExportMode = () => {
-		const d = dialog();
-		return "type" in d && d.type === "export" && d.open;
-	};
 
 	return (
 		<Show when={!isExportMode()} fallback={<ExportPage />}>

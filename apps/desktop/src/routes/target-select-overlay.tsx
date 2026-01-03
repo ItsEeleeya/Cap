@@ -43,12 +43,11 @@ import {
 import ModeSelect from "~/components/ModeSelect";
 import SelectionHint from "~/components/selection-hint";
 import { authStore, generalSettingsStore } from "~/store";
+import { createDevicesQuery } from "~/utils/devices";
 import {
 	createCameraMutation,
 	createOptionsQuery,
 	createOrganizationsQuery,
-	listAudioDevices,
-	listVideoDevices,
 } from "~/utils/queries";
 import {
 	type CameraInfo,
@@ -259,9 +258,8 @@ function Inner() {
 									<Show when={display.physical_size}>
 										{(size) => (
 											<span class="mb-2 text-xs">
-												{`${size().width}x${size().height} · ${
-													display.refresh_rate
-												}FPS`}
+												{`${size().width}x${size().height} · ${display.refresh_rate
+													}FPS`}
 											</span>
 										)}
 									</Show>
@@ -537,23 +535,34 @@ function Inner() {
 						const originalLogicalSize = original.size.toLogical(scaleFactor);
 
 						const padding = 16;
+						const TOOLBAR_HEIGHT = 56;
+						const originalContentWidth = originalLogicalSize.width;
+						const originalContentHeight = Math.max(
+							0,
+							originalLogicalSize.height - TOOLBAR_HEIGHT,
+						);
+
 						const selectionMinDim = Math.min(bounds.width, bounds.height);
-						const targetMaxDim = Math.max(
-							150,
+						const targetContentMaxDim = Math.max(
+							100,
 							Math.min(
-								Math.max(originalLogicalSize.width, originalLogicalSize.height),
-								selectionMinDim * 0.5,
+								Math.max(originalContentWidth, originalContentHeight),
+								selectionMinDim * 0.5 - TOOLBAR_HEIGHT,
 							),
 						);
 
-						const originalMaxDim = Math.max(
-							originalLogicalSize.width,
-							originalLogicalSize.height,
+						const originalContentMaxDim = Math.max(
+							originalContentWidth,
+							originalContentHeight,
 						);
-						const scale = targetMaxDim / originalMaxDim;
+						const scale =
+							originalContentMaxDim > 0
+								? targetContentMaxDim / originalContentMaxDim
+								: 1;
 
-						const newWidth = Math.round(originalLogicalSize.width * scale);
-						const newHeight = Math.round(originalLogicalSize.height * scale);
+						const newWidth = Math.round(originalContentWidth * scale);
+						const newHeight =
+							Math.round(originalContentHeight * scale) + TOOLBAR_HEIGHT;
 
 						if (
 							bounds.width > newWidth + padding * 2 &&
@@ -581,6 +590,12 @@ function Inner() {
 						if (original && win) {
 							await win.setPosition(original.position);
 							await win.setSize(original.size);
+							await commands.updateCameraOverlayBounds(
+								original.position.x,
+								original.position.y,
+								original.size.width,
+								original.size.height,
+							);
 							setOriginalCameraBounds(null);
 							setTargetState(null);
 							lastApplied = null;
@@ -836,8 +851,10 @@ function RecordingControls(props: {
 	const { setOptions, rawOptions } = useRecordingOptions();
 
 	const generalSetings = generalSettingsStore.createQuery();
-	const cameras = useQuery(() => listVideoDevices);
-	const mics = useQuery(() => listAudioDevices);
+	const devices = createDevicesQuery();
+	const cameras = createMemo(() => devices.data?.cameras ?? []);
+	const mics = createMemo(() => devices.data?.microphones ?? []);
+	const permissions = createMemo(() => devices.data?.permissions);
 	const setMicInput = createMutation(() => ({
 		mutationFn: async (name: string | null) => {
 			await commands.setMicInput(name);
@@ -848,14 +865,12 @@ function RecordingControls(props: {
 
 	const selectedCamera = createMemo(() => {
 		if (!rawOptions.cameraID) return null;
-		return findCamera(cameras.data ?? [], rawOptions.cameraID) ?? null;
+		return findCamera(cameras(), rawOptions.cameraID) ?? null;
 	});
 
 	const selectedMicName = createMemo(() => {
 		if (!rawOptions.micName) return null;
-		return (
-			(mics.data ?? []).find((name) => name === rawOptions.micName) ?? null
-		);
+		return mics().find((name) => name === rawOptions.micName) ?? null;
 	});
 
 	const menuModes = async () =>
@@ -865,6 +880,7 @@ function RecordingControls(props: {
 					text: "Studio Mode",
 					action: () => {
 						setOptions("mode", "studio");
+						commands.setRecordingMode("studio");
 					},
 					checked: rawOptions.mode === "studio",
 				}),
@@ -872,6 +888,7 @@ function RecordingControls(props: {
 					text: "Instant Mode",
 					action: () => {
 						setOptions("mode", "instant");
+						commands.setRecordingMode("instant");
 					},
 					checked: rawOptions.mode === "instant",
 				}),
@@ -879,6 +896,7 @@ function RecordingControls(props: {
 					text: "Screenshot Mode",
 					action: () => {
 						setOptions("mode", "screenshot");
+						commands.setRecordingMode("screenshot");
 					},
 					checked: rawOptions.mode === "screenshot",
 				}),
@@ -932,7 +950,7 @@ function RecordingControls(props: {
 
 	return (
 		<>
-			<div class="flex flex-col gap-2.5 items-stretch my-2.5 w-88 max-w-[90vw]">
+			<div class="flex flex-col gap-2.5 items-stretch my-2.5 w-[26rem] max-w-[90vw]">
 				<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
 					<div class="flex gap-2.5 items-center">
 						<div
@@ -947,7 +965,7 @@ function RecordingControls(props: {
 						<div
 							data-inactive={rawOptions.mode === "instant" && !auth.data}
 							data-disabled={startDisabled()}
-							class="flex flex-1 min-w-0 max-w-60 overflow-hidden flex-row h-11 rounded-full text-white bg-linear-to-r from-blue-10 via-blue-10 to-blue-11 dark:from-blue-9 dark:via-blue-9 dark:to-blue-10 group"
+							class="flex flex-1 min-w-0 max-w-[18rem] overflow-hidden flex-row h-11 rounded-full text-white bg-gradient-to-r from-blue-10 via-blue-10 to-blue-11 dark:from-blue-9 dark:via-blue-9 dark:to-blue-10 group"
 							onClick={async () => {
 								if (rawOptions.mode === "instant" && !auth.data) {
 									emit("start-sign-in");
@@ -1053,8 +1071,8 @@ function RecordingControls(props: {
 					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
 						<div class="grid grid-cols-2 gap-2 w-full">
 							<CameraSelect
-								disabled={cameras.isPending}
-								options={cameras.data ?? []}
+								disabled={devices.isPending}
+								options={cameras()}
 								value={selectedCamera() ?? null}
 								onChange={(camera) => {
 									if (!camera) setCamera.mutate(null);
@@ -1062,16 +1080,14 @@ function RecordingControls(props: {
 										setCamera.mutate({ ModelID: camera.model_id });
 									else setCamera.mutate({ DeviceID: camera.device_id });
 								}}
+								permissions={permissions()}
 							/>
 							<MicrophoneSelect
-								disabled={mics.isPending}
-								options={mics.isPending ? [] : (mics.data ?? [])}
-								value={
-									mics.isPending
-										? (rawOptions.micName ?? null)
-										: selectedMicName()
-								}
+								disabled={devices.isPending}
+								options={mics()}
+								value={selectedMicName()}
 								onChange={(value) => setMicInput.mutate(value)}
+								permissions={permissions()}
 							/>
 						</div>
 					</div>

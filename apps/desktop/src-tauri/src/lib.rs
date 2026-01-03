@@ -628,6 +628,106 @@ fn spawn_device_watchers(app_handle: AppHandle) {
     spawn_camera_watcher(app_handle);
 }
 
+#[derive(Serialize, Type, tauri_specta::Event, Debug, Clone)]
+pub struct DevicesUpdated {
+    cameras: Vec<cap_camera::CameraInfo>,
+    microphones: Vec<String>,
+    permissions: permissions::OSPermissionsCheck,
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn get_devices_snapshot() -> DevicesUpdated {
+    let permissions = permissions::do_permissions_check(false);
+    let cameras = if permissions.camera.permitted() {
+        cap_camera::list_cameras().collect()
+    } else {
+        Vec::new()
+    };
+    let microphones = if permissions.microphone.permitted() {
+        MicrophoneFeed::list().keys().cloned().collect()
+    } else {
+        Vec::new()
+    };
+    DevicesUpdated {
+        cameras,
+        microphones,
+        permissions,
+    }
+}
+
+fn spawn_devices_snapshot_emitter(app_handle: AppHandle) {
+    tokio::spawn(async move {
+        let mut last_perm_tuple: (u8, u8, u8, u8) = (255, 255, 255, 255);
+        let mut last_camera_ids: Vec<String> = Vec::new();
+        let mut last_mics: Vec<String> = Vec::new();
+        let mut fast_loops = 0u32;
+        loop {
+            let permissions = permissions::do_permissions_check(false);
+            let cameras = if permissions.camera.permitted() {
+                cap_camera::list_cameras().collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            let microphones = if permissions.microphone.permitted() {
+                MicrophoneFeed::list().keys().cloned().collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            let perm_tuple = (
+                match permissions.screen_recording {
+                    permissions::OSPermissionStatus::NotNeeded => 0,
+                    permissions::OSPermissionStatus::Empty => 1,
+                    permissions::OSPermissionStatus::Granted => 2,
+                    permissions::OSPermissionStatus::Denied => 3,
+                },
+                match permissions.microphone {
+                    permissions::OSPermissionStatus::NotNeeded => 0,
+                    permissions::OSPermissionStatus::Empty => 1,
+                    permissions::OSPermissionStatus::Granted => 2,
+                    permissions::OSPermissionStatus::Denied => 3,
+                },
+                match permissions.camera {
+                    permissions::OSPermissionStatus::NotNeeded => 0,
+                    permissions::OSPermissionStatus::Empty => 1,
+                    permissions::OSPermissionStatus::Granted => 2,
+                    permissions::OSPermissionStatus::Denied => 3,
+                },
+                match permissions.accessibility {
+                    permissions::OSPermissionStatus::NotNeeded => 0,
+                    permissions::OSPermissionStatus::Empty => 1,
+                    permissions::OSPermissionStatus::Granted => 2,
+                    permissions::OSPermissionStatus::Denied => 3,
+                },
+            );
+            let camera_ids: Vec<String> =
+                cameras.iter().map(|c| c.device_id().to_string()).collect();
+            let mut changed = perm_tuple != last_perm_tuple;
+            if !changed {
+                changed = camera_ids != last_camera_ids || microphones != last_mics;
+            }
+            if changed {
+                DevicesUpdated {
+                    cameras: cameras.clone(),
+                    microphones: microphones.clone(),
+                    permissions: permissions.clone(),
+                }
+                .emit(&app_handle)
+                .ok();
+                last_perm_tuple = perm_tuple;
+                last_camera_ids = camera_ids;
+                last_mics = microphones;
+            }
+            let dur = if fast_loops < 10 {
+                std::time::Duration::from_millis(500)
+            } else {
+                std::time::Duration::from_secs(5)
+            };
+            fast_loops = fast_loops.saturating_add(1);
+            tokio::time::sleep(dur).await;
+        }
+    });
+}
 async fn cleanup_camera_window(app: AppHandle) {
     let state = app.state::<ArcLock<App>>();
     let mut app_state = state.write().await;
@@ -1456,7 +1556,7 @@ async fn get_video_metadata(path: PathBuf) -> Result<VideoRecordingMetadata, Str
                 return Err("Unable to get metadata on in-progress recording".to_string());
             }
 
-            match meta {
+            match &**meta {
                 StudioRecordingMeta::SingleSegment { segment } => {
                     vec![recording_meta.path(&segment.display.path)]
                 }
@@ -1888,15 +1988,13 @@ impl RecordingMetaWithMetadata {
                 RecordingMetaInner::Instant(_) => RecordingMode::Instant,
             },
             status: match &inner.inner {
-                RecordingMetaInner::Studio(StudioRecordingMeta::MultipleSegments { inner }) => {
-                    inner
+                RecordingMetaInner::Studio(meta) => match &**meta {
+                    StudioRecordingMeta::MultipleSegments { inner } => inner
                         .status
                         .clone()
-                        .unwrap_or(StudioRecordingStatus::Complete)
-                }
-                RecordingMetaInner::Studio(StudioRecordingMeta::SingleSegment { .. }) => {
-                    StudioRecordingStatus::Complete
-                }
+                        .unwrap_or(StudioRecordingStatus::Complete),
+                    StudioRecordingMeta::SingleSegment { .. } => StudioRecordingStatus::Complete,
+                },
                 RecordingMetaInner::Instant(InstantRecordingMeta::InProgress { .. }) => {
                     StudioRecordingStatus::InProgress
                 }
@@ -2385,6 +2483,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             recording::stop_recording,
             recording::pause_recording,
             recording::resume_recording,
+            recording::toggle_pause_recording,
             recording::restart_recording,
             recording::delete_recording,
             recording::take_screenshot,
@@ -2427,6 +2526,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             permissions::open_permission_settings,
             permissions::do_permissions_check,
             permissions::request_permission,
+            get_devices_snapshot,
             upload_exported_video,
             upload_screenshot,
             create_screenshot_editor_instance,
@@ -2459,7 +2559,6 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             await_camera_preview_ready,
             captions::create_dir,
             captions::save_model_file,
-            captions::prewarm_whisperx,
             captions::transcribe_audio,
             captions::save_captions,
             captions::load_captions,
@@ -2501,6 +2600,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             hotkeys::OnEscapePress,
             upload::UploadProgressEvent,
             SetCaptureAreaPending,
+            DevicesUpdated,
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Throw)
         .typ::<ProjectConfiguration>()
@@ -2737,6 +2837,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
 
             spawn_mic_error_handler(app.clone(), mic_error_rx);
             spawn_device_watchers(app.clone());
+            spawn_devices_snapshot_emitter(app.clone());
 
             tokio::spawn(check_notification_permissions(app.clone()));
 
@@ -2833,12 +2934,26 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
 
             match event {
                 WindowEvent::CloseRequested { .. } => {
-                    if let Ok(CapWindowDef::Camera) = CapWindowDef::from_str(label) {
-                        tokio::spawn(cleanup_camera_window(app.clone()));
+                    if let Ok(window_id) = CapWindowDef::from_str(label) {
+                        match window_id {
+                            CapWindowDef::Camera => {
+                                tracing::warn!("Camera window CloseRequested event received!");
+                                tokio::spawn(cleanup_camera_window(app.clone()));
+                            }
+                            CapWindowDef::Main => {
+                                if let Some(camera_window) = CapWindowDef::Camera.get(app) {
+                                    let _ = camera_window.close();
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 WindowEvent::Destroyed => {
                     if let Ok(window_id) = CapWindowDef::from_str(label) {
+                        if matches!(window_id, CapWindowDef::Camera) {
+                            tracing::warn!("Camera window Destroyed event received!");
+                        }
                         match window_id {
                             CapWindowDef::Main => {
                                 let app = app.clone();
@@ -3010,6 +3125,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                         || label.starts_with("screenshot-editor-")
                         || label.as_str() == "settings"
                         || label.as_str() == "signin"
+                        || label.as_str() == "setup"
                 });
 
                 if has_window {
@@ -3021,6 +3137,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 || label.starts_with("screenshot-editor-")
                                 || label.as_str() == "settings"
                                 || label.as_str() == "signin"
+                                || label.as_str() == "setup"
                         })
                         .map(|(_, window)| window.clone())
                     {
@@ -3091,8 +3208,10 @@ async fn resume_uploads(app: AppHandle) -> Result<(), String> {
                 // Check if recording is still marked as in-progress and if so mark as failed
                 // This should only happen if the application crashes while recording
                 match &mut meta.inner {
-                    RecordingMetaInner::Studio(StudioRecordingMeta::MultipleSegments { inner }) => {
-                        if let Some(StudioRecordingStatus::InProgress) = &inner.status {
+                    RecordingMetaInner::Studio(meta_box) => {
+                        if let StudioRecordingMeta::MultipleSegments { inner } = &mut **meta_box
+                            && let Some(StudioRecordingStatus::InProgress) = &inner.status
+                        {
                             inner.status = Some(StudioRecordingStatus::Failed {
                                 error: "Recording crashed".to_string(),
                             });

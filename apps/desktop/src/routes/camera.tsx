@@ -370,13 +370,13 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 		socket.onmessage = (event) => {
 			const buffer = event.data as ArrayBuffer;
 			const clamped = new Uint8ClampedArray(buffer);
-			if (clamped.length < 12) {
+			if (clamped.length < 24) {
 				console.error("Received frame too small to contain metadata");
 				return;
 			}
 
-			const metadataOffset = clamped.length - 12;
-			const meta = new DataView(buffer, metadataOffset, 12);
+			const metadataOffset = clamped.length - 24;
+			const meta = new DataView(buffer, metadataOffset, 24);
 			const strideBytes = meta.getUint32(0, true);
 			const height = meta.getUint32(4, true);
 			const width = meta.getUint32(8, true);
@@ -589,16 +589,6 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 
 	let cameraCanvasRef: HTMLCanvasElement | undefined;
 
-	createEffect(
-		on(
-			() => rawOptions.cameraLabel,
-			(label) => {
-				if (label === null) getCurrentWindow().close();
-			},
-			{ defer: true },
-		),
-	);
-
 	onMount(() => getCurrentWindow().show());
 
 	return (
@@ -700,6 +690,7 @@ function Canvas(props: {
 	latestFrame: Accessor<{ width: number; data: ImageData } | null | undefined>;
 	state: CameraWindowState;
 	ref: HTMLCanvasElement | undefined;
+	containerSize?: { width: number; height: number };
 }) {
 	const style = () => {
 		const frame = props.latestFrame();
@@ -707,8 +698,10 @@ function Canvas(props: {
 
 		const aspectRatio = frame.data.width / frame.data.height;
 
-		// Use state.size directly for immediate feedback
-		const base = props.state.size;
+		// Use container size if available (for external resize), otherwise use state.size
+		const base = props.containerSize
+			? Math.min(props.containerSize.width, props.containerSize.height)
+			: props.state.size;
 
 		// Replicate window size logic synchronously for the canvas
 		const winWidth =
@@ -741,7 +734,7 @@ function Canvas(props: {
 			else
 				return {
 					width: base,
-					height: base * aspectRatio,
+					height: base / aspectRatio,
 				};
 		})();
 

@@ -426,7 +426,7 @@ impl CaptionsLayer {
     pub fn prepare(
         &mut self,
         uniforms: &ProjectUniforms,
-        segment_frames: &DecodedSegmentFrames,
+        _segment_frames: &DecodedSegmentFrames,
         output_size: XY<u32>,
         constants: &RenderVideoConstants,
     ) {
@@ -444,7 +444,7 @@ impl CaptionsLayer {
             return;
         }
 
-        let current_time = segment_frames.segment_time;
+        let current_time = uniforms.frame_number as f32 / uniforms.frame_rate as f32;
         let fade_duration = caption_data.settings.fade_duration;
         let linger_duration = caption_data.settings.linger_duration;
         let word_transition_duration = caption_data.settings.word_transition_duration;
@@ -553,7 +553,9 @@ impl CaptionsLayer {
         let base_alpha = (fade_opacity * BASE_TEXT_OPACITY).clamp(0.0, 1.0);
         let highlight_alpha = fade_opacity.clamp(0.0, 1.0);
 
-        if !caption_words.is_empty() {
+        let active_word_highlight_enabled = caption_data.settings.active_word_highlight;
+
+        if !caption_words.is_empty() && active_word_highlight_enabled {
             let mut rich_text: Vec<(&str, Attrs)> = Vec::new();
             let full_text = caption_text.as_str();
             let mut last_end = 0usize;
@@ -636,10 +638,10 @@ impl CaptionsLayer {
             );
         } else {
             let color = Color::rgba(
-                (base_color[0] * 255.0) as u8,
-                (base_color[1] * 255.0) as u8,
-                (base_color[2] * 255.0) as u8,
-                (base_alpha * 255.0) as u8,
+                (highlight_color_rgb[0] * 255.0) as u8,
+                (highlight_color_rgb[1] * 255.0) as u8,
+                (highlight_color_rgb[2] * 255.0) as u8,
+                (highlight_alpha * 255.0) as u8,
             );
             let attrs = Attrs::new().family(font_family).weight(weight).color(color);
             updated_buffer.set_text(

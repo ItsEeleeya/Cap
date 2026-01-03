@@ -31,6 +31,7 @@ import { useScreenshotEditorContext } from "./context";
 import { Header } from "./Header";
 import { LayersPanel } from "./LayersPanel";
 import { Preview } from "./Preview";
+import { ScreenshotEditorSkeleton } from "./screenshot-editor-skeleton";
 import { Dialog, EditorButton } from "./ui";
 
 export function Editor() {
@@ -43,6 +44,7 @@ export function Editor() {
 		setLayersPanelOpen,
 		activePopover,
 		setActivePopover,
+		isRenderReady,
 	} = useScreenshotEditorContext();
 
 	createEffect(() => {
@@ -132,7 +134,7 @@ export function Editor() {
 	});
 
 	return (
-		<>
+		<Show when={isRenderReady()} fallback={<ScreenshotEditorSkeleton />}>
 			<div class="relative">
 				<Header />
 				<AnnotationConfigBar />
@@ -151,7 +153,7 @@ export function Editor() {
 				</div>
 				<Dialogs />
 			</div>
-		</>
+		</Show>
 	);
 }
 
@@ -171,7 +173,7 @@ function Dialogs() {
 			contentClass=""
 			open={dialog().open}
 			onOpenChange={(o) => {
-				if (!o) setDialog((d) => ({ ...d, open: false }));
+				if (!o) setDialog({ open: false });
 			}}
 		>
 			<Show
@@ -432,7 +434,7 @@ function Dialogs() {
 															y: bounds.height,
 														},
 													});
-													setDialog((d) => ({ ...d, open: false }));
+													setDialog({ open: false });
 												}}
 											>
 												Save
