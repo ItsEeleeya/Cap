@@ -673,7 +673,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                 Ok(TrayItem::RequestPermissions) => {
                     let app = app.clone();
                     tokio::spawn(async move {
-                        let _ = ShowCapWindow::Setup.show(&app).await;
+                        let _ = CapWindow::Setup.show(&app).await;
                     });
                 }
                 _ => {}

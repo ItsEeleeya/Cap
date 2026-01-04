@@ -73,3 +73,30 @@
 .apple-vibrancy-overlay {
 	-apple-visual-effect: -apple-system-vibrancy-overlay;
 }
+
+::-webkit-slider-thumb {
+	/* @apply bg-[000]; */
+	/* background-color: red; */
+	/* visibility: hidden; */
+	/* opacity: 0.1; */
+	/* opacity: 0.4; */
+	/* -apple-visual-effect: -apple-system-blur-material; */
+	/* border-radius: 100%; */
+}
+/* ::-webkit-slider-thumb::before {
+	content: '';
+	size: 100% 100%;
+	position: absolute;
+	border: 1px blue;
+	background-color: aquamarine;
+	-apple-visual-effect: -apple-system-glass-material-clear;
+} */
+
+::-webkit-slider-runnable-track {
+	/* background-color: aquamarine; */
+	/* height: 2px; */
+}
+
+.solarium-slider-track {
+
+}

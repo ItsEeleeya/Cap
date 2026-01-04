@@ -1,245 +1,311 @@
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
-import { Transition } from "solid-transition-group";
+import { Slider } from "@kobalte/core/slider";
+import { animate, spring } from "@motionone/dom";
+import { cx } from "cva";
+import {
+	type Component,
+	createEffect,
+	createSignal,
+	type JSX,
+	mergeProps,
+	onCleanup,
+	Show,
+} from "solid-js";
 
-const MAX_OVERFLOW = 50;
+// --- Helpers ---
 
-function decay(value: number, max: number) {
-	if (max === 0) {
-		return 0;
-	}
-
+function decay(value: number, max: number): number {
+	if (max === 0) return 0;
 	const entry = value / max;
 	const sigmoid = 2 * (1 / (1 + Math.exp(-entry)) - 0.5);
-
 	return sigmoid * max;
 }
 
-function SpeakerXMarkIcon() {
-	return (
-		<svg
-			class="size-5 text-white"
-			fill="currentColor"
-			viewBox="0 0 20 20"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path d="M9.547 3.062A.75.75 0 0110 3.75v12.5a.75.75 0 01-1.264.546L5.203 13H2.667a.75.75 0 01-.7-.48A6.985 6.985 0 011.5 10c0-.887.165-1.737.468-2.52a.75.75 0 01.699-.48h2.536l3.533-3.796a.75.75 0 01.811-.142zM12.22 5.22a.75.75 0 011.06 0L15 6.94l1.72-1.72a.75.75 0 111.06 1.06L16.06 8l1.72 1.72a.75.75 0 11-1.06 1.06L15 9.06l-1.72 1.72a.75.75 0 11-1.06-1.06L13.94 8l-1.72-1.72a.75.75 0 010-1.06z" />
-		</svg>
-	);
+const MAX_OVERFLOW = 20;
+
+interface ElasticSliderProps {
+	defaultValue?: number;
+	minValue?: number;
+	maxValue?: number;
+	step?: number;
+	class?: string;
+	leftIcon?: JSX.Element;
+	rightIcon?: JSX.Element;
+	onChange?: (value: number) => void;
 }
 
-function SpeakerWaveIcon() {
-	return (
-		<svg
-			class="size-5 text-white"
-			fill="currentColor"
-			viewBox="0 0 20 20"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path d="M10.5 3.75a.75.75 0 00-1.264-.546L5.703 6.5H3a.75.75 0 00-.75.75v5.5c0 .414.336.75.75.75h2.703l3.533 3.296a.75.75 0 001.264-.546V3.75zM14.854 5.146a.75.75 0 00-1.06 1.06 4.5 4.5 0 010 6.364.75.75 0 001.06 1.06 6 6 0 000-8.484z" />
-			<path d="M12.293 7.793a.75.75 0 10-1.06 1.06 1.5 1.5 0 010 2.122.75.75 0 001.06 1.06 3 3 0 000-4.242z" />
-		</svg>
+export const ElasticSlider: Component<ElasticSliderProps> = (props) => {
+	const merged = mergeProps(
+		{
+			defaultValue: 50,
+			minValue: 0,
+			maxValue: 100,
+			step: 1,
+			class: "",
+		},
+		props,
 	);
-}
 
-export default function Slider() {
-	const [volume, setVolume] = createSignal(50);
-	const [region, setRegion] = createSignal("middle");
-	const [overflow, setOverflow] = createSignal(0);
-	const [scale, setScale] = createSignal(1);
+	// --- State ---
+	// We track value locally to calculate the Thumb position interpolation
+	const [value, setValue] = createSignal(merged.defaultValue);
+
+	const [trackWrapper, setTrackWrapper] = createSignal<HTMLDivElement | null>(
+		null,
+	);
+	const [leftIconEl, setLeftIconEl] = createSignal<HTMLDivElement | null>(null);
+	const [rightIconEl, setRightIconEl] = createSignal<HTMLDivElement | null>(
+		null,
+	);
+	const [thumbEl, setThumbEl] = createSignal<HTMLSpanElement | null>(null);
+
+	const [region, setRegion] = createSignal<"left" | "middle" | "right">(
+		"middle",
+	);
 	const [isDragging, setIsDragging] = createSignal(false);
-	const [clientX, setClientX] = createSignal(0);
 
-	let sliderRef: HTMLDivElement | undefined;
-	let animationFrame: number | undefined;
+	// --- Physics Logic (Global Listener Pattern) ---
 
-	function animateScale(target: number) {
-		const start = scale();
-		const duration = 200;
-		const startTime = performance.now();
+	const handlePointerDown = (e: PointerEvent) => {
+		const wrapper = trackWrapper();
+		if (!wrapper) return;
 
-		function animate(currentTime: number) {
-			const elapsed = currentTime - startTime;
-			const progress = Math.min(elapsed / duration, 1);
-			const eased = 1 - (1 - progress) ** 3;
-			setScale(start + (target - start) * eased);
+		setIsDragging(true);
 
-			if (progress < 1) {
-				animationFrame = requestAnimationFrame(animate);
-			}
-		}
+		const rect = wrapper.getBoundingClientRect();
+		const { left, width, right } = rect;
 
-		if (animationFrame) cancelAnimationFrame(animationFrame);
-		animationFrame = requestAnimationFrame(animate);
-	}
+		const onPointerMove = (moveEvent: PointerEvent) => {
+			const clientX = moveEvent.clientX;
+			let overflow = 0;
 
-	function animateOverflow(target: number) {
-		const start = overflow();
-		const duration = 500;
-		const startTime = performance.now();
-
-		function animate(currentTime: number) {
-			const elapsed = currentTime - startTime;
-			const progress = Math.min(elapsed / duration, 1);
-			const bounce = Math.sin(progress * Math.PI) * 0.5 + progress;
-			setOverflow(start + (target - start) * bounce);
-
-			if (progress < 1) {
-				animationFrame = requestAnimationFrame(animate);
-			}
-		}
-
-		if (animationFrame) cancelAnimationFrame(animationFrame);
-		animationFrame = requestAnimationFrame(animate);
-	}
-
-	createEffect(() => {
-		const x = clientX();
-		if (sliderRef) {
-			const { left, right } = sliderRef.getBoundingClientRect();
-			let newValue = 0;
-
-			if (x < left) {
+			// Determine Elastic Region
+			if (clientX < left) {
 				setRegion("left");
-				newValue = left - x;
-			} else if (x > right) {
+				overflow = left - clientX;
+			} else if (clientX > right) {
 				setRegion("right");
-				newValue = x - right;
+				overflow = clientX - right;
 			} else {
 				setRegion("middle");
-				newValue = 0;
+				overflow = 0;
 			}
 
-			setOverflow(decay(newValue, MAX_OVERFLOW));
-		}
-	});
+			// Apply Physics to Wrapper
+			const dampenedOverflow = decay(overflow, MAX_OVERFLOW);
 
-	function handlePointerDown(e: PointerEvent) {
-		setIsDragging(true);
-		updateVolume(e);
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}
+			if (dampenedOverflow > 0) {
+				const scaleX = 1 + dampenedOverflow / width;
+				const scaleY = 1 - dampenedOverflow / MAX_OVERFLOW / 5;
+				const transformOrigin = clientX < left + width / 2 ? "right" : "left";
 
-	function handlePointerMove(e: PointerEvent) {
-		if (isDragging()) {
-			setClientX(e.clientX);
-			updateVolume(e);
-		}
-	}
+				wrapper.style.transformOrigin = transformOrigin;
+				wrapper.style.transform = `scale(${scaleX}, ${scaleY})`;
+			} else {
+				wrapper.style.transform = `scale(1, 1)`;
+			}
 
-	function handlePointerUp() {
-		setIsDragging(false);
-		animateOverflow(0);
-	}
+			// Apply Physics to Icons
+			const lIcon = leftIconEl();
+			const rIcon = rightIconEl();
+			const currentRegion = region();
 
-	function updateVolume(e: PointerEvent) {
-		if (sliderRef) {
-			const { left, width } = sliderRef.getBoundingClientRect();
-			const percent = Math.max(
-				0,
-				Math.min(100, ((e.clientX - left) / width) * 100),
+			if (lIcon && rIcon) {
+				if (currentRegion === "left") {
+					lIcon.style.transform = `translateX(${-dampenedOverflow}px)`;
+				} else if (currentRegion === "right") {
+					rIcon.style.transform = `translateX(${dampenedOverflow}px)`;
+				} else {
+					lIcon.style.transform = `translateX(0px)`;
+					rIcon.style.transform = `translateX(0px)`;
+				}
+			}
+		};
+
+		const onPointerUp = () => {
+			setIsDragging(false);
+			setRegion("middle");
+
+			// Spring Reset
+			animate(
+				wrapper,
+				{ transform: "scale(1, 1)" },
+				{ easing: spring({ stiffness: 500, damping: 25 }) },
 			);
-			setVolume(Math.floor(percent));
-		}
-	}
 
-	onCleanup(() => {
-		if (animationFrame) cancelAnimationFrame(animationFrame);
+			const lIcon = leftIconEl();
+			const rIcon = rightIconEl();
+			if (lIcon)
+				animate(lIcon, { transform: "translateX(0px)" }, { duration: 0.2 });
+			if (rIcon)
+				animate(rIcon, { transform: "translateX(0px)" }, { duration: 0.2 });
+
+			window.removeEventListener("pointermove", onPointerMove);
+			window.removeEventListener("pointerup", onPointerUp);
+			window.removeEventListener("pointercancel", onPointerUp);
+		};
+
+		window.addEventListener("pointermove", onPointerMove);
+		window.addEventListener("pointerup", onPointerUp);
+		window.addEventListener("pointercancel", onPointerUp);
+	};
+
+	// --- Thumb Animation Effect ---
+	// createEffect(() => {
+	// 	const thumb = thumbEl();
+	// 	if (!thumb) return;
+
+	// 	// Bouncy Scale on Drag
+	// 	if (isDragging()) {
+	// 		animate(
+	// 			thumb,
+	// 			{ scale: 1.5 },
+	// 			{ easing: spring({ stiffness: 400, damping: 20 }) },
+	// 		);
+	// 	} else {
+	// 		animate(
+	// 			thumb,
+	// 			{ scale: 1 },
+	// 			{ easing: spring({ stiffness: 400, damping: 20 }) },
+	// 		);
+	// 	}
+	// });
+
+	// --- Icon Pop Effect ---
+	createEffect(() => {
+		const r = region();
+		const lIcon = leftIconEl();
+		const rIcon = rightIconEl();
+
+		if (r === "left" && lIcon) {
+			animate(lIcon, { scale: [1, 1.4, 1] }, { duration: 0.25 });
+		}
+		if (r === "right" && rIcon) {
+			animate(rIcon, { scale: [1, 1.4, 1] }, { duration: 0.25 });
+		}
 	});
 
-	function getScaleX() {
-		if (sliderRef) {
-			const { width } = sliderRef.getBoundingClientRect();
-			return 1 + overflow() / width;
+	// Calculate percentage for transform logic
+	const _getPercentage = () => {
+		const range = merged.maxValue - merged.minValue;
+		const v = ((value() - merged.minValue) / range) * 100;
+		console.log(v);
+		return v;
+	};
+
+	const getPercentage = () => {
+		const range = merged.maxValue - merged.minValue;
+		const p = ((value() - merged.minValue) / range) * 100;
+
+		// The size of the edge zones (2.5% on left + 2.5% on right = 95% middle)
+		const threshold = 30;
+
+		if (p < threshold) {
+			// Zone 1 (Start): 0% -> 2.5%
+			// We map this small progress to 0 -> 50 for the transform
+			const t = p / threshold; // Normalized 0-1
+
+			// Cubic Ease Out: Starts fast, slows down gently into the center
+			const ease = 1 - (1 - t) ** 3;
+			return ease * 50;
 		}
-		return 1;
-	}
 
-	function getScaleY() {
-		return 1 - (overflow() / MAX_OVERFLOW) * 0.2;
-	}
+		if (p > 100 - threshold) {
+			// Zone 3 (End): 97.5% -> 100%
+			// We map this small progress to 50 -> 100
+			const t = (p - (100 - threshold)) / threshold; // Normalized 0-1
 
-	function getTransformOrigin() {
-		if (sliderRef) {
-			const { left, width } = sliderRef.getBoundingClientRect();
-			return clientX() < left + width / 2 ? "right" : "left";
+			// Cubic Ease In: Starts slow from center, speeds up into the edge
+			const ease = t ** 3;
+			return 50 + ease * 50;
 		}
-		return "center";
-	}
 
-	function getHeight() {
-		return 6 + (scale() - 1) * 30;
-	}
-
-	function getIconX(side: "left" | "right") {
-		if (region() === side) {
-			return side === "left" ? -overflow() / scale() : overflow() / scale();
-		}
-		return 0;
-	}
-
-	function getIconScale(side: "left" | "right") {
-		return region() === side ? 1.4 : 1;
-	}
+		// Zone 2 (Middle): The Plateau
+		// For 95% of the slider, the thumb is perfectly centered
+		return 50;
+	};
 
 	return (
-		<div
-			class="flex w-full touch-none select-none items-center justify-center gap-3"
-			style={{
-				transform: `scale(${scale()})`,
-				opacity: 0.7 + (scale() - 1) * 1.5,
-				transition: "transform 0.2s, opacity 0.2s",
+		<Slider
+			class={`flex touch-none select-none items-center justify-center gap-4 ${merged.class}`}
+			value={[value()]}
+			minValue={merged.minValue}
+			maxValue={merged.maxValue}
+			step={merged.step}
+			onChange={(val) => {
+				setValue(val[0]);
+				props.onChange?.(val[0]);
 			}}
-			onMouseEnter={() => animateScale(1.2)}
-			onMouseLeave={() => animateScale(1)}
-			onTouchStart={() => animateScale(1.2)}
-			onTouchEnd={() => animateScale(1)}
 		>
-			<div
-				style={{
-					transform: `translateX(${getIconX("left")}px) scale(${getIconScale("left")})`,
-					transition:
-						region() === "left" ? "transform 0.25s" : "transform 0.2s",
-				}}
-			>
-				<SpeakerXMarkIcon />
-			</div>
-
-			<div
-				ref={sliderRef}
-				class="relative flex w-full max-w-[200px] grow cursor-grab touch-none select-none items-center py-4 active:cursor-grabbing"
-				onPointerDown={handlePointerDown}
-				onPointerMove={handlePointerMove}
-				onPointerUp={handlePointerUp}
-				onPointerCancel={handlePointerUp}
-			>
-				<div
-					class="flex grow"
-					style={{
-						transform: `scaleX(${getScaleX()}) scaleY(${getScaleY()})`,
-						"transform-origin": getTransformOrigin(),
-						height: `${getHeight()}px`,
-						"margin-top": `${-(getHeight() - 6) / 2}px`,
-						"margin-bottom": `${-(getHeight() - 6) / 2}px`,
-					}}
-				>
-					<div class="relative isolate h-full grow overflow-hidden rounded-full bg-gray-500">
-						<div
-							class="absolute h-full bg-white"
-							style={{ width: `${volume()}%` }}
-						/>
+			<div class="contents">
+				<Show when={props.leftIcon}>
+					<div
+						ref={setLeftIconEl}
+						class="flex items-center justify-center text-gray-400"
+					>
+						{props.leftIcon}
 					</div>
-				</div>
-			</div>
+				</Show>
 
-			<div
-				style={{
-					transform: `translateX(${getIconX("right")}px) scale(${getIconScale("right")})`,
-					transition:
-						region() === "right" ? "transform 0.25s" : "transform 0.2s",
-				}}
-			>
-				<SpeakerWaveIcon />
+				{/*
+                    ELASTIC WRAPPER
+                    Handles the stretch transform and pointer events.
+                */}
+				<div
+					ref={setTrackWrapper}
+					onPointerDown={handlePointerDown}
+					class="relative flex grow items-center h-[16px] py-[3px]" // Padding Y adds hit area
+				>
+					<Slider.Track class="relative h-[10px] w-full cursor-pointer touch-none">
+						{/*
+                           LAYER 1: MASKED VISUALS
+                           This div clips the fill so we don't have ugly corners at small widths.
+                        */}
+						<div class="absolute inset-0 rounded-full overflow-hidden bg-gray-300/50">
+							<Slider.Fill class="absolute h-full rounded-full bg-[-apple-system-control-accent]" />
+						</div>
+
+						{/*
+                           LAYER 2: THUMB
+                           Sits outside the overflow-hidden div so it can glow/shadow freely.
+                        */}
+						<Slider.Thumb
+							onPointerDown={handlePointerDown}
+							ref={setThumbEl}
+							class={cx(
+								"block h-5 w-8 -top-[5px] rounded-full focus:outline-none cursor-grab active:cursor-grabbing border-white/20",
+								isDragging()
+									? "bg-white/5 scale-110 shadow-md shadow-white/10 border border-white/20 backdrop-brightness-150"
+									: "shadow-sm border bg-white border-gray-2",
+							)}
+							// Style Logic for "Stay Inside" + "Apple Glass"
+							style={{
+								// 1. Position Interpolation:
+								//    At 0%, translate 0%. At 100%, translate -100%.
+								//    This keeps the capsule perfectly inside the track bounds.
+								// transform: `translateX(-${50}%)`,
+								transform: `translateX(-${getPercentage()}%)`,
+
+								// "background-color": "rgba(255, 255, 255, 0.2)",
+								// "backdrop-filter": "blur(1px) saturate(180%)",
+								// "-webkit-backdrop-filter": "blur(8px) saturate(180%)", // Safari support
+							}}
+						>
+							<Slider.Input />
+						</Slider.Thumb>
+					</Slider.Track>
+				</div>
+
+				<Show when={props.rightIcon}>
+					<div
+						ref={setRightIconEl}
+						class="flex items-center justify-center text-gray-400"
+					>
+						{props.rightIcon}
+					</div>
+				</Show>
 			</div>
-		</div>
+		</Slider>
 	);
-}
+};
+
+export default ElasticSlider;

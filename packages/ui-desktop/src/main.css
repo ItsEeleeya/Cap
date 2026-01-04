@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@plugin "tailwindcss-fade";
 @import "tw-animate-css";
+@plugin "tailwindcss-fade";
 
 @source "../../../apps/*/src/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../../*/src/**/*.{ts,tsx,html,stories.tsx}";

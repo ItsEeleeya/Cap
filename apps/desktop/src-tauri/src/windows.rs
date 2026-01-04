@@ -364,19 +364,7 @@ impl CapWindow {
                     .build()?;
 
                 #[cfg(target_os = "macos")]
-                crate::platform::set_window_level(window.as_ref().window(), 50);
-
-                #[cfg(target_os = "macos")]
                 {
-                #[cfg(target_os = "macos")]
-                {
-                    if new_recording_flow {
-                        let _ = window.run_on_main_thread({
-                            let window = window.clone();
-                            move || window.objc2_nswindow().setLevel(50)
-                        });
-                    }
-
                     let _ = window.run_on_main_thread({
                         let window = window.clone();
                         move || add_toolbar_shell(window)
@@ -954,8 +942,8 @@ impl CapWindow {
             })
             .unwrap_or(None);
 
-        let mut builder = WebviewWindow::builder(app, id.label(), WebviewUrl::App(url.into()))
-            .title(id.title())
+        let mut builder = WebviewWindow::builder(app, def.label(), WebviewUrl::App(url.into()))
+            .title(def.title())
             .visible(false)
             .accept_first_mouse(true)
             .content_protected(should_protect)
@@ -1117,10 +1105,9 @@ fn should_protect_window(app: &AppHandle<Wry>, window_title: &str) -> bool {
 #[instrument(skip(app))]
 pub fn refresh_window_content_protection(app: AppHandle<Wry>) -> Result<(), String> {
     for (label, window) in app.webview_windows() {
-        if let Ok(id) = CapWindowDef::from_str(&label) {
-            let title = id.title();
+        if let Ok(def) = CapWindowDef::from_str(&label) {
             window
-                .set_content_protected(should_protect_window(&app, title))
+                .set_content_protected(should_protect_window(&app, def.title()))
                 .map_err(|e| e.to_string())?;
         }
     }

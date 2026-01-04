@@ -11,8 +11,10 @@ import {
 	onMount,
 	type ParentProps,
 } from "solid-js";
+import IconCapRings from "~/assets/CapLogoRings.svg";
 import { commands } from "~/utils/tauri";
 import { createSolariumWindow } from "./debug";
+import ElasticSlider from "./solarium/components/elastic-slider";
 import { SolariumSlider } from "./solarium/components/solarium-slider";
 
 /* ---------------------------------- kinds --------------------------------- */
@@ -176,7 +178,7 @@ function ValueSliderShowcase() {
 	const [value, setValue] = createSignal(50);
 
 	return (
-		<div class="w-full flex flex-col gap-2">
+		<div class="w-full flex flex-col gap-8 p-2">
 			<SolariumSlider
 				class="w-full"
 				minValue={0}
@@ -187,6 +189,22 @@ function ValueSliderShowcase() {
 					return `${v}`;
 				}}
 			></SolariumSlider>
+
+			<div class="w-full flex flex-col gap-2">
+				<input
+					type="range"
+					min="0"
+					max="100"
+					step="1"
+					// value={value()}
+					// onInput={(e) => setValue(+e.currentTarget.value)}
+				/>
+				<span class="text-xs opacity-70">Slide</span>
+			</div>
+			<ElasticSlider
+				// leftIcon={<img class="size-5" alt="logo" src={IconCapRings}></img>}
+				class="w-44"
+			></ElasticSlider>
 		</div>
 	);
 }

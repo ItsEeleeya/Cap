@@ -619,7 +619,7 @@ pub async fn start_recording(
         }
     }
 
-    let _ = ShowCapWindow::InProgressRecording { countdown }
+    let _ = CapWindow::InProgressRecording { countdown }
         .show(&app)
         .await;
 
