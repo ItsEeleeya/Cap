@@ -12,7 +12,6 @@ import {
 	batch,
 	createEffect,
 	createResource,
-	createRoot,
 	createSignal,
 	on,
 	onCleanup,
@@ -21,12 +20,7 @@ import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 
 import { createPresets } from "~/utils/createPresets";
 import { createCustomDomainQuery } from "~/utils/queries";
-import {
-	type CanvasControls,
-	createImageDataWS,
-	createLazySignal,
-	type FrameData,
-} from "~/utils/socket";
+import { createImageDataWS, createLazySignal } from "~/utils/socket";
 import {
 	commands,
 	events,
@@ -40,10 +34,6 @@ import {
 	type TimelineConfiguration,
 	type XY,
 } from "~/utils/tauri";
-import {
-	cleanup as cleanupCropVideoPreloader,
-	preloadCropVideoMetadata,
-} from "./cropVideoPreloader";
 import type { MaskSegment } from "./masks";
 import type { TextSegment } from "./text";
 import { createProgressBar } from "./utils";
@@ -212,8 +202,7 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						let searchTime = time;
 						let _prevDuration = 0;
 						const currentSegmentIndex = segments.findIndex((segment) => {
-							const duration =
-								(segment.end - segment.start) / segment.timescale;
+							const duration = segment.end - segment.start;
 							if (searchTime > duration) {
 								searchTime -= duration;
 								_prevDuration += duration;
@@ -226,15 +215,12 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						if (currentSegmentIndex === -1) return;
 						const segment = segments[currentSegmentIndex];
 
-						const splitPositionInRecording = searchTime * segment.timescale;
-
 						segments.splice(currentSegmentIndex + 1, 0, {
 							...segment,
-							start: segment.start + splitPositionInRecording,
+							start: segment.start + searchTime,
 							end: segment.end,
 						});
-						segments[currentSegmentIndex].end =
-							segment.start + splitPositionInRecording;
+						segments[currentSegmentIndex].end = segment.start + searchTime;
 					}),
 				);
 			},
@@ -612,12 +598,6 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 			previewTime: null as number | null,
 			playbackTime: 0,
 			playing: false,
-			captions: {
-				isGenerating: false,
-				isDownloading: false,
-				downloadProgress: 0,
-				downloadingModel: null as string | null,
-			},
 			timeline: {
 				interactMode: "seek" as "seek" | "split",
 				selection: null as
@@ -711,7 +691,7 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 	null!,
 );
 
-export type { CanvasControls, FrameData } from "~/utils/socket";
+export type FrameData = { width: number; height: number; data: ImageData };
 
 function transformMeta({ pretty_name, ...rawMeta }: RecordingMeta) {
 	if ("fps" in rawMeta) {
@@ -755,59 +735,27 @@ export type TransformedMeta = ReturnType<typeof transformMeta>;
 
 export const [EditorInstanceContextProvider, useEditorInstanceContext] =
 	createContextProvider(() => {
-		const [latestFrame, setLatestFrame] = createLazySignal<FrameData>();
-
-		const [_isConnected, setIsConnected] = createSignal(false);
-		const [isWorkerReady, setIsWorkerReady] = createSignal(false);
-		const [canvasControls, setCanvasControls] =
-			createSignal<CanvasControls | null>(null);
-
-		let disposeWorkerReadyEffect: (() => void) | undefined;
-
-		onCleanup(() => {
-			disposeWorkerReadyEffect?.();
-			cleanupCropVideoPreloader();
-		});
+		const [latestFrame, setLatestFrame] = createLazySignal<{
+			width: number;
+			data: ImageData;
+		}>();
 
 		const [editorInstance] = createResource(async () => {
-			console.log("[Editor] Creating editor instance...");
 			const instance = await commands.createEditorInstance();
-			console.log("[Editor] Editor instance created, setting up WebSocket");
 
-			preloadCropVideoMetadata(
-				`${instance.path}/content/segments/segment-0/display.mp4`,
-			);
-
-			const requestFrame = () => {
-				events.renderFrameEvent.emit({
-					frame_number: 0,
-					fps: FPS,
-					resolution_base: getPreviewResolution(DEFAULT_PREVIEW_QUALITY),
-				});
-			};
-
-			const [ws, _wsConnected, workerReady, controls] = createImageDataWS(
+			const [_ws, isConnected] = createImageDataWS(
 				instance.framesSocketUrl,
 				setLatestFrame,
-				requestFrame,
 			);
 
-			setCanvasControls(controls);
-
-			disposeWorkerReadyEffect = createRoot((dispose) => {
-				createEffect(() => {
-					setIsWorkerReady(workerReady());
-				});
-				return dispose;
-			});
-
-			ws.addEventListener("open", () => {
-				setIsConnected(true);
-				requestFrame();
-			});
-
-			ws.addEventListener("close", () => {
-				setIsConnected(false);
+			createEffect(() => {
+				if (isConnected()) {
+					events.renderFrameEvent.emit({
+						frame_number: Math.floor(0),
+						fps: FPS,
+						resolution_base: getPreviewResolution(DEFAULT_PREVIEW_QUALITY),
+					});
+				}
 			});
 
 			return instance;
@@ -827,8 +775,6 @@ export const [EditorInstanceContextProvider, useEditorInstanceContext] =
 			latestFrame,
 			presets: createPresets(),
 			metaQuery,
-			isWorkerReady,
-			canvasControls,
 		};
 	}, null!);
 

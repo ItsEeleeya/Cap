@@ -1,121 +1,205 @@
-import { animate, spring } from "@motionone/dom";
-import { type Accessor, onCleanup } from "solid-js";
+import { createSignal, type JSX, onCleanup } from "solid-js";
 
-// Types for our directive options
-interface ElasticOptions {
-	value: Accessor<number>;
-	min: number;
-	max: number;
-	orientation?: "horizontal" | "vertical";
-	maxScale?: number; // Default 1.25
+type SpringOpts = {
+	stiffness?: number;
+	damping?: number;
+};
+
+function spring(initial: number, target: number, opts: SpringOpts = {}) {
+	let x = initial;
+	let v = 0;
+
+	const k = opts.stiffness ?? 20;
+	const c = opts.damping ?? 26;
+
+	return {
+		setTarget(t: number) {
+			target = t;
+		},
+		step(dt: number) {
+			const a = -k * (x - target) - c * v;
+			v += a * dt;
+			x += v * dt;
+			return x;
+		},
+		get() {
+			return x;
+		},
+	};
 }
 
-// Extend JSX namespace for TypeScript support
-declare module "solid-js" {
-	namespace JSX {
-		interface Directives {
-			elastic: ElasticOptions;
-		}
+export function LiquidGlassPopover(props: {
+	trigger: JSX.Element;
+	children: JSX.Element;
+}) {
+	let triggerRef!: HTMLButtonElement;
+	let popoverRef!: HTMLDivElement;
+
+	const [open, setOpen] = createSignal(false);
+	let raf = 0;
+
+	function rect(el: HTMLElement) {
+		return el.getBoundingClientRect();
 	}
-}
 
-export function elastic(el: HTMLElement, accessor: Accessor<ElasticOptions>) {
-	const getOptions = accessor;
+	function morphOpen() {
+		if (open()) return;
 
-	// State
-	let startX = 0;
-	let startY = 0;
-	let isDragging = false;
+		const start = rect(triggerRef);
 
-	const handlePointerDown = (e: PointerEvent) => {
-		// Only capture if we are interacting with the thumb/slider
-		isDragging = true;
-		startX = e.clientX;
-		startY = e.clientY;
+		const endW = 360;
+		const endH = 220;
+		const end = {
+			left: (window.innerWidth - endW) / 2,
+			top: (window.innerHeight - endH) / 2,
+			width: endW,
+			height: endH,
+		};
 
-		// Optional: capture pointer to keep tracking even if mouse leaves window
-		el.setPointerCapture(e.pointerId);
+		// Clone trigger (native glass)
+		const clone = triggerRef.cloneNode(true) as HTMLDivElement;
+		clone.className =
+			"fixed z-50 pointer-events-none apple-glass border border-white/10";
 
-		// Stop any ongoing release animations
-		animate(el, { scale: 1 }, { duration: 0 });
-	};
+		Object.assign(clone.style, {
+			left: `${start.left}px`,
+			top: `${start.top}px`,
+			width: `${start.width}px`,
+			height: `${start.height}px`,
+			borderRadius: "999px",
+			transformOrigin: "center",
+		});
 
-	const handlePointerMove = (e: PointerEvent) => {
-		if (!isDragging) return;
+		document.body.appendChild(clone);
 
-		const {
-			value,
-			min,
-			max,
-			orientation = "horizontal",
-			maxScale = 1.25,
-		} = getOptions();
-		const currValue = value();
+		// Springs
+		const sx = spring(start.left, end.left);
+		const sy = spring(start.top, end.top);
+		const sw = spring(start.width, end.width);
+		const sh = spring(start.height, end.height);
+		const sr = spring(999, 14, { stiffness: 14, damping: 30 });
 
-		// 1. Calculate how far we have moved in pixels
-		const deltaX = e.clientX - startX;
-		const deltaY = e.clientY - startY;
-		const delta = orientation === "horizontal" ? deltaX : deltaY;
+		// liquid feel: slight scale overshoot
+		const sxs = spring(1, 1, { stiffness: 10, damping: 18 });
+		const sys = spring(1, 1, { stiffness: 10, damping: 18 });
 
-		// 2. Determine if we are "overscrolling"
-		// We only stretch if we are at the min limit and pulling left/up
-		// OR at the max limit and pulling right/down.
-		const isAtMin = currValue <= min;
-		const isAtMax = currValue >= max;
+		let last = performance.now();
 
-		let overscroll = 0;
+		const frame = (now: number) => {
+			const dt = Math.min(32, now - last) / 1000;
+			last = now;
 
-		if (isAtMin && delta < 0) {
-			overscroll = Math.abs(delta);
-		} else if (isAtMax && delta > 0) {
-			overscroll = delta;
-		}
+			const x = sx.step(dt);
+			const y = sy.step(dt);
+			const w = sw.step(dt);
+			const h = sh.step(dt);
+			const r = sr.step(dt);
 
-		// 3. Apply the Elastic Math
-		// If there is overscroll, calculate scale. Otherwise scale is 1.
-		if (overscroll > 0) {
-			// Formula: scale = 1 + (max_increase * (overscroll / (overscroll + constant)))
-			// This ensures we approach but never exceed maxScale.
-			// 'constant' determines how much resistance there is (higher = harder to stretch).
-			const constant = 500;
-			const maxIncrease = maxScale - 1;
-			const scaleIncrease =
-				maxIncrease * (overscroll / (overscroll + constant));
+			// stretch a bit while moving
+			const vx = Math.abs(sw.get() - end.width);
+			const vy = Math.abs(sh.get() - end.height);
+			sxs.setTarget(1 + Math.min(0.06, vx / 800));
+			sys.setTarget(1 + Math.min(0.06, vy / 800));
 
-			const newScale = 1 + scaleIncrease;
+			const scaleX = sxs.step(dt);
+			const scaleY = sys.step(dt);
 
-			// Apply transform directly for 60fps performance (no Reactivity overhead needed here)
-			// We use the center as origin so it stretches from the middle
-			el.style.transformOrigin = "center";
-			el.style.transform = `scale(${newScale})`;
-		} else {
-			el.style.transform = `scale(1)`;
-		}
-	};
+			Object.assign(clone.style, {
+				left: `${x}px`,
+				top: `${y}px`,
+				width: `${w}px`,
+				height: `${h}px`,
+				borderRadius: `${r}px`,
+				transform: `scale(${scaleX}, ${scaleY})`,
+			});
 
-	const handlePointerUp = (e: PointerEvent) => {
-		if (!isDragging) return;
-		isDragging = false;
-		el.releasePointerCapture(e.pointerId);
+			const done =
+				Math.abs(x - end.left) < 0.4 &&
+				Math.abs(y - end.top) < 0.4 &&
+				Math.abs(w - end.width) < 0.4 &&
+				Math.abs(h - end.height) < 0.4;
 
-		// 4. Spring back to normal
-		animate(
-			el,
-			{ transform: "scale(1)" },
-			{
-				easing: spring({ stiffness: 400, damping: 25 }),
-			},
-		);
-	};
+			if (!done) {
+				raf = requestAnimationFrame(frame);
+			} else {
+				clone.remove();
+				setOpen(true);
+			}
+		};
 
-	// Bind events
-	el.addEventListener("pointerdown", handlePointerDown);
-	window.addEventListener("pointermove", handlePointerMove); // window ensures smoother dragging
-	window.addEventListener("pointerup", handlePointerUp);
+		raf = requestAnimationFrame(frame);
+	}
 
-	onCleanup(() => {
-		el.removeEventListener("pointerdown", handlePointerDown);
-		window.removeEventListener("pointermove", handlePointerMove);
-		window.removeEventListener("pointerup", handlePointerUp);
-	});
+	function close() {
+		setOpen(false);
+	}
+
+	onCleanup(() => cancelAnimationFrame(raf));
+
+	return (
+		<>
+			{/* Trigger */}
+			<button
+				ref={triggerRef}
+				onClick={morphOpen}
+				class="
+          relative z-10
+          size-14 rounded-full
+          apple-glass-clear
+          border border-white/10
+          flex items-center justify-center
+          text-white
+        "
+			>
+				{props.trigger}
+			</button>
+
+			{/* Popover */}
+			{open() && (
+				<div
+					class="fixed inset-0 z-40 flex items-center justify-center"
+					onClick={close}
+				>
+					<div
+						ref={popoverRef}
+						onClick={(e) => e.stopPropagation()}
+						class="
+              relative
+              w-[360px] h-[220px]
+              rounded-[14px]
+              apple-glass
+              border border-white/10
+              p-4
+              overflow-hidden
+            "
+					>
+						{/* Specular highlights (liquid feel) */}
+						<div
+							class="
+              pointer-events-none
+              absolute -top-12 -left-12
+              w-40 h-40
+              rounded-full
+              bg-white/20
+              blur-2xl
+              opacity-50
+            "
+						/>
+						<div
+							class="
+              pointer-events-none
+              absolute top-8 right-6
+              w-24 h-24
+              rounded-full
+              bg-white/10
+              blur-xl
+            "
+						/>
+
+						{props.children}
+					</div>
+				</div>
+			)}
+		</>
+	);
 }

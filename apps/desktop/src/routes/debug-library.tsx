@@ -15,7 +15,13 @@ import IconCapRings from "~/assets/CapLogoRings.svg";
 import { commands } from "~/utils/tauri";
 import { createSolariumWindow } from "./debug";
 import ElasticSlider from "./solarium/components/elastic-slider";
+import {
+	SolariumPopover,
+	SolariumPopoverContent,
+	SolariumPopoverTrigger,
+} from "./solarium/components/SolariumPopover";
 import { SolariumSlider } from "./solarium/components/solarium-slider";
+import { LiquidGlassPopover } from "./solarium/elastic";
 
 /* ---------------------------------- kinds --------------------------------- */
 
@@ -23,6 +29,7 @@ const ComponentKind = {
 	button: "Button",
 	slider: "Slider",
 	switch: "Switch",
+	liquid: "Liquid",
 } as const;
 
 type ComponentKindValue = (typeof ComponentKind)[keyof typeof ComponentKind];
@@ -64,6 +71,11 @@ export default function SolariumDebugLibrary() {
 			kind: ComponentKind.slider,
 			name: "Sliders",
 			Component: ValueSliderShowcase,
+		},
+		{
+			kind: ComponentKind.liquid,
+			name: "Liquid Effect",
+			Component: LiquidShowcase,
 		},
 		{
 			kind: ComponentKind.switch,
@@ -166,6 +178,24 @@ function ButtonShowcase() {
 			<button class="rounded-xl px-4 py-2 bg-orange-500/90 text-white hover:bg-orange-500">
 				Warning
 			</button>
+		</div>
+	);
+}
+
+function LiquidShowcase() {
+	return (
+		<div class="flex gap-2">
+			<SolariumPopover>
+				<SolariumPopoverTrigger>
+					<button class="px-5 py-3 apple-glass rounded-full hover:bg-white/10 transition-colors ease-in-out duration-200">
+						More…
+					</button>
+				</SolariumPopoverTrigger>
+
+				<SolariumPopoverContent>
+					<div class="flex apple-glass rounded-2xl flex-col p-10">Items</div>
+				</SolariumPopoverContent>
+			</SolariumPopover>
 		</div>
 	);
 }
