@@ -65,7 +65,7 @@ function Inner() {
 			class="flex items-center justify-center gap-2 h-15 m-10 mb-18 size-fit"
 		>
 			<div
-				class="recording-controls gap apple-glass h-11 aspect-square rounded-full inline-flex items-center justify-center hover:bg-blue-4/30"
+				class="recording-controls gap apple-glass-media-controls h-11 aspect-square rounded-full inline-flex items-center justify-center hover:bg-blue-4/30"
 				onClick={() => webview.close()}
 			>
 				<IconCapX class="apple-vibrancy-fill size-3 pointer-events-none" />
@@ -73,7 +73,7 @@ function Inner() {
 			<div class="relative size-fit">
 				<div
 					data-tauri-drag-region
-					class="absolute rounded-full w-fit z-50 apple-glass p-1 -ml-2.5 -mt-0.5"
+					class="absolute rounded-full w-fit z-50 apple-glass-media-controls p-1 -ml-2.5 -mt-0.5"
 					onClick={() => commands.showWindow("ModeSelect")}
 				>
 					<IconCapInfo class="invert transition-opacity duration-200 cursor-pointer size-3 dark:invert-0 group-hover:opacity-50 apple-vibrancy-fill" />
@@ -81,26 +81,26 @@ function Inner() {
 
 				<div
 					data-tauri-drag-region
-					class="recording-controls gap apple-glass h-14 rounded-full inline-flex items-center justify-center"
+					class="recording-controls gap apple-glass-media-controls h-14 rounded-full inline-flex items-center justify-center"
 				>
 					<Mode />
 				</div>
 			</div>
 			<div
 				data-tauri-drag-region
-				class="recording-controls gap apple-glass h-14 rounded-full inline-flex items-center justify-center"
+				class="recording-controls gap apple-glass-media-controls h-14 rounded-full inline-flex items-center justify-center"
 			>
 				<TargetSelectMode />
 			</div>
 			<div
 				data-tauri-drag-region
-				class="recording-controls gap apple-glass h-14 rounded-full inline-flex items-center justify-center"
+				class="recording-controls gap apple-glass-media-controls h-14 rounded-full inline-flex items-center justify-center"
 			>
 				<RecordingInputs />
 			</div>
 			<div
 				data-tauri-drag-region
-				class="recording-controls gap apple-glass h-11 rounded-full inline-flex items-center justify-center"
+				class="recording-controls gap apple-glass-media-controls h-11 rounded-full inline-flex items-center justify-center"
 			>
 				<OptionsGroup />
 			</div>
@@ -171,7 +171,7 @@ function OptionsGroup() {
 			>
 				<div class="absolute">
 					<IconLucideCog class="invert size-5.5 dark:invert-0 pointer-events-none apple-vibrancy-fill" />
-					{/*<div class="absolute -bottom-2 -right-2 rounded-full apple-glass size-5 text-xs flex items-center justify-center brightness-80">3s</div>*/}
+					{/*<div class="absolute -bottom-2 -right-2 rounded-full apple-glass-media-controls size-5 text-xs flex items-center justify-center brightness-80">3s</div>*/}
 				</div>
 			</button>
 		</div>

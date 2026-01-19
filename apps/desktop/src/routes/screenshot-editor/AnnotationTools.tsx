@@ -11,25 +11,8 @@ import IconLucideType from "~icons/lucide/type";
 import { type AnnotationType, useScreenshotEditorContext } from "./context";
 
 export function AnnotationTools() {
-	const { layersPanelOpen, setLayersPanelOpen } = useScreenshotEditorContext();
-
 	return (
-		<div class="flex items-center gap-1">
-			<Tooltip content="Layers" kbd={["L"]}>
-				<button
-					type="button"
-					onClick={() => setLayersPanelOpen(!layersPanelOpen())}
-					class={cx(
-						"flex items-center justify-center rounded-[0.5rem] transition-all size-8",
-						layersPanelOpen()
-							? "bg-blue-3 text-blue-11"
-							: "bg-transparent hover:bg-gray-3 text-gray-11",
-					)}
-				>
-					<IconLucideLayers class="size-4" />
-				</button>
-			</Tooltip>
-			<div class="w-px h-4 bg-gray-4 mx-1" />
+		<div class="flex items-center gap-1 rounded-full apple-glass px-1 py-1">
 			<ToolButton
 				tool="select"
 				icon={IconLucideMousePointer2}
@@ -87,10 +70,10 @@ function ToolButton(props: {
 					}
 				}}
 				class={cx(
-					"flex items-center justify-center rounded-lg transition-all size-8",
+					"flex items-center justify-center rounded-full transition-all size-8",
 					activeTool() === props.tool
-						? "bg-blue-3 text-blue-11"
-						: "bg-transparent hover:bg-gray-3 text-gray-11",
+						? "bg-blue-3/30n backdrop-brightness-125 text-blue-11 *:apple-vibrancy-fill"
+						: "bg-transparent hover:bg-gray-3/50 apple-vibrancy-fill text-gray-11",
 				)}
 			>
 				<props.icon class="size-4" />

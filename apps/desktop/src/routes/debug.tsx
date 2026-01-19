@@ -90,7 +90,7 @@ export default function Debug() {
 						);
 						createSolariumWindow({
 							label: "solarium-cap-main",
-							title: "Recording Controls",
+							title: "Cap",
 							url: "/solarium-cap-main",
 							hiddenTitle: true,
 							titleBarStyle: "overlay",

@@ -163,11 +163,41 @@ function ShowcaseCard(props: ParentProps<{ title: string }>) {
 function ButtonShowcase() {
 	return (
 		<div class="flex flex-wrap items-center justify-center gap-2">
-			<button class="rounded-xl px-4 py-2 bg-white/90 text-black hover:bg-white">
-				Primary
+			<button
+				class="rounded-xl px-4 py-2 bg-white/90 text-black hover:bg-white"
+				onClick={() =>
+					createSolariumWindow({
+						decorations: false,
+						shadow: false,
+						label: "recording-controls-solarium",
+						title: "Recording Controls",
+						url: "/solarium-recording-controls",
+						transparent: true,
+					})
+				}
+			>
+				Recording Controls
 			</button>
-			<button class="rounded-xl px-4 py-2 bg-green-500/90 text-white hover:bg-green-500">
-				Success
+			<button
+				class="rounded-xl px-4 py-2 bg-green-500/90 text-white hover:bg-green-500"
+				onClick={() =>
+					createSolariumWindow({
+						label: "solarium-cap-main",
+						title: "Cap",
+						url: "/solarium-cap-main",
+						hiddenTitle: true,
+						titleBarStyle: "overlay",
+						resizable: false,
+						alwaysOnTop: true,
+						// windowEffects: {
+						// 	effects: [Effect.UnderWindowBackground, Effect.Mica],
+						// 	state: EffectState.Active,
+						// },
+						transparent: true,
+					})
+				}
+			>
+				Cap Solarium Main
 			</button>
 			<button class="rounded-xl px-4 py-2 bg-blue-9/90 text-white hover:bg-blue-9">
 				Info

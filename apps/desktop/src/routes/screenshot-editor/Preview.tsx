@@ -175,22 +175,22 @@ export function Preview(props: { zoom: number; setZoom: (z: number) => void }) {
 	});
 
 	return (
-		<div class="flex flex-col flex-1 overflow-hidden bg-gray-1 dark:bg-gray-2">
+		<div class="flex flex-col flex-1 overflow-hidden ">
 			{/* Preview Area */}
 			<div
 				ref={setCanvasContainerRef}
 				class="flex-1 relative flex items-center justify-center overflow-hidden outline-none"
-				style={gridStyle}
+				// style={gridStyle}
 				onWheel={handleWheel}
 				onMouseDown={handleMiddleMouseDown}
 			>
-				<div class="absolute left-4 bottom-4 z-10 flex items-center gap-2 bg-gray-1 dark:bg-gray-3 rounded-lg shadow-sm p-1 border border-gray-4">
+				<div class="absolute left-2 bottom-2 z-10 flex items-center gap-2 rounded-full apple-glass p-1">
 					<EditorButton
 						tooltipText="Zoom Out"
 						kbd={["meta", "-"]}
 						onClick={zoomOut}
 					>
-						<IconCapZoomOut class="size-4" />
+						<IconCapZoomOut class="size-4 apple-vibrancy-fill" />
 					</EditorButton>
 					<Slider
 						class="w-20"
@@ -206,7 +206,7 @@ export function Preview(props: { zoom: number; setZoom: (z: number) => void }) {
 						kbd={["meta", "+"]}
 						onClick={zoomIn}
 					>
-						<IconCapZoomIn class="size-4" />
+						<IconCapZoomIn class="size-4 apple-vibrancy-fill" />
 					</EditorButton>
 				</div>
 				<Show
@@ -480,7 +480,7 @@ export function Preview(props: { zoom: number; setZoom: (z: number) => void }) {
 						createEffect(renderMaskOverlays);
 
 						return (
-							<div class="flex overflow-hidden absolute inset-0 justify-center items-center h-full">
+							<div class="flex overflow-hidden absolute inset-0 justify-center items-center h-full pt-20 fade-mask fade-top-12">
 								<div
 									class="absolute inset-0 z-0"
 									style={{

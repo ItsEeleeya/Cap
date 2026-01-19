@@ -197,8 +197,8 @@ export function LayersPanel() {
 	);
 
 	return (
-		<div class="flex flex-col h-full w-56 border-r border-gray-3 bg-gray-1 dark:bg-gray-2 select-none z-20">
-			<div class="flex items-center justify-between px-3 h-10 border-b border-gray-3">
+		<div class="fixed right-0 top-0 flex flex-col h-full w-56 select-none z-20 pt-13 apple-glass">
+			<div class="flex items-center justify-between px-3 h-10">
 				<div class="flex items-center gap-2 text-sm font-medium text-gray-12">
 					<IconLucideLayers class="size-4" />
 					<span>Layers</span>
@@ -208,7 +208,7 @@ export function LayersPanel() {
 					onClick={() => setLayersPanelOpen(false)}
 					class="p-1 rounded hover:bg-gray-3 text-gray-11 hover:text-gray-12 transition-colors"
 				>
-					<IconLucideX class="size-4" />
+					{/*<IconLucideX class="size-4" />*/}
 				</button>
 			</div>
 

@@ -36,7 +36,7 @@ export function ProgressiveBlur(props: ProgressiveBlurProps) {
 		"gradient-blur pointer-events-none absolute inset-x-0",
 		className,
 		position === "top"
-			? "top-0"
+			? "-top-0.5"
 			: position === "bottom"
 				? "bottom-0"
 				: "inset-y-0",

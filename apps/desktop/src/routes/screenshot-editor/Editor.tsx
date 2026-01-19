@@ -22,6 +22,7 @@ import {
 	createCropOptionsMenuItems,
 	type Ratio,
 } from "~/components/Cropper";
+import { ProgressiveBlur } from "~/components/ProgressiveMask";
 import { composeEventHandlers } from "~/utils/composeEventHandlers";
 import IconCapCircleX from "~icons/cap/circle-x";
 import IconLucideMaximize from "~icons/lucide/maximize";
@@ -135,7 +136,7 @@ export function Editor() {
 
 	return (
 		<Show when={isRenderReady()} fallback={<ScreenshotEditorSkeleton />}>
-			<div class="relative">
+			<div class="relative z-50">
 				<Header />
 				<AnnotationConfigBar />
 			</div>
@@ -143,15 +144,16 @@ export function Editor() {
 				class="flex overflow-y-hidden flex-1 gap-0 pb-0 w-full min-h-0 leading-5 animate-in fade-in"
 				data-tauri-drag-region
 			>
-				<Show when={layersPanelOpen()}>
-					<LayersPanel />
-				</Show>
+				<ProgressiveBlur position="top" height="10%" blur="sm" />
 				<div class="flex overflow-hidden flex-col flex-1 min-h-0">
 					<div class="flex overflow-y-hidden flex-row flex-1 min-h-0">
 						<Preview zoom={zoom()} setZoom={setZoom} />
 					</div>
 				</div>
 				<Dialogs />
+				<Show when={layersPanelOpen()}>
+					<LayersPanel />
+				</Show>
 			</div>
 		</Show>
 	);

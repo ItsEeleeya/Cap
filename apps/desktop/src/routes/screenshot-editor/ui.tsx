@@ -312,6 +312,7 @@ const editorButtonStyles = cva(
 	{
 		variants: {
 			variant: {
+				glass: "apple-glass rounded-full",
 				primary:
 					"text-gray-12 enabled:hover:ui-not-pressed:bg-gray-3 data-expanded:bg-gray-3 outline-blue-300 focus:bg-transparent",
 				danger:
