@@ -34,7 +34,6 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { generateAiMetadata } from "@/actions/videos/generate-ai-metadata";
 import { getVideoAnalytics } from "@/actions/videos/get-analytics";
 import {
 	getDashboardData,
@@ -408,6 +407,7 @@ async function AuthorizedContent({
 		.select({
 			email: users.email,
 			stripeSubscriptionStatus: users.stripeSubscriptionStatus,
+			thirdPartyStripeSubscriptionId: users.thirdPartyStripeSubscriptionId,
 		})
 		.from(users)
 		.where(eq(users.id, video.owner.id))
@@ -452,104 +452,31 @@ async function AuthorizedContent({
 
 	if (
 		video.transcriptionStatus !== "COMPLETE" &&
-		video.transcriptionStatus !== "PROCESSING"
+		video.transcriptionStatus !== "PROCESSING" &&
+		video.transcriptionStatus !== "SKIPPED" &&
+		video.transcriptionStatus !== "NO_AUDIO"
 	) {
 		console.log("[ShareVideoPage] Starting transcription for video:", videoId);
-		await transcribeVideo(videoId, video.owner.id, aiGenerationEnabled);
-
-		const updatedVideoQuery = await db()
-			.select({
-				id: videos.id,
-				name: videos.name,
-				createdAt: videos.createdAt,
-				updatedAt: videos.updatedAt,
-				effectiveCreatedAt: videos.effectiveCreatedAt,
-				bucket: videos.bucket,
-				metadata: videos.metadata,
-				public: videos.public,
-				videoStartTime: videos.videoStartTime,
-				audioStartTime: videos.audioStartTime,
-				xStreamInfo: videos.xStreamInfo,
-				jobId: videos.jobId,
-				jobStatus: videos.jobStatus,
-				isScreenshot: videos.isScreenshot,
-				skipProcessing: videos.skipProcessing,
-				transcriptionStatus: videos.transcriptionStatus,
-				source: videos.source,
-				sharedOrganization: {
-					organizationId: sharedVideos.organizationId,
-				},
-				orgSettings: organizations.settings,
-				videoSettings: videos.settings,
-			})
-			.from(videos)
-			.leftJoin(sharedVideos, eq(videos.id, sharedVideos.videoId))
-			.innerJoin(users, eq(videos.ownerId, users.id))
-			.leftJoin(organizations, eq(videos.orgId, organizations.id))
-			.where(eq(videos.id, videoId))
-			.execute();
-
-		if (updatedVideoQuery[0]) {
-			Object.assign(video, updatedVideoQuery[0]);
-			console.log(
-				"[ShareVideoPage] Updated transcription status:",
-				video.transcriptionStatus,
-			);
-		}
+		transcribeVideo(videoId, video.owner.id, aiGenerationEnabled).catch(
+			(error) => {
+				console.error(
+					`[ShareVideoPage] Error transcribing video ${videoId}:`,
+					error,
+				);
+			},
+		);
 	}
 
 	const currentMetadata = (video.metadata as VideoMetadata) || {};
 	const metadata = currentMetadata;
-	let initialAiData = null;
+	const aiGenerationStatus = metadata.aiGenerationStatus || null;
 
-	if (metadata.summary || metadata.chapters || metadata.aiTitle) {
-		initialAiData = {
-			title: metadata.aiTitle || null,
-			summary: metadata.summary || null,
-			chapters: metadata.chapters || null,
-			processing: metadata.aiProcessing || false,
-			generationSkipped: metadata.aiGenerationSkipped || false,
-		};
-	} else if (metadata.aiProcessing) {
-		initialAiData = {
-			title: null,
-			summary: null,
-			chapters: null,
-			processing: true,
-			generationSkipped: false,
-		};
-	} else if (metadata.aiGenerationSkipped) {
-		initialAiData = {
-			title: null,
-			summary: null,
-			chapters: null,
-			processing: false,
-			generationSkipped: true,
-		};
-	}
-
-	if (
-		video.transcriptionStatus === "COMPLETE" &&
-		!currentMetadata.aiProcessing &&
-		!currentMetadata.aiGenerationSkipped &&
-		!currentMetadata.summary &&
-		!currentMetadata.chapters &&
-		aiGenerationEnabled
-	) {
-		try {
-			generateAiMetadata(videoId, video.owner.id).catch((error) => {
-				console.error(
-					`[ShareVideoPage] Error generating AI metadata for video ${videoId}:`,
-					error,
-				);
-			});
-		} catch (error) {
-			console.error(
-				`[ShareVideoPage] Error starting AI metadata generation for video ${videoId}:`,
-				error,
-			);
-		}
-	}
+	const initialAiData = {
+		title: metadata.aiTitle || null,
+		summary: metadata.summary || null,
+		chapters: metadata.chapters || null,
+		aiGenerationStatus,
+	};
 
 	const customDomainPromise = (async () => {
 		if (!user) {

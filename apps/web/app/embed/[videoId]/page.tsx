@@ -210,6 +210,7 @@ async function EmbedContent({
 		.select({
 			email: users.email,
 			stripeSubscriptionStatus: users.stripeSubscriptionStatus,
+			thirdPartyStripeSubscriptionId: users.thirdPartyStripeSubscriptionId,
 		})
 		.from(users)
 		.where(eq(users.id, video.ownerId))
@@ -250,7 +251,9 @@ async function EmbedContent({
 
 	if (
 		video.transcriptionStatus !== "COMPLETE" &&
-		video.transcriptionStatus !== "PROCESSING"
+		video.transcriptionStatus !== "PROCESSING" &&
+		video.transcriptionStatus !== "SKIPPED" &&
+		video.transcriptionStatus !== "NO_AUDIO"
 	) {
 		transcribeVideo(video.id, video.ownerId, aiGenerationEnabled);
 	}
@@ -267,14 +270,6 @@ async function EmbedContent({
 			title: currentMetadata.aiTitle || null,
 			summary: currentMetadata.summary || null,
 			chapters: currentMetadata.chapters || null,
-			processing: currentMetadata.aiProcessing || false,
-		};
-	} else if (currentMetadata.aiProcessing) {
-		initialAiData = {
-			title: null,
-			summary: null,
-			chapters: null,
-			processing: true,
 		};
 	}
 
@@ -317,7 +312,6 @@ async function EmbedContent({
 			user={user}
 			comments={commentsQuery}
 			chapters={initialAiData?.chapters || []}
-			aiProcessing={initialAiData?.processing || false}
 			ownerName={videoOwner[0]?.name || null}
 			autoplay={autoplay}
 		/>

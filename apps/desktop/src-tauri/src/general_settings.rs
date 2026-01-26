@@ -31,6 +31,15 @@ pub enum PostDeletionBehaviour {
     ReopenRecordingWindow,
 }
 
+#[derive(Default, Serialize, Deserialize, Type, Debug, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorPreviewQuality {
+    Quarter,
+    #[default]
+    Half,
+    Full,
+}
+
 impl MainWindowRecordingStartBehaviour {
     pub fn perform(&self, window: &tauri::WebviewWindow) -> tauri::Result<()> {
         match self {
@@ -131,6 +140,8 @@ pub struct GeneralSettingsStore {
     pub experimental_use_solarium_like: bool,
     #[serde(default = "default_max_fps")]
     pub max_fps: u32,
+    #[serde(default)]
+    pub editor_preview_quality: EditorPreviewQuality,
 }
 
 fn default_enable_native_camera_preview() -> bool {
@@ -199,6 +210,7 @@ impl Default for GeneralSettingsStore {
             use_solarium_glass: true,
             experimental_use_solarium_like: false,
             max_fps: 60,
+            editor_preview_quality: EditorPreviewQuality::Half,
         }
     }
 }

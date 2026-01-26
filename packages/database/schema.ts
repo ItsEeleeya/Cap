@@ -312,7 +312,7 @@ export const videos = mysqlTable(
 			disableComments?: boolean;
 		}>(),
 		transcriptionStatus: varchar("transcriptionStatus", { length: 255 }).$type<
-			"PROCESSING" | "COMPLETE" | "ERROR" | "SKIPPED"
+			"PROCESSING" | "COMPLETE" | "ERROR" | "SKIPPED" | "NO_AUDIO"
 		>(),
 		source: json("source")
 			.$type<
@@ -751,6 +751,16 @@ export const videoUploads = mysqlTable("video_uploads", {
 	startedAt: timestamp("started_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 	mode: varchar("mode", { length: 255, enum: ["singlepart", "multipart"] }),
+	phase: varchar("phase", { length: 32 })
+		.$type<
+			"uploading" | "processing" | "generating_thumbnail" | "complete" | "error"
+		>()
+		.notNull()
+		.default("uploading"),
+	processingProgress: int("processing_progress").notNull().default(0),
+	processingMessage: varchar("processing_message", { length: 255 }),
+	processingError: text("processing_error"),
+	rawFileKey: varchar("raw_file_key", { length: 512 }),
 });
 
 export const importedVideos = mysqlTable(

@@ -5,8 +5,7 @@ use std::{
 
 use cap_enc_ffmpeg::remux::{
     concatenate_audio_to_ogg, concatenate_m4s_segments_with_init, concatenate_video_fragments,
-    get_media_duration, get_video_fps, probe_m4s_can_decode_with_init, probe_media_valid,
-    probe_video_can_decode,
+    get_media_duration, get_video_fps, probe_media_valid, probe_video_can_decode,
 };
 use cap_project::{
     AudioMeta, Cursors, MultipleSegment, MultipleSegments, ProjectConfiguration, RecordingMeta,
@@ -69,6 +68,26 @@ pub enum RecoveryError {
 pub struct RecoveryManager;
 
 impl RecoveryManager {
+    pub fn find_incomplete_single(project_path: &Path) -> Option<IncompleteRecording> {
+        if !project_path.is_dir() {
+            return None;
+        }
+
+        if !project_path.join("recording-meta.json").exists() {
+            return None;
+        }
+
+        let meta = RecordingMeta::load_for_project(project_path).ok()?;
+
+        if let Some(studio_meta) = meta.studio_meta()
+            && Self::should_check_for_recovery(&studio_meta.status())
+        {
+            Self::analyze_incomplete(project_path, &meta)
+        } else {
+            None
+        }
+    }
+
     pub fn find_incomplete(recordings_dir: &Path) -> Vec<IncompleteRecording> {
         let mut incomplete = Vec::new();
 
@@ -298,25 +317,8 @@ impl RecoveryManager {
                         }
 
                         if Self::is_video_file(&path) {
-                            if let Some(init_path) = &init_segment {
-                                match probe_m4s_can_decode_with_init(init_path, &path) {
-                                    Ok(true) => Some(path),
-                                    Ok(false) => {
-                                        warn!(
-                                            "M4S segment {} has no decodable frames (with init)",
-                                            path.display()
-                                        );
-                                        None
-                                    }
-                                    Err(e) => {
-                                        warn!(
-                                            "M4S segment {} validation failed: {}",
-                                            path.display(),
-                                            e
-                                        );
-                                        None
-                                    }
-                                }
+                            if init_segment.is_some() {
+                                Some(path)
                             } else {
                                 match probe_video_can_decode(&path) {
                                     Ok(true) => Some(path),
@@ -822,35 +824,49 @@ impl RecoveryManager {
                     } else {
                         None
                     },
-                    mic: if mic_path.exists() {
-                        Some(AudioMeta {
-                            path: RelativePathBuf::from(format!("{segment_base}/audio-input.ogg")),
-                            start_time: get_start_time_or_fallback(
-                                original_segment
+                    mic: {
+                        let mic_size = std::fs::metadata(&mic_path).map(|m| m.len()).unwrap_or(0);
+                        const MIN_VALID_AUDIO_SIZE: u64 = 500;
+                        if mic_path.exists() && mic_size > MIN_VALID_AUDIO_SIZE {
+                            Some(AudioMeta {
+                                path: RelativePathBuf::from(format!(
+                                    "{segment_base}/audio-input.ogg"
+                                )),
+                                start_time: get_start_time_or_fallback(
+                                    original_segment
+                                        .and_then(|s| s.mic.as_ref())
+                                        .and_then(|m| m.start_time),
+                                ),
+                                device_id: original_segment
                                     .and_then(|s| s.mic.as_ref())
-                                    .and_then(|m| m.start_time),
-                            ),
-                            device_id: original_segment
-                                .and_then(|s| s.mic.as_ref())
-                                .and_then(|m| m.device_id.clone()),
-                        })
-                    } else {
-                        None
+                                    .and_then(|m| m.device_id.clone()),
+                            })
+                        } else {
+                            None
+                        }
                     },
-                    system_audio: if system_audio_path.exists() {
-                        Some(AudioMeta {
-                            path: RelativePathBuf::from(format!("{segment_base}/system_audio.ogg")),
-                            start_time: get_start_time_or_fallback(
-                                original_segment
+                    system_audio: {
+                        let file_size = std::fs::metadata(&system_audio_path)
+                            .map(|m| m.len())
+                            .unwrap_or(0);
+                        const MIN_VALID_AUDIO_SIZE: u64 = 500;
+                        if system_audio_path.exists() && file_size > MIN_VALID_AUDIO_SIZE {
+                            Some(AudioMeta {
+                                path: RelativePathBuf::from(format!(
+                                    "{segment_base}/system_audio.ogg"
+                                )),
+                                start_time: get_start_time_or_fallback(
+                                    original_segment
+                                        .and_then(|s| s.system_audio.as_ref())
+                                        .and_then(|a| a.start_time),
+                                ),
+                                device_id: original_segment
                                     .and_then(|s| s.system_audio.as_ref())
-                                    .and_then(|a| a.start_time),
-                            ),
-                            device_id: original_segment
-                                .and_then(|s| s.system_audio.as_ref())
-                                .and_then(|a| a.device_id.clone()),
-                        })
-                    } else {
-                        None
+                                    .and_then(|a| a.device_id.clone()),
+                            })
+                        } else {
+                            None
+                        }
                     },
                     cursor: if cursor_path.exists() {
                         Some(RelativePathBuf::from(format!("{segment_base}/cursor.json")))

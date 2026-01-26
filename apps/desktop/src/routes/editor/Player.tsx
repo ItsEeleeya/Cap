@@ -2,6 +2,7 @@ import { Select as KSelect } from "@kobalte/core/select";
 import { ToggleButton as KToggleButton } from "@kobalte/core/toggle-button";
 import { createElementBounds } from "@solid-primitives/bounds";
 import { debounce } from "@solid-primitives/scheduled";
+import { Menu } from "@tauri-apps/api/menu";
 import { cx } from "cva";
 import { createEffect, createSignal, onMount, Show } from "solid-js";
 
@@ -10,13 +11,14 @@ import { captionsStore } from "~/store/captions";
 import { commands } from "~/utils/tauri";
 import AspectRatioSelect from "./AspectRatioSelect";
 import {
+	type EditorPreviewQuality,
 	FPS,
-	type PreviewQuality,
 	serializeProjectConfiguration,
 	useEditorContext,
 } from "./context";
 import { preloadCropVideoFull } from "./cropVideoPreloader";
 import { MaskOverlay } from "./MaskOverlay";
+import { PerformanceOverlay } from "./PerformanceOverlay";
 import { TextOverlay } from "./TextOverlay";
 import {
 	EditorButton,
@@ -45,9 +47,9 @@ export function PlayerContent() {
 	} = useEditorContext();
 
 	const previewOptions = [
-		{ label: "Full", value: "full" as PreviewQuality },
-		{ label: "Half", value: "half" as PreviewQuality },
-		{ label: "Quarter", value: "quarter" as PreviewQuality },
+		{ label: "Full", value: "full" as EditorPreviewQuality },
+		{ label: "Half", value: "half" as EditorPreviewQuality },
+		{ label: "Quarter", value: "quarter" as EditorPreviewQuality },
 	];
 
 	// Load captions on mount
@@ -73,22 +75,7 @@ export function PlayerContent() {
 							end: segment.end,
 							text: segment.text,
 						})),
-						settings: {
-							enabled: captionsStore.state.settings.enabled,
-							font: captionsStore.state.settings.font,
-							size: captionsStore.state.settings.size,
-							color: captionsStore.state.settings.color,
-							backgroundColor: captionsStore.state.settings.backgroundColor,
-							backgroundOpacity: captionsStore.state.settings.backgroundOpacity,
-							position: captionsStore.state.settings.position,
-							italic: captionsStore.state.settings.italic,
-							outline: captionsStore.state.settings.outline,
-							outlineColor: captionsStore.state.settings.outlineColor,
-							exportWithSubtitles:
-								captionsStore.state.settings.exportWithSubtitles,
-							highlightColor: captionsStore.state.settings.highlightColor,
-							fadeDuration: captionsStore.state.settings.fadeDuration,
-						},
+						settings: { ...captionsStore.state.settings },
 					};
 
 					// Update the project with captions data
@@ -141,7 +128,7 @@ export function PlayerContent() {
 		setEditorState("playing", false);
 	};
 
-	const handlePreviewQualityChange = async (quality: PreviewQuality) => {
+	const handlePreviewQualityChange = async (quality: EditorPreviewQuality) => {
 		if (quality === previewQuality()) return;
 
 		const wasPlaying = editorState.playing;
@@ -266,7 +253,7 @@ export function PlayerContent() {
 				</div>
 				<div class="flex items-center gap-2">
 					<span class="text-xs font-medium text-gray-11">Preview quality</span>
-					<KSelect<{ label: string; value: PreviewQuality }>
+					<KSelect<{ label: string; value: EditorPreviewQuality }>
 						options={previewOptions}
 						optionValue="value"
 						optionTextValue="label"
@@ -294,7 +281,7 @@ export function PlayerContent() {
 						<KSelect.Trigger class="flex items-center gap-2 h-9 px-3 rounded-lg border border-gray-3 bg-gray-2 dark:bg-gray-3 text-sm text-gray-12">
 							<KSelect.Value<{
 								label: string;
-								value: PreviewQuality;
+								value: EditorPreviewQuality;
 							}> class="flex-1 text-left truncate">
 								{(state) =>
 									state.selectedOption()?.label ?? "Select preview quality"
@@ -457,11 +444,29 @@ const gridStyle = {
 };
 
 function PreviewCanvas() {
-	const { latestFrame, canvasControls } = useEditorContext();
+	const { latestFrame, canvasControls, performanceMode, setPerformanceMode } =
+		useEditorContext();
 
 	const hasRenderedFrame = () => canvasControls()?.hasRenderedFrame() ?? false;
 
-	const canvasTransferredRef = { current: false };
+	const handleContextMenu = async (e: MouseEvent) => {
+		e.preventDefault();
+		const menu = await Menu.new({
+			items: [
+				{
+					id: "performance-mode",
+					text: performanceMode() ? "✓ Performance Mode" : "Performance Mode",
+					action: () => setPerformanceMode(!performanceMode()),
+				},
+			],
+		});
+		menu.popup();
+	};
+
+	const canvasInitializedRef = { current: false };
+	const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | null>(
+		null,
+	);
 
 	const [canvasContainerRef, setCanvasContainerRef] =
 		createSignal<HTMLDivElement>();
@@ -487,103 +492,101 @@ function PreviewCanvas() {
 		}
 	});
 
-	const isWindows = navigator.userAgent.includes("Windows");
-
-	const initCanvas = (canvas: HTMLCanvasElement) => {
-		if (canvasTransferredRef.current) return;
+	createEffect(() => {
+		const canvas = canvasRef();
 		const controls = canvasControls();
-		if (!controls) return;
+		console.warn("[Player] Canvas init effect", {
+			hasCanvas: !!canvas,
+			hasControls: !!controls,
+			alreadyInit: canvasInitializedRef.current,
+		});
+		if (canvasInitializedRef.current || !canvas || !controls) return;
 
-		if (isWindows) {
-			controls.initDirectCanvas(canvas);
-			canvasTransferredRef.current = true;
-			return;
-		}
+		console.warn("[Player] Initializing canvas", {
+			canvasId: canvas.id,
+			isConnected: canvas.isConnected,
+		});
+		controls.initDirectCanvas(canvas);
+		canvasInitializedRef.current = true;
+		console.warn("[Player] Canvas initialized successfully");
+	});
 
-		try {
-			const offscreen = canvas.transferControlToOffscreen();
-			controls.initCanvas(offscreen);
-			canvasTransferredRef.current = true;
-		} catch (e) {
-			console.error("[PreviewCanvas] Failed to transfer canvas:", e);
-		}
+	const padding = 4;
+	const frameWidth = () => latestFrame()?.width ?? 1920;
+	const frameHeight = () => latestFrame()?.height ?? 1080;
+
+	const availableWidth = () =>
+		Math.max(debouncedBounds().width - padding * 2, 0);
+	const availableHeight = () =>
+		Math.max(debouncedBounds().height - padding * 2, 0);
+
+	const containerAspect = () => {
+		const width = availableWidth();
+		const height = availableHeight();
+		if (width === 0 || height === 0) return 1;
+		return width / height;
 	};
+
+	const frameAspect = () => {
+		const width = frameWidth();
+		const height = frameHeight();
+		if (width === 0 || height === 0) return containerAspect();
+		return width / height;
+	};
+
+	const size = () => {
+		let width: number;
+		let height: number;
+		if (frameAspect() < containerAspect()) {
+			height = availableHeight();
+			width = height * frameAspect();
+		} else {
+			width = availableWidth();
+			height = width / frameAspect();
+		}
+
+		return { width, height };
+	};
+
+	const hasFrame = () => !!latestFrame();
 
 	return (
 		<div
 			ref={setCanvasContainerRef}
 			class="relative flex-1 justify-center items-center"
 			style={{ contain: "layout style" }}
+			onContextMenu={handleContextMenu}
 		>
-			<Show when={latestFrame()}>
-				{(currentFrame) => {
-					const padding = 4;
-					const frameWidth = () => currentFrame().width;
-					const frameHeight = () => currentFrame().height;
-
-					const availableWidth = () =>
-						Math.max(debouncedBounds().width - padding * 2, 0);
-					const availableHeight = () =>
-						Math.max(debouncedBounds().height - padding * 2, 0);
-
-					const containerAspect = () => {
-						const width = availableWidth();
-						const height = availableHeight();
-						if (width === 0 || height === 0) return 1;
-						return width / height;
-					};
-
-					const frameAspect = () => {
-						const width = frameWidth();
-						const height = frameHeight();
-						if (width === 0 || height === 0) return containerAspect();
-						return width / height;
-					};
-
-					const size = () => {
-						let width: number;
-						let height: number;
-						if (frameAspect() < containerAspect()) {
-							height = availableHeight();
-							width = height * frameAspect();
-						} else {
-							width = availableWidth();
-							height = width / frameAspect();
-						}
-
-						return { width, height };
-					};
-
-					return (
-						<div class="flex overflow-hidden absolute inset-0 justify-center items-center h-full">
-							<div
-								class="relative"
-								style={{
-									width: `${size().width}px`,
-									height: `${size().height}px`,
-									contain: "strict",
-								}}
-							>
-								<canvas
-									style={{
-										width: `${size().width}px`,
-										height: `${size().height}px`,
-										"image-rendering": "auto",
-										"background-color": "#000000",
-										...(hasRenderedFrame() ? gridStyle : {}),
-									}}
-									ref={initCanvas}
-									id="canvas"
-									width={frameWidth()}
-									height={frameHeight()}
-								/>
-								<MaskOverlay size={size()} />
-								<TextOverlay size={size()} />
-							</div>
-						</div>
-					);
-				}}
-			</Show>
+			<div
+				class="flex overflow-hidden absolute inset-0 justify-center items-center h-full"
+				style={{ visibility: hasFrame() ? "visible" : "hidden" }}
+			>
+				<div
+					class="relative"
+					style={{
+						width: `${size().width}px`,
+						height: `${size().height}px`,
+						contain: "strict",
+					}}
+				>
+					<canvas
+						style={{
+							width: `${size().width}px`,
+							height: `${size().height}px`,
+							"image-rendering": "auto",
+							"background-color": "#000000",
+							...(hasRenderedFrame() ? gridStyle : {}),
+						}}
+						ref={setCanvasRef}
+						id="canvas"
+					/>
+					<Show when={hasFrame()}>
+						<MaskOverlay size={size()} />
+						<TextOverlay size={size()} />
+						<PerformanceOverlay size={size()} />
+					</Show>
+				</div>
+			</div>
 		</div>
 	);
 }

@@ -4,13 +4,14 @@ import { createElementBounds } from "@solid-primitives/bounds";
 import { trackDeep } from "@solid-primitives/deep";
 import { debounce, throttle } from "@solid-primitives/scheduled";
 import { makePersisted } from "@solid-primitives/storage";
-import { createMutation } from "@tanstack/solid-query";
+import { createMutation, createQuery, skipToken } from "@tanstack/solid-query";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { Menu } from "@tauri-apps/api/menu";
 import {
 	createEffect,
 	createMemo,
+	createResource,
 	createSignal,
 	Match,
 	on,
@@ -41,8 +42,10 @@ import {
 	useEditorContext,
 	useEditorInstanceContext,
 } from "./context";
+import { EditorErrorScreen } from "./EditorErrorScreen";
 import { ExportPage } from "./ExportPage";
 import { Header } from "./Header";
+import { ImportProgress } from "./ImportProgress";
 import { PlayerContent } from "./Player";
 import { Timeline } from "./Timeline";
 import { Dialog, DialogContent, EditorButton, Input, Subfield } from "./ui";
@@ -54,38 +57,145 @@ const RESIZE_HANDLE_HEIGHT = 8;
 const MIN_PLAYER_HEIGHT = MIN_PLAYER_CONTENT_HEIGHT + RESIZE_HANDLE_HEIGHT;
 
 export function Editor() {
+	const [projectPath] = createResource(() => commands.getEditorProjectPath());
+
+	const rawMetaQuery = createQuery(() => ({
+		queryKey: ["editor", "raw-meta", projectPath()],
+		queryFn: projectPath()
+			? () => commands.getRecordingMetaByPath(projectPath()!)
+			: skipToken,
+		staleTime: Infinity,
+		gcTime: 0,
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
+	}));
+
+	const rawImportStatus = createMemo(() => {
+		const meta = rawMetaQuery.data;
+		if (!meta) return "loading" as const;
+		if (
+			"status" in meta &&
+			meta.status &&
+			typeof meta.status === "object" &&
+			"status" in meta.status &&
+			meta.status.status === "InProgress"
+		) {
+			return "importing" as const;
+		}
+		return "ready" as const;
+	});
+
+	const [lockedToImporting, setLockedToImporting] = createSignal(false);
+
+	createEffect(() => {
+		if (rawImportStatus() === "importing") {
+			setLockedToImporting(true);
+		}
+	});
+
+	const importStatus = () => {
+		if (lockedToImporting()) return "importing" as const;
+		return rawImportStatus();
+	};
+
+	const [importAborted, setImportAborted] = createSignal(false);
+
+	onCleanup(() => {
+		setImportAborted(true);
+	});
+
+	const handleImportComplete = async () => {
+		const path = projectPath();
+		if (!path) return;
+
+		for (let i = 0; i < 20; i++) {
+			if (importAborted()) return;
+			await new Promise((resolve) => setTimeout(resolve, 250));
+			if (importAborted()) return;
+			const ready = await commands.checkImportReady(path);
+			if (ready) {
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+				if (importAborted()) return;
+				window.location.reload();
+				return;
+			}
+		}
+		if (importAborted()) return;
+		console.error("Import verification timed out");
+		window.location.reload();
+	};
+
 	return (
-		<EditorInstanceContextProvider>
-			<Show
-				when={(() => {
-					const ctx = useEditorInstanceContext();
-					const editorInstance = ctx.editorInstance();
+		<Switch
+			fallback={
+				<div class="flex items-center justify-center h-full w-full">
+					<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500" />
+				</div>
+			}
+		>
+			<Match when={importStatus() === "importing" && projectPath()}>
+				<ImportProgress
+					projectPath={projectPath()!}
+					onComplete={handleImportComplete}
+					onError={(error) => console.error("Import failed:", error)}
+				/>
+			</Match>
+			<Match when={importStatus() === "ready" && projectPath()}>
+				<EditorInstanceContextProvider>
+					<EditorContent projectPath={projectPath()!} />
+				</EditorInstanceContextProvider>
+			</Match>
+		</Switch>
+	);
+}
 
-					if (!editorInstance || !ctx.metaQuery.data) return;
+function EditorContent(props: { projectPath: string }) {
+	const ctx = useEditorInstanceContext();
 
-					return {
-						editorInstance,
-						meta() {
-							const d = ctx.metaQuery.data;
-							if (!d)
-								throw new Error(
-									"metaQuery.data is undefined - how did this happen?",
-								);
-							return d;
-						},
-						refetchMeta: async () => {
-							await ctx.metaQuery.refetch();
-						},
-					};
-				})()}
-			>
+	const errorInfo = () => {
+		const error = ctx.editorInstance.error;
+		if (!error) return null;
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		return { error: errorMessage, projectPath: props.projectPath };
+	};
+
+	const readyData = () => {
+		const editorInstance = ctx.editorInstance();
+		if (!editorInstance || !ctx.metaQuery.data) return null;
+
+		return {
+			editorInstance,
+			meta() {
+				const d = ctx.metaQuery.data;
+				if (!d)
+					throw new Error("metaQuery.data is undefined - how did this happen?");
+				return d;
+			},
+			refetchMeta: async () => {
+				await ctx.metaQuery.refetch();
+			},
+		};
+	};
+
+	return (
+		<Switch>
+			<Match when={errorInfo()}>
+				{(info) => (
+					<EditorErrorScreen
+						error={info().error}
+						projectPath={info().projectPath}
+					/>
+				)}
+			</Match>
+			<Match when={readyData()}>
 				{(values) => (
 					<EditorContextProvider {...values()}>
 						<Inner />
 					</EditorContextProvider>
 				)}
-			</Show>
-		</EditorInstanceContextProvider>
+			</Match>
+		</Switch>
 	);
 }
 
@@ -96,12 +206,16 @@ function Inner() {
 		setEditorState,
 		previewResolutionBase,
 		dialog,
-		canvasControls,
 	} = useEditorContext();
 
 	const isExportMode = () => {
 		const d = dialog();
 		return "type" in d && d.type === "export" && d.open;
+	};
+
+	const isCropMode = () => {
+		const d = dialog();
+		return "type" in d && d.type === "crop" && d.open;
 	};
 
 	const [layoutRef, setLayoutRef] = createSignal<HTMLDivElement>();
@@ -206,11 +320,31 @@ function Inner() {
 		}),
 	);
 
+	createEffect(
+		on(isCropMode, (cropMode, prevCropMode) => {
+			if (prevCropMode === true && cropMode === false) {
+				emitRenderFrame(frameNumberToRender());
+			}
+		}),
+	);
+
 	const doConfigUpdate = async (time: number) => {
 		const config = serializeProjectConfiguration(project);
-		await commands.updateProjectConfigInMemory(config);
-		canvasControls()?.resetFrameState();
-		renderFrame(time);
+		const frameNumber = Math.max(Math.floor(time * FPS), 0);
+		const resBase = previewResolutionBase();
+		try {
+			await commands.updateProjectConfigInMemory(
+				config,
+				frameNumber,
+				FPS,
+				resBase,
+			);
+		} catch (e) {
+			console.error(
+				"[Editor] doConfigUpdate - ERROR sending config to Rust:",
+				e,
+			);
+		}
 	};
 	const throttledConfigUpdate = throttle(doConfigUpdate, 1000 / FPS);
 	const trailingConfigUpdate = debounce(doConfigUpdate, 1000 / FPS + 16);
@@ -220,10 +354,13 @@ function Inner() {
 	};
 	createEffect(
 		on(
-			() => trackDeep(project),
 			() => {
-				updateConfigAndRender(editorState.playbackTime);
+				trackDeep(project);
 			},
+			() => {
+				updateConfigAndRender(frameNumberToRender());
+			},
+			{ defer: true },
 		),
 	);
 
@@ -453,17 +590,18 @@ function Dialogs() {
 									string | null
 								>(null);
 
-								const playerCanvas = document.getElementById(
-									"canvas",
-								) as HTMLCanvasElement | null;
-								if (playerCanvas) {
-									playerCanvas.toBlob((blob) => {
-										if (blob) {
-											const url = URL.createObjectURL(blob);
-											setFrameBlobUrl(url);
-										}
-									}, "image/png");
-								}
+								commands
+									.getDisplayFrameForCropping(FPS)
+									.then((pngBytes) => {
+										const blob = new Blob([new Uint8Array(pngBytes)], {
+											type: "image/png",
+										});
+										const url = URL.createObjectURL(blob);
+										setFrameBlobUrl(url);
+									})
+									.catch((error: unknown) => {
+										console.warn("Display frame fetch failed:", error);
+									});
 
 								onCleanup(() => {
 									const url = frameBlobUrl();

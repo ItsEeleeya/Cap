@@ -7,7 +7,7 @@ import {
 	useQuery,
 } from "@tanstack/solid-query";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createEffect, createMemo, onCleanup } from "solid-js";
+import { batch, createEffect, createMemo, onCleanup } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { useRecordingOptions } from "~/routes/(window-chrome)/OptionsContext";
 import {
@@ -21,6 +21,7 @@ import {
 	commands,
 	type DeviceOrModelID,
 	type RecordingMode,
+	type RecordingTargetMode,
 	type ScreenCaptureTarget,
 } from "./tauri";
 import { orgCustomDomainClient, protectedHeaders } from "./web-api";
@@ -146,14 +147,17 @@ export const isSystemAudioSupported = queryOptions({
 	staleTime: Number.POSITIVE_INFINITY, // This won't change during runtime
 });
 
+type CameraCaptureTarget = ScreenCaptureTarget | { variant: "cameraOnly" };
+type ExtendedRecordingTargetMode = RecordingTargetMode | "camera" | null;
+
 export function createOptionsQuery() {
 	const PERSIST_KEY = "recording-options-query-2";
 	const [_state, _setState] = createStore<{
-		captureTarget: ScreenCaptureTarget;
+		captureTarget: CameraCaptureTarget;
 		micName: string | null;
 		mode: RecordingMode;
 		captureSystemAudio?: boolean;
-		targetMode?: "display" | "window" | "area" | null;
+		targetMode?: ExtendedRecordingTargetMode;
 		cameraID?: DeviceOrModelID | null;
 		organizationId?: string | null;
 		/** @deprecated */
@@ -170,15 +174,30 @@ export function createOptionsQuery() {
 		if (e.key === PERSIST_KEY) _setState(JSON.parse(e.newValue ?? "{}"));
 	});
 
+	let initialized = false;
+
+	recordingSettingsStore.get().then((data) => {
+		batch(() => {
+			if (data?.mode && data.mode !== _state.mode) {
+				_setState("mode", data.mode);
+			}
+			initialized = true;
+		});
+	});
+
 	createEffect(() => {
-		recordingSettingsStore.set({
+		const settings = {
 			target: _state.captureTarget,
 			micName: _state.micName,
 			cameraId: _state.cameraID,
 			mode: _state.mode,
 			systemAudio: _state.captureSystemAudio,
 			organizationId: _state.organizationId,
-		});
+		};
+
+		if (initialized) {
+			recordingSettingsStore.set(settings);
+		}
 	});
 
 	const storeListenerCleanup = recordingSettingsStore.listen((data) => {

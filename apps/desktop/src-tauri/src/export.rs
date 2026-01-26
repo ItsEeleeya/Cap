@@ -1,19 +1,31 @@
-use crate::editor_window::WindowEditorInstance;
+use crate::editor_window::{OptionalWindowEditorInstance, WindowEditorInstance};
 use crate::{FramesRendered, get_video_metadata};
 use cap_export::ExporterBase;
 use cap_project::{RecordingMeta, XY};
 use cap_rendering::{
     FrameRenderer, ProjectRecordingsMeta, ProjectUniforms, RenderSegment, RenderVideoConstants,
-    RendererLayers,
+    RendererLayers, ZoomFocusInterpolator, spring_mass_damper::SpringMassDamperSimulationConfig,
 };
 use image::codecs::jpeg::JpegEncoder;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::Ordering},
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use tracing::{info, instrument};
+
+struct ExportActiveGuard<'a>(&'a AtomicBool);
+
+impl Drop for ExportActiveGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+        tracing::info!("Resuming editor preview after export");
+    }
+}
 
 #[derive(Deserialize, Clone, Copy, Debug, Type)]
 #[serde(tag = "format")]
@@ -31,21 +43,17 @@ impl ExportSettings {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
-#[instrument(skip(progress))]
-pub async fn export_video(
-    project_path: PathBuf,
-    progress: tauri::ipc::Channel<FramesRendered>,
-    settings: ExportSettings,
+async fn do_export(
+    project_path: &Path,
+    settings: &ExportSettings,
+    progress: &tauri::ipc::Channel<FramesRendered>,
+    force_ffmpeg: bool,
 ) -> Result<PathBuf, String> {
-    let exporter_base = ExporterBase::builder(project_path)
+    let exporter_base = ExporterBase::builder(project_path.to_path_buf())
+        .with_force_ffmpeg_decoder(force_ffmpeg)
         .build()
         .await
-        .map_err(|e| {
-            sentry::capture_message(&e.to_string(), sentry::Level::Error);
-            e.to_string()
-        })?;
+        .map_err(|e| e.to_string())?;
 
     let total_frames = exporter_base.total_frames(settings.fps());
 
@@ -54,11 +62,11 @@ pub async fn export_video(
         total_frames,
     });
 
-    let output_path = match settings {
-        ExportSettings::Mp4(settings) => {
-            settings
+    match settings {
+        ExportSettings::Mp4(mp4_settings) => {
+            let progress = progress.clone();
+            mp4_settings
                 .export(exporter_base, move |frame_index| {
-                    // Ensure progress never exceeds total frames
                     progress
                         .send(FramesRendered {
                             rendered_count: (frame_index + 1).min(total_frames),
@@ -68,10 +76,10 @@ pub async fn export_video(
                 })
                 .await
         }
-        ExportSettings::Gif(settings) => {
-            settings
+        ExportSettings::Gif(gif_settings) => {
+            let progress = progress.clone();
+            gif_settings
                 .export(exporter_base, move |frame_index| {
-                    // Ensure progress never exceeds total frames
                     progress
                         .send(FramesRendered {
                             rendered_count: (frame_index + 1).min(total_frames),
@@ -82,14 +90,70 @@ pub async fn export_video(
                 .await
         }
     }
-    .map_err(|e| {
-        sentry::capture_message(&e.to_string(), sentry::Level::Error);
-        e.to_string()
-    })?;
+}
 
-    info!("Exported to {} completed", output_path.display());
+fn is_frame_decode_error(error: &str) -> bool {
+    error.contains("Failed to decode video frames")
+        || error.contains("Too many consecutive frame failures")
+}
 
-    Ok(output_path)
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(progress, editor))]
+pub async fn export_video(
+    project_path: PathBuf,
+    progress: tauri::ipc::Channel<FramesRendered>,
+    settings: ExportSettings,
+    editor: OptionalWindowEditorInstance,
+) -> Result<PathBuf, String> {
+    let force_ffmpeg = true;
+    tracing::info!(
+        "Using FFmpeg decoder for export (ensures all frames can be decoded regardless of keyframe positions)"
+    );
+
+    let _guard = if let Some(ref ed) = *editor {
+        ed.export_active.store(true, Ordering::Release);
+        tracing::info!("Pausing editor preview during export");
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        Some(ExportActiveGuard(&ed.export_active))
+    } else {
+        None
+    };
+
+    let result = do_export(&project_path, &settings, &progress, force_ffmpeg).await;
+
+    match result {
+        Ok(path) => {
+            info!("Exported to {} completed", path.display());
+            Ok(path)
+        }
+        Err(e) if !force_ffmpeg && is_frame_decode_error(&e) => {
+            info!(
+                "Export failed with frame decode error, retrying with FFmpeg decoder: {}",
+                e
+            );
+
+            let retry_result = do_export(&project_path, &settings, &progress, true).await;
+
+            match retry_result {
+                Ok(path) => {
+                    info!(
+                        "Export succeeded with FFmpeg decoder fallback: {}",
+                        path.display()
+                    );
+                    Ok(path)
+                }
+                Err(retry_e) => {
+                    sentry::capture_message(&retry_e, sentry::Level::Error);
+                    Err(retry_e)
+                }
+            }
+        }
+        Err(e) => {
+            sentry::capture_message(&e, sentry::Level::Error);
+            Err(e)
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, specta::Type)]
@@ -142,7 +206,7 @@ pub async fn get_export_estimates(
             };
 
             let compression_factor = match mp4_settings.compression {
-                cap_export::mp4::ExportCompression::Minimal => 1.0,
+                cap_export::mp4::ExportCompression::Maximum => 1.0,
                 cap_export::mp4::ExportCompression::Social => 1.1,
                 cap_export::mp4::ExportCompression::Web => 1.15,
                 cap_export::mp4::ExportCompression::Potato => 1.2,
@@ -231,7 +295,7 @@ pub async fn generate_export_preview(
         .map_err(|e| format!("Failed to create render constants: {e}"))?,
     );
 
-    let segments = create_segments(&recording_meta, studio_meta)
+    let segments = create_segments(&recording_meta, studio_meta, false)
         .await
         .map_err(|e| format!("Failed to create segments: {e}"))?;
 
@@ -266,6 +330,25 @@ pub async fn generate_export_preview(
         .ok_or_else(|| "Failed to decode frame".to_string())?;
 
     let frame_number = (frame_time * settings.fps as f64).floor() as u32;
+    let total_duration = project_config
+        .timeline
+        .as_ref()
+        .map(|t| t.duration())
+        .unwrap_or(0.0);
+
+    let cursor_smoothing =
+        (!project_config.cursor.raw).then_some(SpringMassDamperSimulationConfig {
+            tension: project_config.cursor.tension,
+            mass: project_config.cursor.mass,
+            friction: project_config.cursor.friction,
+        });
+
+    let zoom_focus_interpolator = ZoomFocusInterpolator::new(
+        &render_segment.cursor,
+        cursor_smoothing,
+        project_config.screen_movement_spring,
+        total_duration,
+    );
 
     let uniforms = ProjectUniforms::new(
         &render_constants,
@@ -275,6 +358,8 @@ pub async fn generate_export_preview(
         settings.resolution_base,
         &render_segment.cursor,
         &segment_frames,
+        total_duration,
+        &zoom_focus_interpolator,
     );
 
     let mut frame_renderer = FrameRenderer::new(&render_constants);
@@ -357,6 +442,10 @@ pub async fn generate_export_preview_fast(
     use base64::{Engine, engine::general_purpose::STANDARD};
     use std::time::Instant;
 
+    if editor.export_active.load(Ordering::Acquire) {
+        return Err("Export is in progress - preview generation skipped".to_string());
+    }
+
     let project_config = editor.project_config.1.borrow().clone();
 
     let Some((segment_time, segment)) = project_config.get_segment_time(frame_time) else {
@@ -384,6 +473,25 @@ pub async fn generate_export_preview_fast(
     let segment_frames = segment_frames.ok_or_else(|| "Failed to decode frame".to_string())?;
 
     let frame_number = (frame_time * settings.fps as f64).floor() as u32;
+    let total_duration = project_config
+        .timeline
+        .as_ref()
+        .map(|t| t.duration())
+        .unwrap_or(0.0);
+
+    let cursor_smoothing =
+        (!project_config.cursor.raw).then_some(SpringMassDamperSimulationConfig {
+            tension: project_config.cursor.tension,
+            mass: project_config.cursor.mass,
+            friction: project_config.cursor.friction,
+        });
+
+    let zoom_focus_interpolator = ZoomFocusInterpolator::new(
+        &segment_media.cursor,
+        cursor_smoothing,
+        project_config.screen_movement_spring,
+        total_duration,
+    );
 
     let uniforms = ProjectUniforms::new(
         &editor.render_constants,
@@ -393,6 +501,8 @@ pub async fn generate_export_preview_fast(
         settings.resolution_base,
         &segment_media.cursor,
         &segment_frames,
+        total_duration,
+        &zoom_focus_interpolator,
     );
 
     let mut frame_renderer = FrameRenderer::new(&editor.render_constants);

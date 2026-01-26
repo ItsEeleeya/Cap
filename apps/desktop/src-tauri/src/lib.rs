@@ -16,6 +16,7 @@ mod frame_ws;
 mod general_settings;
 mod hotkeys;
 mod http_client;
+mod import;
 mod logging;
 mod notifications;
 mod permissions;
@@ -546,7 +547,7 @@ async fn set_camera_input(
                 return Err(e);
             }
 
-            CapWindow::Camera
+            CapWindow::Camera { centered: false }
                 .show(&app_handle)
                 .await
                 .map_err(|err| error!("Failed to show camera preview window: {err}"))
@@ -740,9 +741,56 @@ async fn cleanup_camera_window(app: AppHandle) {
     app_state.camera_preview.on_window_close();
 
     if !app_state.is_recording_active_or_pending() {
-        let _ = app_state.camera_feed.ask(feeds::camera::RemoveInput).await;
-        app_state.camera_in_use = false;
+        let has_visible_target_overlay = app.webview_windows().iter().any(|(label, window)| {
+            label.starts_with("target-select-overlay-") && window.is_visible().unwrap_or(false)
+        });
+
+        if !has_visible_target_overlay {
+            let _ = app_state.camera_feed.ask(feeds::camera::RemoveInput).await;
+            app_state.camera_in_use = false;
+        }
     }
+}
+
+async fn cleanup_camera_after_overlay_close(app: AppHandle) {
+    let state = app.state::<ArcLock<App>>();
+
+    let camera_feed = {
+        let mut app_state = state.write().await;
+
+        if app_state.camera_cleanup_done {
+            return;
+        }
+
+        if app_state.is_recording_active_or_pending() {
+            return;
+        }
+
+        let has_camera_window = CapWindowId::Camera.get(&app).is_some();
+        if has_camera_window {
+            return;
+        }
+
+        let has_visible_target_overlay = app.webview_windows().iter().any(|(label, window)| {
+            label.starts_with("target-select-overlay-") && window.is_visible().unwrap_or(false)
+        });
+        if has_visible_target_overlay {
+            return;
+        }
+
+        app_state.camera_cleanup_done = true;
+
+        if !app_state.camera_in_use {
+            return;
+        }
+
+        app_state.camera_feed.clone()
+    };
+
+    let _ = camera_feed.ask(feeds::camera::RemoveInput).await;
+
+    let mut app_state = state.write().await;
+    app_state.camera_in_use = false;
 }
 
 fn spawn_microphone_watcher(app_handle: AppHandle) {
@@ -901,6 +949,12 @@ pub struct RequestOpenRecordingPicker {
 }
 
 #[derive(Deserialize, specta::Type, Serialize, tauri_specta::Event, Debug, Clone)]
+pub struct RequestSetTargetMode {
+    pub target_mode: Option<RecordingTargetMode>,
+    pub display_id: Option<String>,
+}
+
+#[derive(Deserialize, specta::Type, Serialize, tauri_specta::Event, Debug, Clone)]
 pub struct RequestOpenSettings {
     page: String,
 }
@@ -961,6 +1015,7 @@ enum CurrentRecordingTarget {
         screen: DisplayId,
         bounds: LogicalBounds,
     },
+    Camera,
 }
 
 #[derive(Serialize, Type)]
@@ -984,55 +1039,37 @@ struct CurrentRecording {
 async fn get_current_recording(
     state: MutableState<'_, App>,
 ) -> Result<JsonValue<Option<CurrentRecording>>, ()> {
-    tracing::debug!("get_current_recording called");
     let state = state.read().await;
 
     let (mode, capture_target, status) = match &state.recording_state {
         RecordingState::None => {
-            tracing::debug!("get_current_recording: state is None");
             return Ok(JsonValue::new(&None));
         }
-        RecordingState::Pending { mode, target } => {
-            tracing::debug!("get_current_recording: state is Pending");
-            (*mode, target, RecordingStatus::Pending)
-        }
-        RecordingState::Active(inner) => {
-            tracing::debug!("get_current_recording: state is Active");
-            (
-                inner.mode(),
-                inner.capture_target(),
-                RecordingStatus::Recording,
-            )
-        }
+        RecordingState::Pending { mode, target } => (*mode, target, RecordingStatus::Pending),
+        RecordingState::Active(inner) => (
+            inner.mode(),
+            inner.capture_target(),
+            RecordingStatus::Recording,
+        ),
     };
 
     let target = match capture_target {
-        ScreenCaptureTarget::Display { id } => {
-            tracing::debug!("get_current_recording: target is Display");
-            CurrentRecordingTarget::Screen { id: id.clone() }
-        }
+        ScreenCaptureTarget::Display { id } => CurrentRecordingTarget::Screen { id: id.clone() },
         ScreenCaptureTarget::Window { id } => {
             let bounds =
                 scap_targets::Window::from_id(id).and_then(|w| w.display_relative_logical_bounds());
-            tracing::debug!(
-                "get_current_recording: target is Window, bounds={:?}",
-                bounds
-            );
             CurrentRecordingTarget::Window {
                 id: id.clone(),
                 bounds,
             }
         }
-        ScreenCaptureTarget::Area { screen, bounds } => {
-            tracing::debug!("get_current_recording: target is Area");
-            CurrentRecordingTarget::Area {
-                screen: screen.clone(),
-                bounds: *bounds,
-            }
-        }
+        ScreenCaptureTarget::Area { screen, bounds } => CurrentRecordingTarget::Area {
+            screen: screen.clone(),
+            bounds: *bounds,
+        },
+        ScreenCaptureTarget::CameraOnly => CurrentRecordingTarget::Camera,
     };
 
-    tracing::debug!("get_current_recording: returning Some(CurrentRecording)");
     Ok(JsonValue::new(&Some(CurrentRecording {
         target,
         mode,
@@ -1043,37 +1080,25 @@ async fn get_current_recording(
 #[derive(Serialize, Type, tauri_specta::Event, Clone)]
 pub struct CurrentRecordingChanged;
 
-async fn create_screenshot(
+pub(crate) async fn create_screenshot(
     input: PathBuf,
     output: PathBuf,
     size: Option<(u32, u32)>,
 ) -> Result<(), String> {
-    println!("Creating screenshot: input={input:?}, output={output:?}, size={size:?}");
-
     let result: Result<(), String> = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let mut ictx = ffmpeg::format::input(&input).map_err(|e| {
-            eprintln!("Failed to create input context: {e}");
-            e.to_string()
-        })?;
+        let mut ictx = ffmpeg::format::input(&input).map_err(|e| e.to_string())?;
         let input_stream = ictx
             .streams()
             .best(ffmpeg::media::Type::Video)
             .ok_or("No video stream found")?;
         let video_stream_index = input_stream.index();
-        println!("Found video stream at index {video_stream_index}");
 
         let mut decoder =
             ffmpeg::codec::context::Context::from_parameters(input_stream.parameters())
-                .map_err(|e| {
-                    eprintln!("Failed to create decoder context: {e}");
-                    e.to_string()
-                })?
+                .map_err(|e| e.to_string())?
                 .decoder()
                 .video()
-                .map_err(|e| {
-                    eprintln!("Failed to create video decoder: {e}");
-                    e.to_string()
-                })?;
+                .map_err(|e| e.to_string())?;
 
         let mut scaler = ffmpeg::software::scaling::context::Context::get(
             decoder.format(),
@@ -1084,27 +1109,17 @@ async fn create_screenshot(
             size.map_or(decoder.height(), |s| s.1),
             ffmpeg::software::scaling::flag::Flags::BILINEAR,
         )
-        .map_err(|e| {
-            eprintln!("Failed to create scaler: {e}");
-            e.to_string()
-        })?;
-
-        println!("Decoder and scaler initialized");
+        .map_err(|e| e.to_string())?;
 
         let mut frame = ffmpeg::frame::Video::empty();
         for (stream, packet) in ictx.packets() {
             if stream.index() == video_stream_index {
-                decoder.send_packet(&packet).map_err(|e| {
-                    eprintln!("Failed to send packet to decoder: {e}");
-                    e.to_string()
-                })?;
+                decoder.send_packet(&packet).map_err(|e| e.to_string())?;
                 if decoder.receive_frame(&mut frame).is_ok() {
-                    println!("Frame received, scaling...");
                     let mut rgb_frame = ffmpeg::frame::Video::empty();
-                    scaler.run(&frame, &mut rgb_frame).map_err(|e| {
-                        eprintln!("Failed to scale frame: {e}");
-                        e.to_string()
-                    })?;
+                    scaler
+                        .run(&frame, &mut rgb_frame)
+                        .map_err(|e| e.to_string())?;
 
                     let width = rgb_frame.width() as usize;
                     let height = rgb_frame.height() as usize;
@@ -1123,21 +1138,15 @@ async fn create_screenshot(
 
                     let img = image::RgbImage::from_raw(width as u32, height as u32, img_buffer)
                         .ok_or("Failed to create image from frame data")?;
-                    println!("Saving image to {output:?}");
 
                     img.save_with_format(&output, image::ImageFormat::Jpeg)
-                        .map_err(|e| {
-                            eprintln!("Failed to save image: {e}");
-                            e.to_string()
-                        })?;
+                        .map_err(|e| e.to_string())?;
 
-                    println!("Screenshot created successfully");
                     return Ok(());
                 }
             }
         }
 
-        eprintln!("Failed to create screenshot: No suitable frame found");
         Err("Failed to create screenshot".to_string())
     })
     .await
@@ -1491,10 +1500,34 @@ async fn create_editor_instance(window: Window) -> Result<SerializedEditorInstan
 
 #[tauri::command]
 #[specta::specta]
+#[instrument(skip(window))]
+async fn get_editor_project_path(window: Window) -> Result<PathBuf, String> {
+    let CapWindowId::Editor { id } = CapWindowId::from_str(window.label()).unwrap() else {
+        return Err("Invalid window".to_string());
+    };
+
+    let window_ids = EditorWindowIds::get(window.app_handle());
+    let window_ids = window_ids.ids.lock().unwrap();
+
+    let Some((path, _)) = window_ids.iter().find(|(_, _id)| *_id == id) else {
+        return Err("Editor instance not found".to_string());
+    };
+
+    Ok(path.clone())
+}
+
+#[tauri::command]
+#[specta::specta]
 #[instrument(skip(editor))]
 async fn get_editor_meta(editor: WindowEditorInstance) -> Result<RecordingMeta, String> {
     let path = editor.project_path.clone();
     RecordingMeta::load_for_project(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn get_recording_meta_by_path(project_path: PathBuf) -> Result<RecordingMeta, String> {
+    RecordingMeta::load_for_project(&project_path).map_err(|e| e.to_string())
 }
 #[tauri::command]
 #[specta::specta]
@@ -1678,8 +1711,16 @@ async fn set_project_config(
 async fn update_project_config_in_memory(
     editor_instance: WindowEditorInstance,
     config: ProjectConfiguration,
+    frame_number: Option<u32>,
+    fps: Option<u32>,
+    resolution_base: Option<XY<u32>>,
 ) -> Result<(), String> {
     editor_instance.project_config.0.send(config).ok();
+    if let (Some(frame), Some(f), Some(res)) = (frame_number, fps, resolution_base) {
+        editor_instance.preview_tx.send_modify(|v| {
+            *v = Some((frame, f, res));
+        });
+    }
     Ok(())
 }
 
@@ -2247,6 +2288,13 @@ async fn reset_microphone_permissions(_app: AppHandle) -> Result<(), ()> {
 #[tauri::command]
 #[specta::specta]
 #[instrument(skip(app))]
+async fn clear_presets(app: AppHandle) -> Result<(), String> {
+    presets::PresetsStore::clear(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(app))]
 async fn is_camera_window_open(app: AppHandle) -> bool {
     CapWindowDef::Camera.get(&app).is_some()
 }
@@ -2262,6 +2310,94 @@ async fn seek_to(editor_instance: WindowEditorInstance, frame_number: u32) -> Re
         .await;
 
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(editor_instance))]
+async fn get_display_frame_for_cropping(
+    editor_instance: WindowEditorInstance,
+    fps: u32,
+) -> Result<Vec<u8>, String> {
+    use cap_project::ClipOffsets;
+    use cap_rendering::{PixelFormat, cpu_yuv};
+    use image::{ImageEncoder, codecs::png::PngEncoder};
+    use std::io::Cursor;
+
+    let frame_number = editor_instance.state.lock().await.playhead_position;
+    let time_secs = frame_number as f64 / fps as f64;
+
+    let project = editor_instance.project_config.1.borrow().clone();
+
+    let (segment_time, segment) = project
+        .get_segment_time(time_secs)
+        .ok_or_else(|| "No segment found for current time".to_string())?;
+
+    let segment_medias = editor_instance
+        .segment_medias
+        .get(segment.recording_clip as usize)
+        .ok_or_else(|| "Segment media not found".to_string())?;
+
+    let clip_offsets = project
+        .clips
+        .iter()
+        .find(|v| v.index == segment.recording_clip)
+        .map(|v| v.offsets)
+        .unwrap_or(ClipOffsets::default());
+
+    let segment_frames = segment_medias
+        .decoders
+        .get_frames(segment_time as f32, false, clip_offsets)
+        .await
+        .ok_or_else(|| "Failed to get frame".to_string())?;
+
+    let screen_frame = segment_frames.screen_frame;
+    let width = screen_frame.width();
+    let height = screen_frame.height();
+
+    let rgba_data = match screen_frame.format() {
+        PixelFormat::Rgba => screen_frame.data().to_vec(),
+        PixelFormat::Nv12 => {
+            let y_plane = screen_frame.y_plane().ok_or("Missing Y plane")?;
+            let uv_plane = screen_frame.uv_plane().ok_or("Missing UV plane")?;
+            let mut rgba = vec![0u8; (width * height * 4) as usize];
+            cpu_yuv::nv12_to_rgba(
+                y_plane,
+                uv_plane,
+                width,
+                height,
+                screen_frame.y_stride(),
+                screen_frame.uv_stride(),
+                &mut rgba,
+            );
+            rgba
+        }
+        PixelFormat::Yuv420p => {
+            let y_plane = screen_frame.y_plane().ok_or("Missing Y plane")?;
+            let u_plane = screen_frame.u_plane().ok_or("Missing U plane")?;
+            let v_plane = screen_frame.v_plane().ok_or("Missing V plane")?;
+            let mut rgba = vec![0u8; (width * height * 4) as usize];
+            cpu_yuv::yuv420p_to_rgba(
+                y_plane,
+                u_plane,
+                v_plane,
+                width,
+                height,
+                screen_frame.y_stride(),
+                screen_frame.uv_stride(),
+                &mut rgba,
+            );
+            rgba
+        }
+    };
+
+    let mut png_data = Cursor::new(Vec::new());
+    let encoder = PngEncoder::new(&mut png_data);
+    encoder
+        .write_image(&rgba_data, width, height, image::ExtendedColorType::Rgba8)
+        .map_err(|e| format!("Failed to encode PNG: {e}"))?;
+
+    Ok(png_data.into_inner())
 }
 
 #[tauri::command]
@@ -2452,6 +2588,39 @@ async fn update_auth_plan(app: AppHandle) {
     AuthStore::update_auth_plan(&app).await.ok();
 }
 
+pub async fn open_target_picker(
+    app: &tauri::AppHandle,
+    target_mode: recording_settings::RecordingTargetMode,
+) {
+    use tauri::Manager;
+
+    if let Some(window) = CapWindowId::Main.get(app) {
+        window.hide().ok();
+    }
+
+    let prewarmed = app.state::<target_select_overlay::PrewarmedOverlays>();
+    let state = app.state::<target_select_overlay::WindowFocusManager>();
+    let display_id = None;
+
+    let _ = target_select_overlay::open_target_select_overlays(
+        app.clone(),
+        state,
+        prewarmed,
+        None,
+        display_id.clone(),
+        Some(target_mode),
+    )
+    .await;
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let _ = RequestSetTargetMode {
+        target_mode: Some(target_mode),
+        display_id,
+    }
+    .emit(app);
+}
+
 type FilteredRegistry = tracing_subscriber::layer::Layered<
     tracing_subscriber::filter::FilterFn<fn(m: &tracing::Metadata) -> bool>,
     tracing_subscriber::Registry,
@@ -2508,6 +2677,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             export::get_export_estimates,
             export::generate_export_preview,
             export::generate_export_preview_fast,
+            import::start_video_import,
+            import::check_import_ready,
             copy_file_to_path,
             copy_video_to_clipboard,
             copy_screenshot_to_clipboard,
@@ -2515,6 +2686,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             open_file_path,
             get_video_metadata,
             create_editor_instance,
+            get_editor_project_path,
             get_mic_waveforms,
             get_system_audio_waveforms,
             start_playback,
@@ -2540,8 +2712,11 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             hotkeys::set_hotkey,
             reset_camera_permissions,
             reset_microphone_permissions,
+            clear_presets,
             is_camera_window_open,
             seek_to,
+            get_display_frame_for_cropping,
+            windows::position_traffic_lights,
             windows::set_theme,
             global_message_dialog,
             show_window,
@@ -2553,6 +2728,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             update_auth_plan,
             set_window_transparent,
             get_editor_meta,
+            get_recording_meta_by_path,
             set_pretty_name,
             set_server_url,
             set_camera_preview_state,
@@ -2566,6 +2742,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             captions::check_model_exists,
             captions::delete_whisper_model,
             captions::export_captions_srt,
+            target_select_overlay::prewarm_target_select_overlays,
             target_select_overlay::open_target_select_overlays,
             target_select_overlay::close_target_select_overlays,
             target_select_overlay::update_camera_overlay_bounds,
@@ -2589,6 +2766,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             RecordingStopped,
             RequestStartRecording,
             RequestOpenRecordingPicker,
+            RequestSetTargetMode,
             RequestOpenSettings,
             RequestScreenCapturePrewarm,
             NewNotification,
@@ -2599,6 +2777,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             target_select_overlay::TargetUnderCursor,
             hotkeys::OnEscapePress,
             upload::UploadProgressEvent,
+            import::VideoImportProgress,
             SetCaptureAreaPending,
             DevicesUpdated,
         ])
@@ -2699,7 +2878,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                     flags
                 })
                 .with_denylist(&[
-                    CapWindowDef::Setup.label().as_str(),
+                    CapWindowId::Setup.label().as_str(),
+                    CapWindowDef::Main.label().as_str(),
                     "window-capture-occluder",
                     "target-select-overlay",
                     CapWindowDef::CaptureArea.label().as_str(),
@@ -2707,6 +2887,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                     CapWindowDef::RecordingsOverlay.label().as_str(),
                     CapWindowDef::RecordingControls.label().as_str(),
                     CapWindowDef::Upgrade.label().as_str(),
+                    "editor",
+                    "screenshot-editor",
                 ])
                 .map_label(|label| match label {
                     label if label.starts_with("editor-") => "editor",
@@ -2732,6 +2914,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             general_settings::init(&app);
             fake_window::init(&app);
             app.manage(target_select_overlay::WindowFocusManager::default());
+            app.manage(target_select_overlay::PrewarmedOverlays::default());
             app.manage(EditorWindowIds::default());
             app.manage(ScreenshotEditorWindowIds::default());
             #[cfg(target_os = "macos")]
@@ -2742,6 +2925,19 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             app.manage(FinalizingRecordings::default());
 
             gpu_context::prewarm_gpu();
+
+            tokio::spawn({
+                let app = app.clone();
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    let prewarmed = app.state::<target_select_overlay::PrewarmedOverlays>();
+                    let _ = target_select_overlay::prewarm_target_select_overlays(
+                        app.clone(),
+                        prewarmed,
+                    )
+                    .await;
+                }
+            });
 
             tokio::spawn({
                 let camera_feed = camera_feed.clone();
@@ -2900,11 +3096,15 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             });
 
             RequestOpenRecordingPicker::listen_any_spawn(&app, async |event, app| {
-                let _ = CapWindow::Main {
-                    init_target_mode: event.target_mode,
+                if let Some(target_mode) = event.target_mode {
+                    open_target_picker(&app, target_mode).await;
+                } else {
+                    let _ = CapWindow::Main {
+                        init_target_mode: None,
+                    }
+                    .show(&app)
+                    .await;
                 }
-                .show(&app)
-                .await;
             });
 
             RequestOpenSettings::listen_any_spawn(&app, async |payload, app| {
@@ -2941,9 +3141,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 tokio::spawn(cleanup_camera_window(app.clone()));
                             }
                             CapWindowDef::Main => {
-                                if let Some(camera_window) = CapWindowDef::Camera.get(app) {
-                                    let _ = camera_window.close();
-                                }
+                                let app = app.clone();
+                                tokio::spawn(async move {
+                                    let state = app.state::<ArcLock<App>>();
+                                    let app_state = state.read().await;
+                                    if !app_state.is_recording_active_or_pending()
+                                        && let Some(camera_window) = CapWindowDef::Camera.get(&app)
+                                    {
+                                        let _ = camera_window.close();
+                                    }
+                                });
                             }
                             _ => {}
                         }
@@ -3051,6 +3258,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                             CapWindowDef::TargetSelectOverlay { display_id } => {
                                 app.state::<target_select_overlay::WindowFocusManager>()
                                     .destroy(&display_id, app.global_shortcut());
+                                tokio::spawn(cleanup_camera_after_overlay_close(app.clone()));
                             }
                             CapWindowDef::Camera => {
                                 let app = app.clone();
@@ -3369,6 +3577,45 @@ async fn wait_for_recording_ready(app: &AppHandle, path: &Path) -> Result<(), St
             return Err(format!("Failed to load recording meta: {e}"));
         }
     };
+
+    if let Some(studio_meta) = meta.studio_meta()
+        && matches!(studio_meta.status(), StudioRecordingStatus::InProgress)
+    {
+        info!("Recording/import is in progress, waiting for completion...");
+        const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+        const MAX_WAIT: std::time::Duration = std::time::Duration::from_secs(600);
+        let start = std::time::Instant::now();
+
+        loop {
+            if start.elapsed() > MAX_WAIT {
+                return Err("Timed out waiting for import to complete".to_string());
+            }
+
+            tokio::time::sleep(POLL_INTERVAL).await;
+
+            let current_meta = match RecordingMeta::load_for_project(path) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+
+            if let Some(current_studio) = current_meta.studio_meta() {
+                match current_studio.status() {
+                    StudioRecordingStatus::Complete => {
+                        info!("Recording/import completed");
+                        break;
+                    }
+                    StudioRecordingStatus::Failed { error } => {
+                        return Err(format!("Import failed: {error}"));
+                    }
+                    StudioRecordingStatus::InProgress => continue,
+                    StudioRecordingStatus::NeedsRemux => break,
+                }
+            }
+        }
+    }
+
+    let meta = RecordingMeta::load_for_project(path)
+        .map_err(|e| format!("Failed to reload recording meta: {e}"))?;
 
     if let Some(studio_meta) = meta.studio_meta()
         && recording::needs_fragment_remux(path, studio_meta)

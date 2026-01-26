@@ -3,11 +3,13 @@ use cap_fail::fail;
 use cap_project::CursorMoveEvent;
 use cap_project::cursor::SHORT_CURSOR_SHAPE_DEBOUNCE_MS;
 use cap_project::{
-    CameraShape, CursorClickEvent, InstantRecordingMeta, MultipleSegments, Platform,
-    ProjectConfiguration, RecordingMeta, RecordingMetaInner, SharingMeta, StudioRecordingMeta,
-    StudioRecordingStatus, TimelineConfiguration, TimelineSegment, UploadMeta, ZoomMode,
-    ZoomSegment, cursor::CursorEvents,
+    CameraShape, CursorClickEvent, GlideDirection, InstantRecordingMeta, MultipleSegments,
+    Platform, ProjectConfiguration, RecordingMeta, RecordingMetaInner, SharingMeta,
+    StudioRecordingMeta, StudioRecordingStatus, TimelineConfiguration, TimelineSegment, UploadMeta,
+    ZoomMode, ZoomSegment, cursor::CursorEvents,
 };
+#[cfg(target_os = "macos")]
+use cap_recording::SendableShareableContent;
 use cap_recording::feeds::camera::CameraFeedLock;
 #[cfg(target_os = "macos")]
 use cap_recording::sources::screen_capture::SourceError;
@@ -47,7 +49,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogBuilder};
 use tauri_specta::Event;
 use tracing::*;
 
-use crate::camera::{CameraPreviewManager, CameraPreviewShape};
+use crate::camera::{CameraPreviewManager, CameraPreviewShape, CameraPreviewState};
 #[cfg(target_os = "macos")]
 use crate::general_settings;
 use crate::permissions;
@@ -93,39 +95,20 @@ pub enum InProgressRecording {
 }
 
 #[cfg(target_os = "macos")]
-#[derive(Clone)]
-struct SendableShareableContent(cidre::arc::R<cidre::sc::ShareableContent>);
-
-#[cfg(target_os = "macos")]
-impl SendableShareableContent {
-    fn retained(&self) -> cidre::arc::R<cidre::sc::ShareableContent> {
-        self.0.clone()
-    }
-}
-
-#[cfg(target_os = "macos")]
-unsafe impl Send for SendableShareableContent {}
-
-#[cfg(target_os = "macos")]
-unsafe impl Sync for SendableShareableContent {}
-
-#[cfg(target_os = "macos")]
 async fn acquire_shareable_content_for_target(
     capture_target: &ScreenCaptureTarget,
 ) -> anyhow::Result<SendableShareableContent> {
     let mut refreshed = false;
 
     loop {
-        let shareable_content = SendableShareableContent(
+        let shareable_content = SendableShareableContent::from(
             crate::platform::get_shareable_content()
                 .await
                 .map_err(|e| anyhow!(format!("GetShareableContent: {e}")))?
                 .ok_or_else(|| anyhow!("GetShareableContent/NotAvailable"))?,
         );
 
-        if !shareable_content_missing_target_display(capture_target, shareable_content.retained())
-            .await
-        {
+        if !shareable_content_missing_target_display(capture_target, &shareable_content) {
             return Ok(shareable_content);
         }
 
@@ -141,15 +124,14 @@ async fn acquire_shareable_content_for_target(
 }
 
 #[cfg(target_os = "macos")]
-async fn shareable_content_missing_target_display(
+fn shareable_content_missing_target_display(
     capture_target: &ScreenCaptureTarget,
-    shareable_content: cidre::arc::R<cidre::sc::ShareableContent>,
+    shareable_content: &SendableShareableContent,
 ) -> bool {
     match capture_target.display() {
         Some(display) => display
             .raw_handle()
-            .as_sc(shareable_content)
-            .await
+            .as_sc(shareable_content.retained())
             .is_none(),
         None => false,
     }
@@ -376,7 +358,21 @@ pub fn format_project_name<'a>(
     datetime: Option<chrono::DateTime<chrono::Local>>,
 ) -> String {
     const DEFAULT_FILENAME_TEMPLATE: &str = "{target_name} ({target_kind}) {date} {time}";
+    const MAX_TARGET_NAME_CHARS: usize = 180;
     let datetime = datetime.unwrap_or(chrono::Local::now());
+
+    let truncated_target_name: std::borrow::Cow<'_, str> =
+        if target_name.chars().count() > MAX_TARGET_NAME_CHARS {
+            std::borrow::Cow::Owned(
+                target_name
+                    .chars()
+                    .take(MAX_TARGET_NAME_CHARS)
+                    .collect::<String>()
+                    + "...",
+            )
+        } else {
+            std::borrow::Cow::Borrowed(target_name)
+        };
 
     lazy_static! {
         static ref DATE_REGEX: Regex = Regex::new(r"\{date(?::([^}]+))?\}").unwrap();
@@ -402,7 +398,10 @@ pub fn format_project_name<'a>(
     };
 
     let result = AC
-        .try_replace_all(haystack, &[recording_mode, mode, target_kind, target_name])
+        .try_replace_all(
+            haystack,
+            &[recording_mode, mode, target_kind, &truncated_target_name],
+        )
         .expect("AhoCorasick replace should never fail with default configuration");
 
     let result = DATE_REGEX.replace_all(&result, |caps: &regex::Captures| {
@@ -454,6 +453,35 @@ pub async fn start_recording(
 ) -> Result<RecordingAction, String> {
     if !matches!(state_mtx.read().await.recording_state, RecordingState::None) {
         return Err("Recording already in progress".to_string());
+    }
+
+    let mut inputs = inputs;
+    if matches!(inputs.capture_target, ScreenCaptureTarget::CameraOnly) {
+        inputs.capture_system_audio = false;
+
+        {
+            let app_state = state_mtx.read().await;
+            let current_mirrored = app_state
+                .camera_preview
+                .get_state()
+                .map(|s| s.mirrored)
+                .unwrap_or(false);
+
+            let camera_state = CameraPreviewState {
+                size: 400.0,
+                shape: CameraPreviewShape::Full,
+                mirrored: current_mirrored,
+            };
+
+            if let Err(err) = app_state.camera_preview.set_state(camera_state) {
+                error!("Failed to set camera preview state for camera-only mode: {err}");
+            }
+        }
+
+        ShowCapWindow::Camera { centered: true }
+            .show(&app)
+            .await
+            .map_err(|err| format!("Failed to show centered camera window: {err}"))?;
     }
 
     let general_settings = GeneralSettingsStore::get(&app).ok().flatten();
@@ -607,28 +635,9 @@ pub async fn start_recording(
             win.close().ok();
         }
     }
-    #[cfg(windows)]
-    let had_camera_window = CapWindowDef::Camera.get(&app).is_some();
-    #[cfg(windows)]
-    if had_camera_window {
-        tracing::info!(
-            "Closing camera window BEFORE InProgressRecording show (will recreate after)"
-        );
-        if let Some(cam_win) = CapWindowDef::Camera.get(&app) {
-            cam_win.close().ok();
-        }
-    }
-
-    let _ = CapWindow::InProgressRecording { countdown }
+    let _ = ShowCapWindow::InProgressRecording { countdown }
         .show(&app)
         .await;
-
-    #[cfg(windows)]
-    if had_camera_window {
-        tracing::info!("Recreating camera window after InProgressRecording");
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-        CapWindow::Camera.show(&app).await.ok();
-    }
 
     if let Some(window) = CapWindowDef::Main.get(&app) {
         let _ = general_settings
@@ -713,8 +722,10 @@ pub async fn start_recording(
             state.camera_in_use = camera_feed.is_some();
 
             #[cfg(target_os = "macos")]
-            let mut shareable_content =
-                acquire_shareable_content_for_target(&inputs.capture_target).await?;
+            let mut shareable_content = match inputs.capture_target {
+                ScreenCaptureTarget::CameraOnly => None,
+                _ => Some(acquire_shareable_content_for_target(&inputs.capture_target).await?),
+            };
 
             let common = InProgressRecordingCommon {
                 target_name: project_name,
@@ -782,7 +793,7 @@ pub async fn start_recording(
                             let handle = builder
                                 .build(
                                     #[cfg(target_os = "macos")]
-                                    shareable_content.retained(),
+                                    shareable_content.clone(),
                                 )
                                 .await
                                 .map_err(|e| {
@@ -818,6 +829,10 @@ pub async fn start_recording(
                                 builder = builder.with_excluded_windows(excluded_windows.clone());
                             }
 
+                            if let Some(camera_feed) = camera_feed.clone() {
+                                builder = builder.with_camera_feed(camera_feed);
+                            }
+
                             if let Some(mic_feed) = mic_feed.clone() {
                                 builder = builder.with_mic_feed(mic_feed);
                             }
@@ -825,7 +840,7 @@ pub async fn start_recording(
                             let handle = builder
                                 .build(
                                     #[cfg(target_os = "macos")]
-                                    shareable_content.retained(),
+                                    shareable_content.clone(),
                                 )
                                 .await
                                 .map_err(|e| {
@@ -864,8 +879,9 @@ pub async fn start_recording(
                     }
                     #[cfg(target_os = "macos")]
                     Err(err) if is_shareable_content_error(&err) => {
-                        shareable_content =
-                            acquire_shareable_content_for_target(&inputs.capture_target).await?;
+                        shareable_content = Some(
+                            acquire_shareable_content_for_target(&inputs.capture_target).await?,
+                        );
                         continue;
                     }
                     Err(err) if mic_restart_attempts == 0 && mic_actor_not_running(&err) => {
@@ -1207,6 +1223,8 @@ pub async fn take_screenshot(
         .await
         .map_err(|e| format!("Failed to capture screenshot: {e}"))?;
 
+    AppSounds::Notification.play();
+
     let image_width = image.width();
     let image_height = image.height();
     let image_data = image.into_raw();
@@ -1318,8 +1336,6 @@ pub async fn take_screenshot(
                     &app_handle,
                     notifications::NotificationType::ScreenshotSaved,
                 );
-
-                AppSounds::StopRecording.play();
             }
             Ok(Err(e)) => {
                 error!("Failed to encode PNG: {e}");
@@ -1779,24 +1795,26 @@ fn generate_zoom_segments_from_clicks_impl(
     mut moves: Vec<CursorMoveEvent>,
     max_duration: f64,
 ) -> Vec<ZoomSegment> {
-    const STOP_PADDING_SECONDS: f64 = 0.8;
-    const CLICK_PRE_PADDING: f64 = 0.6;
-    const CLICK_POST_PADDING: f64 = 1.6;
-    const MOVEMENT_PRE_PADDING: f64 = 0.4;
-    const MOVEMENT_POST_PADDING: f64 = 1.2;
-    const MERGE_GAP_THRESHOLD: f64 = 0.6;
-    const MIN_SEGMENT_DURATION: f64 = 1.3;
-    const MOVEMENT_WINDOW_SECONDS: f64 = 1.2;
-    const MOVEMENT_EVENT_DISTANCE_THRESHOLD: f64 = 0.025;
-    const MOVEMENT_WINDOW_DISTANCE_THRESHOLD: f64 = 0.1;
+    const STOP_PADDING_SECONDS: f64 = 0.5;
+    const CLICK_GROUP_TIME_THRESHOLD_SECS: f64 = 2.5;
+    const CLICK_GROUP_SPATIAL_THRESHOLD: f64 = 0.15;
+    const CLICK_PRE_PADDING: f64 = 0.4;
+    const CLICK_POST_PADDING: f64 = 1.8;
+    const MOVEMENT_PRE_PADDING: f64 = 0.3;
+    const MOVEMENT_POST_PADDING: f64 = 1.5;
+    const MERGE_GAP_THRESHOLD: f64 = 0.8;
+    const MIN_SEGMENT_DURATION: f64 = 1.0;
+    const MOVEMENT_WINDOW_SECONDS: f64 = 1.5;
+    const MOVEMENT_EVENT_DISTANCE_THRESHOLD: f64 = 0.02;
+    const MOVEMENT_WINDOW_DISTANCE_THRESHOLD: f64 = 0.08;
     const AUTO_ZOOM_AMOUNT: f64 = 1.5;
+    const SHAKE_FILTER_THRESHOLD: f64 = 0.33;
+    const SHAKE_FILTER_WINDOW_MS: f64 = 150.0;
 
     if max_duration <= 0.0 {
         return Vec::new();
     }
 
-    // We trim the tail of the recording to avoid using the final
-    // "stop recording" click as a zoom target.
     let activity_end_limit = if max_duration > STOP_PADDING_SECONDS {
         max_duration - STOP_PADDING_SECONDS
     } else {
@@ -1818,7 +1836,6 @@ fn generate_zoom_segments_from_clicks_impl(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Remove trailing click-down events that are too close to the end.
     while let Some(index) = clicks.iter().rposition(|c| c.down) {
         let time_secs = clicks[index].time_ms / 1000.0;
         if time_secs > activity_end_limit {
@@ -1828,16 +1845,77 @@ fn generate_zoom_segments_from_clicks_impl(
         }
     }
 
+    let click_positions: HashMap<usize, (f64, f64)> = clicks
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.down)
+        .filter_map(|(idx, click)| {
+            let click_time = click.time_ms;
+            moves
+                .iter()
+                .rfind(|m| m.time_ms <= click_time)
+                .map(|m| (idx, (m.x, m.y)))
+        })
+        .collect();
+
+    let mut click_groups: Vec<Vec<usize>> = Vec::new();
+    let down_clicks: Vec<(usize, &CursorClickEvent)> = clicks
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.down && c.time_ms / 1000.0 < activity_end_limit)
+        .collect();
+
+    for (idx, click) in &down_clicks {
+        let click_time = click.time_ms / 1000.0;
+        let click_pos = click_positions.get(idx);
+
+        let mut found_group = false;
+        for group in click_groups.iter_mut() {
+            let can_join = group.iter().any(|&group_idx| {
+                let group_click = &clicks[group_idx];
+                let group_time = group_click.time_ms / 1000.0;
+                let time_close = (click_time - group_time).abs() < CLICK_GROUP_TIME_THRESHOLD_SECS;
+
+                let spatial_close = match (click_pos, click_positions.get(&group_idx)) {
+                    (Some((x1, y1)), Some((x2, y2))) => {
+                        let dx = x1 - x2;
+                        let dy = y1 - y2;
+                        (dx * dx + dy * dy).sqrt() < CLICK_GROUP_SPATIAL_THRESHOLD
+                    }
+                    _ => true,
+                };
+
+                time_close && spatial_close
+            });
+
+            if can_join {
+                group.push(*idx);
+                found_group = true;
+                break;
+            }
+        }
+
+        if !found_group {
+            click_groups.push(vec![*idx]);
+        }
+    }
+
     let mut intervals: Vec<(f64, f64)> = Vec::new();
 
-    for click in clicks.into_iter().filter(|c| c.down) {
-        let time = click.time_ms / 1000.0;
-        if time >= activity_end_limit {
+    for group in click_groups {
+        if group.is_empty() {
             continue;
         }
 
-        let start = (time - CLICK_PRE_PADDING).max(0.0);
-        let end = (time + CLICK_POST_PADDING).min(activity_end_limit);
+        let times: Vec<f64> = group
+            .iter()
+            .map(|&idx| clicks[idx].time_ms / 1000.0)
+            .collect();
+        let group_start = times.iter().cloned().fold(f64::INFINITY, f64::min);
+        let group_end = times.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+        let start = (group_start - CLICK_PRE_PADDING).max(0.0);
+        let end = (group_end + CLICK_POST_PADDING).min(activity_end_limit);
 
         if end > start {
             intervals.push((start, end));
@@ -1847,6 +1925,7 @@ fn generate_zoom_segments_from_clicks_impl(
     let mut last_move_by_cursor: HashMap<String, (f64, f64, f64)> = HashMap::new();
     let mut distance_window: VecDeque<(f64, f64)> = VecDeque::new();
     let mut window_distance = 0.0_f64;
+    let mut shake_window: VecDeque<(f64, f64, f64)> = VecDeque::new();
 
     for mv in moves.iter() {
         let time = mv.time_ms / 1000.0;
@@ -1866,6 +1945,40 @@ fn generate_zoom_segments_from_clicks_impl(
 
         if distance <= f64::EPSILON {
             continue;
+        }
+
+        shake_window.push_back((mv.time_ms, mv.x, mv.y));
+        while let Some(&(old_time, _, _)) = shake_window.front() {
+            if mv.time_ms - old_time > SHAKE_FILTER_WINDOW_MS {
+                shake_window.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        if shake_window.len() >= 3 {
+            let positions: Vec<(f64, f64)> =
+                shake_window.iter().map(|(_, x, y)| (*x, *y)).collect();
+            let mut direction_changes = 0;
+            for i in 1..positions.len() - 1 {
+                let dx1 = positions[i].0 - positions[i - 1].0;
+                let dy1 = positions[i].1 - positions[i - 1].1;
+                let dx2 = positions[i + 1].0 - positions[i].0;
+                let dy2 = positions[i + 1].1 - positions[i].1;
+
+                if (dx1 * dx2 + dy1 * dy2) < 0.0 {
+                    direction_changes += 1;
+                }
+            }
+
+            let total_dist: f64 = positions
+                .windows(2)
+                .map(|w| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt())
+                .sum();
+
+            if direction_changes >= 2 && total_dist < SHAKE_FILTER_THRESHOLD * 3.0 {
+                continue;
+            }
         }
 
         distance_window.push_back((time, distance));
@@ -1929,6 +2042,10 @@ fn generate_zoom_segments_from_clicks_impl(
                 end,
                 amount: AUTO_ZOOM_AMOUNT,
                 mode: ZoomMode::Auto,
+                glide_direction: GlideDirection::None,
+                glide_speed: 0.5,
+                instant_animation: false,
+                edge_snap_ratio: 0.25,
             })
         })
         .collect()
@@ -2072,16 +2189,7 @@ pub fn needs_fragment_remux(recording_dir: &Path, meta: &StudioRecordingMeta) ->
 }
 
 pub fn remux_fragmented_recording(recording_dir: &Path) -> Result<(), String> {
-    let meta = RecordingMeta::load_for_project(recording_dir)
-        .map_err(|e| format!("Failed to load recording meta: {e}"))?;
-
-    let incomplete =
-        RecoveryManager::find_incomplete(recording_dir.parent().unwrap_or(recording_dir));
-
-    let incomplete_recording = incomplete
-        .into_iter()
-        .find(|r| r.project_path == recording_dir)
-        .or_else(|| analyze_recording_for_remux(recording_dir, &meta));
+    let incomplete_recording = RecoveryManager::find_incomplete_single(recording_dir);
 
     if let Some(recording) = incomplete_recording {
         RecoveryManager::recover(&recording)
@@ -2091,125 +2199,6 @@ pub fn remux_fragmented_recording(recording_dir: &Path) -> Result<(), String> {
     } else {
         Err("Could not find fragments to remux".to_string())
     }
-}
-
-fn analyze_recording_for_remux(
-    project_path: &Path,
-    meta: &RecordingMeta,
-) -> Option<cap_recording::recovery::IncompleteRecording> {
-    use cap_recording::recovery::{IncompleteRecording, RecoverableSegment};
-
-    let StudioRecordingMeta::MultipleSegments { inner, .. } = meta.studio_meta()? else {
-        return None;
-    };
-
-    let mut recoverable_segments = Vec::new();
-
-    for (index, segment) in inner.segments.iter().enumerate() {
-        let display_path = segment.display.path.to_path(project_path);
-        let (display_fragments, display_init_segment) = if display_path.is_dir() {
-            let frags = find_fragments_in_dir(&display_path);
-            let init = display_path.join("init.mp4");
-            (frags, if init.exists() { Some(init) } else { None })
-        } else if display_path.exists() {
-            (vec![display_path], None)
-        } else {
-            continue;
-        };
-
-        if display_fragments.is_empty() {
-            continue;
-        }
-
-        let (camera_fragments, camera_init_segment) = segment
-            .camera
-            .as_ref()
-            .map(|cam| {
-                let cam_path = cam.path.to_path(project_path);
-                if cam_path.is_dir() {
-                    let frags = find_fragments_in_dir(&cam_path);
-                    let init = cam_path.join("init.mp4");
-                    let init_seg = if init.exists() { Some(init) } else { None };
-                    if frags.is_empty() {
-                        (None, None)
-                    } else {
-                        (Some(frags), init_seg)
-                    }
-                } else if cam_path.exists() {
-                    (Some(vec![cam_path]), None)
-                } else {
-                    (None, None)
-                }
-            })
-            .unwrap_or((None, None));
-
-        let cursor_path = segment
-            .cursor
-            .as_ref()
-            .map(|c| c.to_path(project_path))
-            .filter(|p| p.exists());
-
-        let mic_fragments = segment.mic.as_ref().and_then(|mic| {
-            let mic_path = mic.path.to_path(project_path);
-            if mic_path.is_dir() {
-                let frags = find_fragments_in_dir(&mic_path);
-                if frags.is_empty() { None } else { Some(frags) }
-            } else if mic_path.exists() {
-                Some(vec![mic_path])
-            } else {
-                None
-            }
-        });
-
-        let system_audio_fragments = segment.system_audio.as_ref().and_then(|sys| {
-            let sys_path = sys.path.to_path(project_path);
-            if sys_path.is_dir() {
-                let frags = find_fragments_in_dir(&sys_path);
-                if frags.is_empty() { None } else { Some(frags) }
-            } else if sys_path.exists() {
-                Some(vec![sys_path])
-            } else {
-                None
-            }
-        });
-
-        recoverable_segments.push(RecoverableSegment {
-            index: index as u32,
-            display_fragments,
-            display_init_segment,
-            camera_fragments,
-            camera_init_segment,
-            mic_fragments,
-            system_audio_fragments,
-            cursor_path,
-        });
-    }
-
-    if recoverable_segments.is_empty() {
-        return None;
-    }
-
-    Some(IncompleteRecording {
-        project_path: project_path.to_path_buf(),
-        meta: meta.clone(),
-        recoverable_segments,
-        estimated_duration: Duration::ZERO,
-    })
-}
-
-fn find_fragments_in_dir(dir: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-
-    let mut fragments: Vec<_> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "mp4" || e == "m4a"))
-        .collect();
-
-    fragments.sort();
-    fragments
 }
 
 #[cfg(test)]

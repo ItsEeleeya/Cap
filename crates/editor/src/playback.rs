@@ -4,7 +4,10 @@ use cap_audio::{LatencyCorrectionConfig, LatencyCorrector, default_output_latenc
 use cap_media::MediaError;
 use cap_media_info::AudioInfo;
 use cap_project::{ProjectConfiguration, XY};
-use cap_rendering::{DecodedSegmentFrames, ProjectUniforms, RenderVideoConstants};
+use cap_rendering::{
+    DecodedSegmentFrames, ProjectUniforms, RenderVideoConstants, ZoomFocusInterpolator,
+    spring_mass_damper::SpringMassDamperSimulationConfig,
+};
 #[cfg(not(target_os = "windows"))]
 use cpal::{BufferSize, SupportedBufferSize};
 use cpal::{
@@ -32,8 +35,8 @@ use crate::{
 };
 
 const PREFETCH_BUFFER_SIZE: usize = 60;
-const PARALLEL_DECODE_TASKS: usize = 8;
-const MAX_PREFETCH_AHEAD: u32 = 90;
+const PARALLEL_DECODE_TASKS: usize = 4;
+const MAX_PREFETCH_AHEAD: u32 = 60;
 const PREFETCH_BEHIND: u32 = 15;
 const FRAME_CACHE_SIZE: usize = 60;
 
@@ -133,13 +136,21 @@ impl Playback {
         let prefetch_stop_rx = stop_rx.clone();
         let mut prefetch_project = self.project.clone();
         let prefetch_segment_medias = self.segment_medias.clone();
-        let prefetch_duration = if let Some(timeline) = &self.project.borrow().timeline {
-            timeline.duration()
-        } else {
-            f64::MAX
-        };
+        let (prefetch_duration, has_timeline) =
+            if let Some(timeline) = &self.project.borrow().timeline {
+                (timeline.duration(), true)
+            } else {
+                (f64::MAX, false)
+            };
+        let segment_media_count = self.segment_medias.len();
 
         tokio::spawn(async move {
+            if !has_timeline {
+                warn!("Prefetch: No timeline configuration found");
+            }
+            if segment_media_count == 0 {
+                warn!("Prefetch: No segment media available");
+            }
             type PrefetchFuture = std::pin::Pin<
                 Box<
                     dyn std::future::Future<Output = (u32, u32, Option<DecodedSegmentFrames>)>
@@ -150,7 +161,7 @@ impl Playback {
             let mut in_flight: FuturesUnordered<PrefetchFuture> = FuturesUnordered::new();
             let mut frames_decoded: u32 = 0;
             let mut prefetched_behind: HashSet<u32> = HashSet::new();
-            const INITIAL_PARALLEL_TASKS: usize = 8;
+            const INITIAL_PARALLEL_TASKS: usize = 4;
             const RAMP_UP_AFTER_FRAMES: u32 = 5;
 
             let mut cached_project = prefetch_project.borrow().clone();
@@ -235,15 +246,26 @@ impl Playback {
                         let decoders = segment_media.decoders.clone();
                         let hide_camera = cached_project.camera.hide;
                         let segment_index = segment.recording_clip;
+                        let is_initial = frames_decoded < 10;
 
                         if let Ok(mut in_flight_guard) = prefetch_in_flight.write() {
                             in_flight_guard.insert(frame_num);
                         }
 
                         in_flight.push(Box::pin(async move {
-                            let result = decoders
-                                .get_frames(segment_time as f32, !hide_camera, clip_offsets)
-                                .await;
+                            let result = if is_initial {
+                                decoders
+                                    .get_frames_initial(
+                                        segment_time as f32,
+                                        !hide_camera,
+                                        clip_offsets,
+                                    )
+                                    .await
+                            } else {
+                                decoders
+                                    .get_frames(segment_time as f32, !hide_camera, clip_offsets)
+                                    .await
+                            };
                             (frame_num, segment_index, result)
                         }));
                     }
@@ -313,12 +335,19 @@ impl Playback {
                             in_flight_guard.remove(&frame_num);
                         }
                         frames_decoded = frames_decoded.saturating_add(1);
+
                         if let Some(segment_frames) = result {
                             let _ = prefetch_tx.send(PrefetchedFrame {
                                 frame_number: frame_num,
                                 segment_frames,
                                 segment_index,
                             }).await;
+                        } else if frames_decoded <= 5 {
+                            warn!(
+                                frame = frame_num,
+                                segment = segment_index,
+                                "Prefetch: decoder returned no frames"
+                            );
                         }
                     }
 
@@ -337,7 +366,7 @@ impl Playback {
             let (audio_playhead_tx, audio_playhead_rx) =
                 watch::channel(self.start_frame_number as f64 / fps as f64);
 
-            AudioPlayback {
+            let has_audio = AudioPlayback {
                 segments: get_audio_segments(&self.segment_medias),
                 stop_rx: stop_rx.clone(),
                 start_frame_number: self.start_frame_number,
@@ -353,13 +382,15 @@ impl Playback {
             let mut prefetch_buffer: VecDeque<PrefetchedFrame> =
                 VecDeque::with_capacity(PREFETCH_BUFFER_SIZE);
             let mut frame_cache = FrameCache::new(FRAME_CACHE_SIZE);
-            let aggressive_skip_threshold = 5u32;
+            let aggressive_skip_threshold = 10u32;
 
             let mut total_frames_rendered = 0u64;
             let mut _total_frames_skipped = 0u64;
 
-            let warmup_target_frames = 1usize;
-            let warmup_after_first_timeout = Duration::from_millis(16);
+            let warmup_target_frames = 20usize;
+            let warmup_after_first_timeout = Duration::from_millis(1000);
+            let warmup_no_frames_timeout = Duration::from_secs(5);
+            let warmup_start = Instant::now();
             let mut first_frame_time: Option<Instant> = None;
 
             while !*stop_rx.borrow() {
@@ -372,6 +403,15 @@ impl Playback {
 
                 if should_start {
                     break;
+                }
+
+                if first_frame_time.is_none() && warmup_start.elapsed() > warmup_no_frames_timeout {
+                    warn!(
+                        "Playback warmup timed out waiting for first frame after {:?}",
+                        warmup_start.elapsed()
+                    );
+                    let _ = event_tx.send(PlaybackEvent::Stop);
+                    return;
                 }
 
                 tokio::select! {
@@ -387,6 +427,8 @@ impl Playback {
                         if *stop_rx.borrow() {
                             break;
                         }
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
                     }
                 }
             }
@@ -464,7 +506,7 @@ impl Playback {
 
                         if is_in_flight {
                             let wait_start = Instant::now();
-                            let max_wait = Duration::from_millis(150);
+                            let max_wait = Duration::from_millis(200);
                             let mut found_frame = None;
 
                             while wait_start.elapsed() < max_wait {
@@ -515,7 +557,7 @@ impl Playback {
                             let _ = frame_request_tx.send(frame_number);
 
                             let wait_result = tokio::time::timeout(
-                                Duration::from_millis(100),
+                                Duration::from_millis(200),
                                 prefetch_rx.recv(),
                             )
                             .await;
@@ -562,7 +604,7 @@ impl Playback {
                                 guard.insert(frame_number);
                             }
 
-                            let max_wait = Duration::from_millis(150);
+                            let max_wait = Duration::from_millis(200);
                             let data = tokio::select! {
                                 _ = stop_rx.changed() => {
                                     if let Ok(mut guard) = main_in_flight.write() {
@@ -608,6 +650,20 @@ impl Playback {
                         );
                     }
 
+                    let cursor_smoothing =
+                        (!cached_project.cursor.raw).then_some(SpringMassDamperSimulationConfig {
+                            tension: cached_project.cursor.tension,
+                            mass: cached_project.cursor.mass,
+                            friction: cached_project.cursor.friction,
+                        });
+
+                    let zoom_focus_interpolator = ZoomFocusInterpolator::new(
+                        &segment_media.cursor,
+                        cursor_smoothing,
+                        cached_project.screen_movement_spring,
+                        duration,
+                    );
+
                     let uniforms = ProjectUniforms::new(
                         &self.render_constants,
                         &cached_project,
@@ -616,6 +672,8 @@ impl Playback {
                         resolution_base,
                         &segment_media.cursor,
                         &segment_frames,
+                        duration,
+                        &zoom_focus_interpolator,
                     );
 
                     self.renderer
@@ -633,9 +691,10 @@ impl Playback {
 
                 frame_number = frame_number.saturating_add(1);
                 let _ = playback_position_tx.send(frame_number);
-                if audio_playhead_tx
-                    .send(frame_number as f64 / fps_f64)
-                    .is_err()
+                if has_audio
+                    && audio_playhead_tx
+                        .send(frame_number as f64 / fps_f64)
+                        .is_err()
                 {
                     break 'playback;
                 }
@@ -650,7 +709,7 @@ impl Playback {
                         continue;
                     }
 
-                    let skipped = (frames_behind / 2).min(fps / 4);
+                    let skipped = frames_behind.saturating_sub(1);
                     if skipped > 0 {
                         frame_number += skipped;
                         _total_frames_skipped += skipped as u64;
@@ -658,9 +717,10 @@ impl Playback {
                         prefetch_buffer.retain(|p| p.frame_number >= frame_number);
                         let _ = frame_request_tx.send(frame_number);
                         let _ = playback_position_tx.send(frame_number);
-                        if audio_playhead_tx
-                            .send(frame_number as f64 / fps_f64)
-                            .is_err()
+                        if has_audio
+                            && audio_playhead_tx
+                                .send(frame_number as f64 / fps_f64)
+                                .is_err()
                         {
                             break 'playback;
                         }
@@ -699,12 +759,12 @@ struct AudioPlayback {
 }
 
 impl AudioPlayback {
-    fn spawn(self) {
+    fn spawn(self) -> bool {
         let handle = tokio::runtime::Handle::current();
 
         if self.segments.is_empty() || self.segments[0].tracks.is_empty() {
             info!("No audio segments found, skipping audio playback thread.");
-            return;
+            return false;
         }
 
         std::thread::spawn(move || {
@@ -779,6 +839,8 @@ impl AudioPlayback {
             let _ = handle.block_on(stop_rx.changed());
             info!("Audio playback thread finished.");
         });
+
+        true
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -877,6 +939,13 @@ impl AudioPlayback {
                     default_output_info
                 }
             };
+
+            // Clamp output info for FFmpeg compatibility (max 8 channels)
+            // This must match what AudioPlaybackBuffer will use internally
+            base_output_info = base_output_info.for_ffmpeg_output();
+
+            // Also update the stream config to match the clamped channels
+            config.channels = base_output_info.channels as u16;
 
             let sample_rate = base_output_info.sample_rate;
             let buffer_size = base_output_info.buffer_size;
@@ -1097,8 +1166,13 @@ impl AudioPlayback {
 
         let mut output_info = AudioInfo::from_stream_config(&supported_config);
         output_info.sample_format = output_info.sample_format.packed();
+        // Clamp output info for FFmpeg compatibility (max 8 channels)
+        output_info = output_info.for_ffmpeg_output();
 
-        let config = supported_config.config();
+        let mut config = supported_config.config();
+        // Match stream config channels to clamped output info
+        config.channels = output_info.channels as u16;
+
         let sample_rate = output_info.sample_rate;
 
         let playhead = f64::from(start_frame_number) / f64::from(fps);

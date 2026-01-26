@@ -164,6 +164,13 @@ function Dialogs() {
 		useScreenshotEditorContext();
 
 	const path = () => editorInstance()?.path ?? "";
+	const imagePath = () => {
+		const p = path();
+		if (p.endsWith(".cap")) {
+			return `${p}/original.png`;
+		}
+		return p;
+	};
 
 	return (
 		<Dialog.Root
@@ -416,7 +423,7 @@ function Dialogs() {
 														<img
 															class="w-full h-full pointer-events-none select-none"
 															alt="screenshot"
-															src={convertFileSrc(path())}
+															src={convertFileSrc(imagePath())}
 														/>
 													</Cropper>
 												</div>

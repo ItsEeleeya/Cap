@@ -1,15 +1,12 @@
 use std::{collections::HashMap, ops::Deref, path::PathBuf, sync::Arc, time::Instant};
 use tauri::{AppHandle, Manager, Runtime, Window, ipc::CommandArg};
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{RwLock, watch};
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
 
 use crate::{
     create_editor_instance_impl,
-    frame_ws::{WSFrame, create_mpsc_frame_ws},
+    frame_ws::{WSFrame, create_watch_frame_ws},
 };
-
-const FRAME_CHANNEL_BUFFER: usize = 8;
 
 pub struct EditorInstance {
     inner: Arc<cap_editor::EditorInstance>,
@@ -24,31 +21,22 @@ type PendingReceiver = tokio::sync::watch::Receiver<Option<PendingResult>>;
 pub struct PendingEditorInstances(Arc<RwLock<HashMap<String, PendingReceiver>>>);
 
 async fn do_prewarm(app: AppHandle, path: PathBuf) -> PendingResult {
-    let (frame_tx, frame_rx) = mpsc::channel(FRAME_CHANNEL_BUFFER);
-    let frame_rx = Arc::new(Mutex::new(frame_rx));
+    let (frame_tx, frame_rx) = watch::channel(None);
 
-    let (ws_port, ws_shutdown_token) = create_mpsc_frame_ws(frame_rx).await;
+    let (ws_port, ws_shutdown_token) = create_watch_frame_ws(frame_rx).await;
     let inner = create_editor_instance_impl(
         &app,
         path,
         Box::new(move |frame| {
-            let width = frame.width;
-            let height = frame.height;
-            let stride = frame.padded_bytes_per_row;
-            let frame_number = frame.frame_number;
-            let target_time_ns = frame.target_time_ns;
-            let data = frame.data;
-            if let Err(e) = frame_tx.try_send(WSFrame {
-                data,
-                width,
-                height,
-                stride,
-                frame_number,
-                target_time_ns,
+            let _ = frame_tx.send(Some(WSFrame {
+                data: frame.data,
+                width: frame.width,
+                height: frame.height,
+                stride: frame.padded_bytes_per_row,
+                frame_number: frame.frame_number,
+                target_time_ns: frame.target_time_ns,
                 created_at: Instant::now(),
-            }) {
-                debug!("Frame channel full or closed during prewarm: {e}");
-            }
+            }));
         }),
     )
     .await?;
@@ -156,6 +144,39 @@ impl<'de, R: Runtime> CommandArg<'de, R> for WindowEditorInstance {
     }
 }
 
+pub struct OptionalWindowEditorInstance(pub Option<Arc<EditorInstance>>);
+
+impl specta::function::FunctionArg for OptionalWindowEditorInstance {
+    fn to_datatype(_: &mut specta::TypeMap) -> Option<specta::DataType> {
+        None
+    }
+}
+
+impl Deref for OptionalWindowEditorInstance {
+    type Target = Option<Arc<EditorInstance>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'de, R: Runtime> CommandArg<'de, R> for OptionalWindowEditorInstance {
+    fn from_command(
+        command: tauri::ipc::CommandItem<'de, R>,
+    ) -> Result<Self, tauri::ipc::InvokeError> {
+        let Ok(window) = Window::from_command(command) else {
+            return Ok(Self(None));
+        };
+
+        let Some(instances) = window.try_state::<EditorInstances>() else {
+            return Ok(Self(None));
+        };
+
+        let instance = futures::executor::block_on(instances.0.read());
+        Ok(Self(instance.get(window.label()).cloned()))
+    }
+}
+
 impl EditorInstances {
     pub async fn get_or_create(
         window: &Window,
@@ -191,37 +212,28 @@ impl EditorInstances {
                     }
                 }
 
-                let (frame_tx, frame_rx) = mpsc::channel(FRAME_CHANNEL_BUFFER);
-                let frame_rx = Arc::new(Mutex::new(frame_rx));
+                let (frame_tx, frame_rx) = watch::channel(None);
 
-                let (ws_port, ws_shutdown_token) = create_mpsc_frame_ws(frame_rx).await;
-                let instance = create_editor_instance_impl(
+                let (ws_port, ws_shutdown_token) = create_watch_frame_ws(frame_rx).await;
+                let inner = create_editor_instance_impl(
                     window.app_handle(),
                     path,
                     Box::new(move |frame| {
-                        let width = frame.width;
-                        let height = frame.height;
-                        let stride = frame.padded_bytes_per_row;
-                        let frame_number = frame.frame_number;
-                        let target_time_ns = frame.target_time_ns;
-                        let data = frame.data;
-                        if let Err(e) = frame_tx.try_send(WSFrame {
-                            data,
-                            width,
-                            height,
-                            stride,
-                            frame_number,
-                            target_time_ns,
+                        let _ = frame_tx.send(Some(WSFrame {
+                            data: frame.data,
+                            width: frame.width,
+                            height: frame.height,
+                            stride: frame.padded_bytes_per_row,
+                            frame_number: frame.frame_number,
+                            target_time_ns: frame.target_time_ns,
                             created_at: Instant::now(),
-                        }) {
-                            debug!("Frame channel full or closed in get_or_create: {e}");
-                        }
+                        }));
                     }),
                 )
                 .await?;
 
                 let instance = Arc::new(EditorInstance {
-                    inner: instance.clone(),
+                    inner,
                     ws_port,
                     ws_shutdown_token,
                 });

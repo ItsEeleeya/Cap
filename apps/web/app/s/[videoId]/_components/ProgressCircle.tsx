@@ -13,6 +13,22 @@ type UploadProgress =
 			progress: number;
 	  }
 	| {
+			status: "processing";
+			lastUpdated: Date;
+			progress: number;
+			message: string | null;
+	  }
+	| {
+			status: "generating_thumbnail";
+			lastUpdated: Date;
+			progress: number;
+	  }
+	| {
+			status: "error";
+			lastUpdated: Date;
+			errorMessage: string | null;
+	  }
+	| {
 			status: "failed";
 			lastUpdated: Date;
 	  };
@@ -51,36 +67,82 @@ export function useUploadProgress(
 	if (!query.data) return null;
 
 	const lastUpdated = new Date(query.data.updatedAt);
+	const phase = query.data.phase;
 
-	return query.data.total > 0 && query.data.uploaded >= query.data.total
-		? null
-		: Date.now() - lastUpdated.getTime() > 5 * MINUTE
-			? {
-					status: "failed",
-					lastUpdated,
-				}
-			: {
-					status: "uploading",
-					lastUpdated,
-					progress:
-						// `0/0` for progress is `NaN`
-						query.data.total === 0
-							? 0
-							: (query.data.uploaded / query.data.total) * 100,
-				};
+	if (phase === "complete") return null;
+
+	if (phase === "error") {
+		return {
+			status: "error",
+			lastUpdated,
+			errorMessage: Option.getOrNull(query.data.processingError),
+		};
+	}
+
+	if (phase === "processing") {
+		return {
+			status: "processing",
+			lastUpdated,
+			progress: query.data.processingProgress,
+			message: Option.getOrNull(query.data.processingMessage),
+		};
+	}
+
+	if (phase === "generating_thumbnail") {
+		return {
+			status: "generating_thumbnail",
+			lastUpdated,
+			progress: query.data.processingProgress,
+		};
+	}
+
+	const isUploadComplete =
+		query.data.total > 0 && query.data.uploaded >= query.data.total;
+	if (isUploadComplete) return null;
+
+	if (Date.now() - lastUpdated.getTime() > 5 * MINUTE) {
+		return {
+			status: "failed",
+			lastUpdated,
+		};
+	}
+
+	return {
+		status: "uploading",
+		lastUpdated,
+		progress:
+			query.data.total === 0
+				? 0
+				: (query.data.uploaded / query.data.total) * 100,
+	};
 }
 
 const ProgressCircle = ({
 	progress,
+	status = "uploading",
 	className,
 	progressTextClassName,
 	subTextClassName,
 }: {
 	progress: number;
+	status?: "uploading" | "processing" | "generating_thumbnail";
 	className?: string;
 	progressTextClassName?: string;
 	subTextClassName?: string;
 }) => {
+	const strokeColor = status === "uploading" ? "#3b82f6" : "#22c55e";
+
+	const getStatusText = () => {
+		switch (status) {
+			case "processing":
+				return "Processing";
+			case "generating_thumbnail":
+				return "Finishing up";
+			default:
+				return "Uploading";
+		}
+	};
+
 	return (
 		<div
 			className={clsx(
@@ -103,7 +165,7 @@ const ProgressCircle = ({
 					cy="50"
 					r="45"
 					fill="none"
-					stroke="#3b82f6"
+					stroke={strokeColor}
 					strokeWidth="5"
 					strokeLinecap="round"
 					strokeDasharray={`${2 * Math.PI * 45}`}
@@ -123,11 +185,11 @@ const ProgressCircle = ({
 				</p>
 				<p
 					className={clsx(
-						"mt-0.5 leading-tight text-[10px] text-white/80",
+						"mt-0.5 leading-tight text-[10px] text-white/80 text-center",
 						subTextClassName,
 					)}
 				>
-					Uploading...
+					{getStatusText()}
 				</p>
 			</div>
 		</div>

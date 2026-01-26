@@ -114,6 +114,22 @@ function createServerEnv() {
 			DUB_API_KEY: z.string().optional(),
 			INTERCOM_SECRET: z.string().optional(),
 
+			/// Media Server
+			MEDIA_SERVER_URL: z
+				.string()
+				.optional()
+				.describe("URL of the media server for FFmpeg processing"),
+			MEDIA_SERVER_WEBHOOK_SECRET: z
+				.string()
+				.optional()
+				.describe("Secret for authenticating media server webhook callbacks"),
+			MEDIA_SERVER_WEBHOOK_URL: z
+				.string()
+				.optional()
+				.describe(
+					"Base URL for media server webhooks (use host.docker.internal for Docker setups)",
+				),
+
 			/// Ignore
 			NODE_ENV: z.string(),
 			WORKFLOWS_RPC_URL: z.string().optional(),

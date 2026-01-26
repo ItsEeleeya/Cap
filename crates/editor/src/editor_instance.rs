@@ -8,10 +8,11 @@ use cap_project::{
 };
 use cap_rendering::{
     ProjectRecordingsMeta, ProjectUniforms, RecordingSegmentDecoders, RenderVideoConstants,
-    RenderedFrame, SegmentVideoPaths, Video, get_duration,
+    RenderedFrame, SegmentVideoPaths, Video, ZoomFocusInterpolator, get_duration,
+    spring_mass_damper::SpringMassDamperSimulationConfig,
 };
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -20,6 +21,53 @@ use std::{
 use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+
+fn get_video_duration_fallback(path: &Path) -> Option<f64> {
+    tracing::debug!("get_video_duration_fallback called for: {:?}", path);
+    let input = match ffmpeg::format::input(path) {
+        Ok(i) => i,
+        Err(e) => {
+            tracing::warn!("get_video_duration_fallback: failed to open input: {}", e);
+            return None;
+        }
+    };
+
+    let container_duration = input.duration();
+    tracing::debug!(
+        "get_video_duration_fallback: container_duration (raw i64) = {}",
+        container_duration
+    );
+    if container_duration > 0 {
+        let secs = container_duration as f64 / 1_000_000.0;
+        tracing::debug!(
+            "get_video_duration_fallback: returning container duration {} seconds",
+            secs
+        );
+        return Some(secs);
+    }
+
+    let stream = input.streams().best(ffmpeg::media::Type::Video)?;
+    let stream_duration = stream.duration();
+    let time_base = stream.time_base();
+    tracing::debug!(
+        "get_video_duration_fallback: stream_duration = {}, time_base = {}/{}",
+        stream_duration,
+        time_base.numerator(),
+        time_base.denominator()
+    );
+    if stream_duration > 0 && time_base.denominator() > 0 {
+        let secs =
+            stream_duration as f64 * time_base.numerator() as f64 / time_base.denominator() as f64;
+        tracing::debug!(
+            "get_video_duration_fallback: returning stream duration {} seconds",
+            secs
+        );
+        Some(secs)
+    } else {
+        tracing::warn!("get_video_duration_fallback: no valid duration found");
+        None
+    }
+}
 
 pub struct EditorInstance {
     pub project_path: PathBuf,
@@ -39,6 +87,7 @@ pub struct EditorInstance {
     pub segment_medias: Arc<Vec<SegmentMedia>>,
     meta: RecordingMeta,
     pub export_preview_active: AtomicBool,
+    pub export_active: AtomicBool,
 }
 
 impl EditorInstance {
@@ -80,11 +129,17 @@ impl EditorInstance {
                         Ok(v) => v.duration,
                         Err(e) => {
                             warn!(
-                                "Failed to load video for duration calculation: {} (path: {}), using default duration 5.0s",
+                                "Failed to load video for duration calculation: {} (path: {}), trying fallback",
                                 e,
                                 display_path.display()
                             );
-                            5.0
+                            match get_video_duration_fallback(&display_path) {
+                                Some(d) => d,
+                                None => {
+                                    warn!("Fallback also failed, using default duration 5.0s");
+                                    5.0
+                                }
+                            }
                         }
                     };
                     vec![TimelineSegment {
@@ -100,17 +155,31 @@ impl EditorInstance {
                     .enumerate()
                     .filter_map(|(i, segment)| {
                         let display_path = recording_meta.path(&segment.display.path);
+                        tracing::debug!("Attempting to get duration for segment {}: {:?}", i, display_path);
                         let duration = match Video::new(&display_path, 0.0) {
-                            Ok(v) => v.duration,
+                            Ok(v) => {
+                                tracing::debug!("Video::new succeeded, duration: {}", v.duration);
+                                v.duration
+                            }
                             Err(e) => {
                                 warn!(
-                                    "Failed to load video for duration calculation: {} (path: {}), using default duration 5.0s",
+                                    "Failed to load video for duration calculation: {} (path: {}), trying fallback",
                                     e,
                                     display_path.display()
                                 );
-                                5.0
+                                match get_video_duration_fallback(&display_path) {
+                                    Some(d) => {
+                                        tracing::debug!("Fallback succeeded, duration: {}", d);
+                                        d
+                                    }
+                                    None => {
+                                        warn!("Fallback also failed, using default duration 5.0s");
+                                        5.0
+                                    }
+                                }
                             }
                         };
+                        tracing::debug!("Final duration for segment {}: {}", i, duration);
                         if duration <= 0.0 {
                             return None;
                         }
@@ -180,7 +249,7 @@ impl EditorInstance {
             meta.as_ref(),
         )?);
 
-        let segments = create_segments(&recording_meta, meta.as_ref()).await?;
+        let segments = create_segments(&recording_meta, meta.as_ref(), false).await?;
 
         let render_constants = Arc::new(
             RenderVideoConstants::new(
@@ -220,6 +289,7 @@ impl EditorInstance {
             playback_active: playback_active_tx,
             playback_active_rx,
             export_preview_active: AtomicBool::new(false),
+            export_active: AtomicBool::new(false),
         });
 
         this.state.lock().await.preview_task =
@@ -248,13 +318,6 @@ impl EditorInstance {
 
         self.renderer.stop().await;
 
-        // // Clear audio data
-        // if self.audio.lock().unwrap().is_some() {
-        //     println!("Clearing audio data");
-        //     *self.audio.lock().unwrap() = None; // Explicitly drop the audio data
-        // }
-
-        // Cancel any remaining tasks
         tokio::task::yield_now().await;
 
         drop(state);
@@ -332,9 +395,11 @@ impl EditorInstance {
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut prefetch_cancel_token: Option<CancellationToken> = None;
+            let mut has_rendered_first_frame = false;
 
             loop {
                 preview_rx.changed().await.unwrap();
+                has_rendered_first_frame = false;
 
                 loop {
                     let Some((frame_number, fps, resolution_base)) =
@@ -348,6 +413,11 @@ impl EditorInstance {
                     }
 
                     if *self.playback_active_rx.borrow() {
+                        break;
+                    }
+
+                    if self.export_active.load(Ordering::Acquire) {
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         break;
                     }
 
@@ -376,8 +446,9 @@ impl EditorInstance {
                     let playback_is_active = *self.playback_active_rx.borrow();
                     let export_preview_is_active =
                         self.export_preview_active.load(Ordering::Acquire);
-                    if !playback_is_active && !export_preview_is_active {
-                        let prefetch_frames_count = 5u32;
+                    let export_is_active = self.export_active.load(Ordering::Acquire);
+                    if !playback_is_active && !export_preview_is_active && !export_is_active {
+                        let prefetch_frames_count = 15u32;
                         let hide_camera = project.camera.hide;
                         let playback_rx = self.playback_active_rx.clone();
                         for offset in 1..=prefetch_frames_count {
@@ -413,11 +484,7 @@ impl EditorInstance {
                         }
                     }
 
-                    let get_frames_future = segment_medias.decoders.get_frames(
-                        segment_time as f32,
-                        !project.camera.hide,
-                        clip_offsets,
-                    );
+                    let use_initial_timeout = !has_rendered_first_frame;
 
                     tokio::select! {
                         biased;
@@ -426,12 +493,49 @@ impl EditorInstance {
                             continue;
                         }
 
-                        segment_frames_opt = get_frames_future => {
+                        segment_frames_opt = async {
+                            if use_initial_timeout {
+                                segment_medias.decoders.get_frames_initial(
+                                    segment_time as f32,
+                                    !project.camera.hide,
+                                    clip_offsets,
+                                ).await
+                            } else {
+                                segment_medias.decoders.get_frames(
+                                    segment_time as f32,
+                                    !project.camera.hide,
+                                    clip_offsets,
+                                ).await
+                            }
+                        } => {
                             if preview_rx.has_changed().unwrap_or(false) {
                                 continue;
                             }
 
                             if let Some(segment_frames) = segment_frames_opt {
+                                has_rendered_first_frame = true;
+
+                                let total_duration = project
+                                    .timeline
+                                    .as_ref()
+                                    .map(|t| t.duration())
+                                    .unwrap_or(0.0);
+
+                                let cursor_smoothing = (!project.cursor.raw).then_some(
+                                    SpringMassDamperSimulationConfig {
+                                        tension: project.cursor.tension,
+                                        mass: project.cursor.mass,
+                                        friction: project.cursor.friction,
+                                    },
+                                );
+
+                                let zoom_focus_interpolator = ZoomFocusInterpolator::new(
+                                    &segment_medias.cursor,
+                                    cursor_smoothing,
+                                    project.screen_movement_spring,
+                                    total_duration,
+                                );
+
                                 let uniforms = ProjectUniforms::new(
                                     &self.render_constants,
                                     &project,
@@ -440,6 +544,8 @@ impl EditorInstance {
                                     resolution_base,
                                     &segment_medias.cursor,
                                     &segment_frames,
+                                    total_duration,
+                                    &zoom_focus_interpolator,
                                 );
                                 self.renderer
                                     .render_frame(segment_frames, uniforms, segment_medias.cursor.clone())
@@ -464,7 +570,6 @@ impl EditorInstance {
     }
 
     pub fn get_total_frames(&self, fps: u32) -> u32 {
-        // Calculate total frames based on actual video duration and fps
         let duration = get_duration(
             &self.recordings,
             &self.meta,
@@ -498,6 +603,7 @@ pub struct SegmentMedia {
 pub async fn create_segments(
     recording_meta: &RecordingMeta,
     meta: &StudioRecordingMeta,
+    force_ffmpeg: bool,
 ) -> Result<Vec<SegmentMedia>, String> {
     match &meta {
         cap_project::StudioRecordingMeta::SingleSegment { segment: s } => {
@@ -511,6 +617,26 @@ pub async fn create_segments(
                 .transpose()?
                 .map(Arc::new);
 
+            let cursor = Arc::new(
+                s.cursor
+                    .as_ref()
+                    .map(|cursor_path| {
+                        let full_path = recording_meta.path(cursor_path);
+                        match CursorEvents::load_from_file(&full_path) {
+                            Ok(events) => events,
+                            Err(e) => {
+                                warn!(
+                                    "Failed to load cursor events from {}: {}",
+                                    full_path.display(),
+                                    e
+                                );
+                                CursorEvents::default()
+                            }
+                        }
+                    })
+                    .unwrap_or_default(),
+            );
+
             let decoders = RecordingSegmentDecoders::new(
                 recording_meta,
                 meta,
@@ -519,6 +645,7 @@ pub async fn create_segments(
                     camera: s.camera.as_ref().map(|c| recording_meta.path(&c.path)),
                 },
                 0,
+                force_ffmpeg,
             )
             .await
             .map_err(|e| format!("SingleSegment / {e}"))?;
@@ -526,7 +653,7 @@ pub async fn create_segments(
             Ok(vec![SegmentMedia {
                 audio,
                 system_audio: None,
-                cursor: Default::default(),
+                cursor,
                 decoders,
             }])
         }
@@ -564,6 +691,7 @@ pub async fn create_segments(
                         camera: s.camera.as_ref().map(|c| recording_meta.path(&c.path)),
                     },
                     i,
+                    force_ffmpeg,
                 )
                 .await
                 .map_err(|e| format!("MultipleSegments {i} / {e}"))?;

@@ -248,10 +248,96 @@ impl CachedFrame {
     }
 }
 
+struct DecoderHealth {
+    consecutive_empty_iterations: u32,
+    consecutive_errors: u32,
+    total_frames_decoded: u64,
+    last_successful_decode: std::time::Instant,
+    reached_eof: bool,
+    last_successful_frame: Option<u32>,
+}
+
+impl DecoderHealth {
+    const MAX_CONSECUTIVE_EMPTY: u32 = 5;
+    const MAX_CONSECUTIVE_ERRORS: u32 = 10;
+    const STALE_THRESHOLD_SECS: u64 = 10;
+    const EOF_TOLERANCE_EMPTY: u32 = 15;
+
+    fn new() -> Self {
+        Self {
+            consecutive_empty_iterations: 0,
+            consecutive_errors: 0,
+            total_frames_decoded: 0,
+            last_successful_decode: std::time::Instant::now(),
+            reached_eof: false,
+            last_successful_frame: None,
+        }
+    }
+
+    fn record_success(&mut self, frames_count: u32, last_frame: u32) {
+        self.consecutive_empty_iterations = 0;
+        self.consecutive_errors = 0;
+        self.total_frames_decoded += frames_count as u64;
+        self.last_successful_decode = std::time::Instant::now();
+        self.reached_eof = false;
+        self.last_successful_frame = Some(last_frame);
+    }
+
+    fn record_empty_iteration(&mut self) {
+        self.consecutive_empty_iterations += 1;
+    }
+
+    fn record_error(&mut self) {
+        self.consecutive_errors += 1;
+    }
+
+    fn mark_eof(&mut self) {
+        self.reached_eof = true;
+    }
+
+    fn is_at_eof(&self) -> bool {
+        self.reached_eof
+    }
+
+    fn needs_recreation(&self, requested_frame: u32, total_frames_estimate: u32) -> bool {
+        if self.reached_eof {
+            return self.consecutive_empty_iterations >= Self::EOF_TOLERANCE_EMPTY;
+        }
+
+        let near_end = if total_frames_estimate > 0 {
+            let remaining = total_frames_estimate.saturating_sub(requested_frame);
+            remaining < 60
+        } else {
+            false
+        };
+
+        if near_end {
+            return self.consecutive_empty_iterations >= Self::EOF_TOLERANCE_EMPTY
+                || self.consecutive_errors >= Self::MAX_CONSECUTIVE_ERRORS;
+        }
+
+        self.consecutive_empty_iterations >= Self::MAX_CONSECUTIVE_EMPTY
+            || self.consecutive_errors >= Self::MAX_CONSECUTIVE_ERRORS
+            || (self.total_frames_decoded > 0
+                && self.last_successful_decode.elapsed().as_secs() > Self::STALE_THRESHOLD_SECS)
+    }
+
+    fn reset_counters(&mut self) {
+        self.consecutive_empty_iterations = 0;
+        self.consecutive_errors = 0;
+        self.last_successful_decode = std::time::Instant::now();
+        self.reached_eof = false;
+    }
+}
+
 struct DecoderInstance {
     inner: cap_video_decode::AVAssetReaderDecoder,
     is_done: bool,
     frames_iter_valid: bool,
+    health: DecoderHealth,
+    path: PathBuf,
+    tokio_handle: TokioHandle,
+    keyframe_index: Option<Arc<cap_video_decode::avassetreader::KeyframeIndex>>,
 }
 
 impl DecoderInstance {
@@ -259,17 +345,21 @@ impl DecoderInstance {
         path: PathBuf,
         tokio_handle: TokioHandle,
         start_time: f32,
-        keyframe_index: Option<cap_video_decode::avassetreader::KeyframeIndex>,
+        keyframe_index: Option<Arc<cap_video_decode::avassetreader::KeyframeIndex>>,
     ) -> Result<Self, String> {
         Ok(Self {
             inner: cap_video_decode::AVAssetReaderDecoder::new_with_keyframe_index(
-                path,
-                tokio_handle,
+                path.clone(),
+                tokio_handle.clone(),
                 start_time,
-                keyframe_index,
+                keyframe_index.clone(),
             )?,
             is_done: false,
             frames_iter_valid: true,
+            health: DecoderHealth::new(),
+            path,
+            tokio_handle,
+            keyframe_index,
         })
     }
 
@@ -278,6 +368,7 @@ impl DecoderInstance {
             Ok(()) => {
                 self.is_done = false;
                 self.frames_iter_valid = true;
+                self.health.reset_counters();
             }
             Err(e) => {
                 tracing::error!(
@@ -287,8 +378,29 @@ impl DecoderInstance {
                 );
                 self.is_done = true;
                 self.frames_iter_valid = false;
+                self.health.record_error();
             }
         }
+    }
+
+    fn recreate(&mut self, start_time: f32) -> Result<(), String> {
+        tracing::info!(
+            start_time = start_time,
+            consecutive_empty = self.health.consecutive_empty_iterations,
+            consecutive_errors = self.health.consecutive_errors,
+            "Recreating decoder instance due to poor health"
+        );
+
+        self.inner = cap_video_decode::AVAssetReaderDecoder::new_with_keyframe_index(
+            self.path.clone(),
+            self.tokio_handle.clone(),
+            start_time,
+            self.keyframe_index.clone(),
+        )?;
+        self.is_done = false;
+        self.frames_iter_valid = true;
+        self.health = DecoderHealth::new();
+        Ok(())
     }
 
     fn current_position(&self) -> f32 {
@@ -301,16 +413,12 @@ pub struct AVAssetReaderDecoder {
     pool_manager: DecoderPoolManager,
     active_decoder_idx: usize,
     scrub_detector: ScrubDetector,
+    total_frames_estimate: u32,
 }
 
 impl AVAssetReaderDecoder {
     fn new(path: PathBuf, tokio_handle: TokioHandle) -> Result<Self, String> {
-        let mut primary_decoder =
-            cap_video_decode::AVAssetReaderDecoder::new(path.clone(), tokio_handle.clone())?;
-
-        let keyframe_index = primary_decoder.take_keyframe_index();
-        let keyframe_index_arc: Option<Arc<cap_video_decode::avassetreader::KeyframeIndex>> = None;
-
+        let keyframe_index = cap_video_decode::avassetreader::KeyframeIndex::build(&path).ok();
         let fps = keyframe_index
             .as_ref()
             .map(|kf| kf.fps() as u32)
@@ -319,29 +427,36 @@ impl AVAssetReaderDecoder {
             .as_ref()
             .map(|kf| kf.duration_secs())
             .unwrap_or(0.0);
+        let keyframe_index_arc = keyframe_index.map(Arc::new);
 
         let config = MultiPositionDecoderConfig {
             path: path.clone(),
             tokio_handle: tokio_handle.clone(),
-            keyframe_index: keyframe_index_arc,
+            keyframe_index: keyframe_index_arc.clone(),
             fps,
             duration_secs,
         };
 
         let pool_manager = DecoderPoolManager::new(config);
 
-        let primary_instance = DecoderInstance {
-            inner: primary_decoder,
-            is_done: false,
-            frames_iter_valid: true,
-        };
+        let primary_instance = DecoderInstance::new(
+            path.clone(),
+            tokio_handle.clone(),
+            0.0,
+            keyframe_index_arc.clone(),
+        )?;
 
         let mut decoders = vec![primary_instance];
 
         let initial_positions = pool_manager.positions();
         for pos in initial_positions.iter().skip(1) {
             let start_time = pos.position_secs;
-            match DecoderInstance::new(path.clone(), tokio_handle.clone(), start_time, None) {
+            match DecoderInstance::new(
+                path.clone(),
+                tokio_handle.clone(),
+                start_time,
+                keyframe_index_arc.clone(),
+            ) {
                 Ok(instance) => {
                     decoders.push(instance);
                     tracing::info!(
@@ -360,10 +475,15 @@ impl AVAssetReaderDecoder {
             }
         }
 
+        let total_frames_estimate = (duration_secs * fps as f64).ceil() as u32;
+
         tracing::info!(
             decoder_count = decoders.len(),
+            optimal_pool_size = pool_manager.optimal_pool_size(),
+            reposition_threshold = pool_manager.reposition_threshold(),
             fps = fps,
             duration_secs = duration_secs,
+            total_frames_estimate = total_frames_estimate,
             "Initialized multi-position decoder pool"
         );
 
@@ -372,6 +492,7 @@ impl AVAssetReaderDecoder {
             pool_manager,
             active_decoder_idx: 0,
             scrub_detector: ScrubDetector::new(),
+            total_frames_estimate,
         })
     }
 
@@ -501,11 +622,15 @@ impl AVAssetReaderDecoder {
 
             let (decoder_idx, was_reset) = this.select_best_decoder(requested_time);
 
-            let cache_min = min_requested_frame.saturating_sub(FRAME_CACHE_SIZE as u32 / 2);
+            let cache_min = if was_reset {
+                min_requested_frame.saturating_sub(FRAME_CACHE_SIZE as u32 * 2)
+            } else {
+                min_requested_frame.saturating_sub(FRAME_CACHE_SIZE as u32 / 2)
+            };
             let cache_max = if is_scrubbing {
                 max_requested_frame + FRAME_CACHE_SIZE as u32 / 4
             } else {
-                max_requested_frame + FRAME_CACHE_SIZE as u32 / 2
+                max_requested_frame + FRAME_CACHE_SIZE as u32
             };
 
             if was_reset {
@@ -545,6 +670,10 @@ impl AVAssetReaderDecoder {
                     last_decoded_position = Some(position_secs);
 
                     let Some(frame) = frame.image_buf() else {
+                        tracing::debug!(
+                            current_frame = current_frame,
+                            "Frame has no image buffer, skipping"
+                        );
                         continue;
                     };
 
@@ -591,7 +720,7 @@ impl AVAssetReaderDecoder {
                                     *last_sent_frame.borrow_mut() = Some(data.clone());
                                     let _ = req.sender.send(data.to_decoded_frame());
                                 } else {
-                                    const MAX_FALLBACK_DISTANCE: u32 = 10;
+                                    const MAX_FALLBACK_DISTANCE: u32 = 90;
 
                                     let nearest = cache
                                         .range(..=req.frame)
@@ -617,10 +746,6 @@ impl AVAssetReaderDecoder {
 
                     exit = exit || exceeds_cache_bounds;
 
-                    if is_scrubbing && frames_iterated > 3 {
-                        break;
-                    }
-
                     if pending_requests.is_empty() || exit {
                         break;
                     }
@@ -629,16 +754,97 @@ impl AVAssetReaderDecoder {
                 decoder.is_done = true;
             }
 
+            let last_frame_in_cache = cache.keys().max().copied().unwrap_or(0);
+            if frames_iterated > 0 {
+                this.decoders[decoder_idx]
+                    .health
+                    .record_success(frames_iterated, last_frame_in_cache);
+            } else if !pending_requests.is_empty() {
+                this.decoders[decoder_idx].health.record_empty_iteration();
+
+                let near_end = this.total_frames_estimate > 0
+                    && requested_frame > this.total_frames_estimate.saturating_sub(120);
+
+                let at_eof = near_end
+                    && this.decoders[decoder_idx]
+                        .health
+                        .consecutive_empty_iterations
+                        >= 3
+                    && !cache.is_empty()
+                    && cache.keys().max().copied().unwrap_or(0)
+                        > requested_frame.saturating_sub(60);
+
+                if at_eof && !this.decoders[decoder_idx].health.is_at_eof() {
+                    this.decoders[decoder_idx].health.mark_eof();
+                    tracing::info!(
+                        decoder_idx = decoder_idx,
+                        requested_frame = requested_frame,
+                        total_frames = this.total_frames_estimate,
+                        cache_max = cache.keys().max().copied().unwrap_or(0),
+                        "Decoder reached EOF - will use cached frames for remaining requests"
+                    );
+                }
+
+                if !at_eof {
+                    tracing::warn!(
+                        decoder_idx = decoder_idx,
+                        requested_frame = requested_frame,
+                        requested_time = requested_time,
+                        was_reset = was_reset,
+                        cache_size = cache.len(),
+                        consecutive_empty = this.decoders[decoder_idx]
+                            .health
+                            .consecutive_empty_iterations,
+                        near_end = near_end,
+                        "No frames decoded from video - decoder iterator returned no frames"
+                    );
+                }
+
+                if this.decoders[decoder_idx]
+                    .health
+                    .needs_recreation(requested_frame, this.total_frames_estimate)
+                {
+                    if let Err(e) = this.decoders[decoder_idx].recreate(requested_time) {
+                        tracing::error!(
+                            decoder_idx = decoder_idx,
+                            error = %e,
+                            "Failed to recreate unhealthy decoder"
+                        );
+                    } else {
+                        this.pool_manager.update_decoder_position(
+                            decoder_idx,
+                            this.decoders[decoder_idx].current_position(),
+                        );
+                    }
+                }
+            }
+
             if let Some(pos) = last_decoded_position {
                 this.pool_manager.update_decoder_position(decoder_idx, pos);
             }
+
+            let mut unfulfilled_count = 0u32;
+            let decoder_returned_no_frames = frames_iterated == 0;
+            let decoder_at_eof = this.decoders[decoder_idx].health.is_at_eof();
+            let near_video_end = this.total_frames_estimate > 0
+                && requested_frame > this.total_frames_estimate.saturating_sub(120);
 
             for req in pending_requests.drain(..) {
                 if let Some(cached) = cache.get(&req.frame) {
                     let data = cached.data().clone();
                     let _ = req.sender.send(data.to_decoded_frame());
                 } else {
-                    const MAX_FALLBACK_DISTANCE: u32 = 10;
+                    const MAX_FALLBACK_DISTANCE: u32 = 90;
+                    const MAX_FALLBACK_DISTANCE_EOF: u32 = 300;
+                    const MAX_FALLBACK_DISTANCE_NEAR_END: u32 = 180;
+
+                    let fallback_distance = if decoder_at_eof || decoder_returned_no_frames {
+                        MAX_FALLBACK_DISTANCE_EOF
+                    } else if near_video_end {
+                        MAX_FALLBACK_DISTANCE_NEAR_END
+                    } else {
+                        MAX_FALLBACK_DISTANCE
+                    };
 
                     let nearest = cache
                         .range(..=req.frame)
@@ -647,12 +853,101 @@ impl AVAssetReaderDecoder {
 
                     if let Some((&frame_num, cached)) = nearest {
                         let distance = req.frame.abs_diff(frame_num);
-                        if distance <= MAX_FALLBACK_DISTANCE {
+                        if distance <= fallback_distance {
                             let _ = req.sender.send(cached.data().to_decoded_frame());
+                        } else if let Some(ref last) = *last_sent_frame.borrow() {
+                            let _ = req.sender.send(last.to_decoded_frame());
+                        } else if let Some(ref first) = *first_ever_frame.borrow() {
+                            let _ = req.sender.send(first.to_decoded_frame());
+                        } else {
+                            unfulfilled_count += 1;
                         }
+                    } else if let Some(ref last) = *last_sent_frame.borrow() {
+                        let _ = req.sender.send(last.to_decoded_frame());
+                    } else if let Some(ref first) = *first_ever_frame.borrow() {
+                        let _ = req.sender.send(first.to_decoded_frame());
+                    } else {
+                        unfulfilled_count += 1;
                     }
                 }
             }
+
+            if unfulfilled_count > 0 {
+                tracing::warn!(
+                    unfulfilled_count = unfulfilled_count,
+                    cache_size = cache.len(),
+                    frames_iterated = frames_iterated,
+                    "Frame requests could not be fulfilled - frames not in cache or nearby"
+                );
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decoder_health_new() {
+        let health = DecoderHealth::new();
+        assert_eq!(health.consecutive_empty_iterations, 0);
+        assert_eq!(health.consecutive_errors, 0);
+        assert_eq!(health.total_frames_decoded, 0);
+        assert!(!health.needs_recreation());
+    }
+
+    #[test]
+    fn test_decoder_health_record_success_resets_counters() {
+        let mut health = DecoderHealth::new();
+        health.consecutive_empty_iterations = 3;
+        health.consecutive_errors = 5;
+
+        health.record_success(10);
+
+        assert_eq!(health.consecutive_empty_iterations, 0);
+        assert_eq!(health.consecutive_errors, 0);
+        assert_eq!(health.total_frames_decoded, 10);
+        assert!(!health.needs_recreation());
+    }
+
+    #[test]
+    fn test_decoder_health_needs_recreation_after_empty_iterations() {
+        let mut health = DecoderHealth::new();
+        for _ in 0..DecoderHealth::MAX_CONSECUTIVE_EMPTY {
+            health.record_empty_iteration();
+        }
+        assert!(health.needs_recreation());
+    }
+
+    #[test]
+    fn test_decoder_health_needs_recreation_after_errors() {
+        let mut health = DecoderHealth::new();
+        for _ in 0..DecoderHealth::MAX_CONSECUTIVE_ERRORS {
+            health.record_error();
+        }
+        assert!(health.needs_recreation());
+    }
+
+    #[test]
+    fn test_decoder_health_reset_counters() {
+        let mut health = DecoderHealth::new();
+        health.consecutive_empty_iterations = 10;
+        health.consecutive_errors = 10;
+
+        health.reset_counters();
+
+        assert_eq!(health.consecutive_empty_iterations, 0);
+        assert_eq!(health.consecutive_errors, 0);
+        assert!(!health.needs_recreation());
+    }
+
+    #[test]
+    fn test_decoder_health_below_threshold_no_recreation() {
+        let mut health = DecoderHealth::new();
+        for _ in 0..(DecoderHealth::MAX_CONSECUTIVE_EMPTY - 1) {
+            health.record_empty_iteration();
+        }
+        assert!(!health.needs_recreation());
     }
 }

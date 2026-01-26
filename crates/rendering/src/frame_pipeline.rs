@@ -1,8 +1,11 @@
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::oneshot;
 use wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
 
 use crate::{ProjectUniforms, RenderingError};
+
+const GPU_BUFFER_WAIT_TIMEOUT_SECS: u64 = 30;
 
 pub struct PendingReadback {
     rx: oneshot::Receiver<Result<(), wgpu::BufferAsyncError>>,
@@ -17,25 +20,39 @@ pub struct PendingReadback {
 impl PendingReadback {
     pub async fn wait(mut self, device: &wgpu::Device) -> Result<RenderedFrame, RenderingError> {
         let mut poll_count = 0u32;
+        let start_time = Instant::now();
+        let timeout_duration = std::time::Duration::from_secs(GPU_BUFFER_WAIT_TIMEOUT_SECS);
 
         loop {
+            if start_time.elapsed() > timeout_duration {
+                tracing::error!(
+                    frame_number = self.frame_number,
+                    elapsed_secs = start_time.elapsed().as_secs(),
+                    poll_count = poll_count,
+                    "GPU buffer mapping timed out after {}s",
+                    GPU_BUFFER_WAIT_TIMEOUT_SECS
+                );
+                return Err(RenderingError::BufferMapWaitingFailed);
+            }
+
             match self.rx.try_recv() {
                 Ok(result) => {
                     result?;
                     break;
                 }
                 Err(oneshot::error::TryRecvError::Empty) => {
-                    match device.poll(wgpu::PollType::Poll) {
-                        Ok(maintained) => {
-                            if maintained.is_queue_empty() {
-                                break;
-                            }
-                        }
-                        Err(e) => return Err(e.into()),
-                    }
+                    device.poll(wgpu::PollType::Poll)?;
                     poll_count += 1;
                     if poll_count.is_multiple_of(3) {
                         tokio::task::yield_now().await;
+                    }
+                    if poll_count.is_multiple_of(10000) {
+                        tracing::warn!(
+                            frame_number = self.frame_number,
+                            poll_count = poll_count,
+                            elapsed_ms = start_time.elapsed().as_millis() as u64,
+                            "GPU buffer mapping taking longer than expected"
+                        );
                     }
                 }
                 Err(oneshot::error::TryRecvError::Closed) => {
@@ -71,6 +88,8 @@ pub struct PipelinedGpuReadback {
     buffer_size: u64,
     current_index: usize,
     pending: Option<PendingReadback>,
+    needs_resize: bool,
+    pending_resize_size: u64,
 }
 
 impl PipelinedGpuReadback {
@@ -89,11 +108,26 @@ impl PipelinedGpuReadback {
             buffer_size: initial_size,
             current_index: 0,
             pending: None,
+            needs_resize: false,
+            pending_resize_size: 0,
         }
     }
 
-    pub fn ensure_size(&mut self, device: &wgpu::Device, required_size: u64) {
+    pub fn mark_for_resize(&mut self, required_size: u64) {
         if self.buffer_size < required_size {
+            self.needs_resize = true;
+            self.pending_resize_size = required_size;
+        }
+    }
+
+    pub fn perform_resize_if_needed(&mut self, device: &wgpu::Device) {
+        if self.needs_resize && self.pending.is_none() {
+            let required_size = self.pending_resize_size;
+            tracing::info!(
+                old_size = self.buffer_size,
+                new_size = required_size,
+                "Resizing GPU readback buffers"
+            );
             let make_buffer = || {
                 Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("Pipelined Readback Buffer"),
@@ -106,6 +140,29 @@ impl PipelinedGpuReadback {
             self.buffers = [make_buffer(), make_buffer(), make_buffer()];
             self.buffer_size = required_size;
             self.current_index = 0;
+            self.needs_resize = false;
+            self.pending_resize_size = 0;
+        }
+    }
+
+    pub fn ensure_size(&mut self, device: &wgpu::Device, required_size: u64) {
+        if self.buffer_size < required_size {
+            if self.pending.is_some() {
+                self.mark_for_resize(required_size);
+            } else {
+                let make_buffer = || {
+                    Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("Pipelined Readback Buffer"),
+                        size: required_size,
+                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                        mapped_at_creation: false,
+                    }))
+                };
+
+                self.buffers = [make_buffer(), make_buffer(), make_buffer()];
+                self.buffer_size = required_size;
+                self.current_index = 0;
+            }
         }
     }
 
@@ -191,6 +248,8 @@ pub struct RenderSession {
     texture_views: (wgpu::TextureView, wgpu::TextureView),
     pub current_is_left: bool,
     pub pipelined_readback: PipelinedGpuReadback,
+    texture_width: u32,
+    texture_height: u32,
 }
 
 impl RenderSession {
@@ -226,10 +285,24 @@ impl RenderSession {
             ),
             textures,
             pipelined_readback: PipelinedGpuReadback::new(device, initial_buffer_size),
+            texture_width: width,
+            texture_height: height,
         }
     }
 
     pub fn update_texture_size(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        if self.texture_width == width && self.texture_height == height {
+            return;
+        }
+
+        tracing::info!(
+            old_width = self.texture_width,
+            old_height = self.texture_height,
+            new_width = width,
+            new_height = height,
+            "Resizing render session textures"
+        );
+
         let make_texture = || {
             device.create_texture(&wgpu::TextureDescriptor {
                 size: wgpu::Extent3d {
@@ -254,6 +327,8 @@ impl RenderSession {
             self.textures.0.create_view(&Default::default()),
             self.textures.1.create_view(&Default::default()),
         );
+        self.texture_width = width;
+        self.texture_height = height;
     }
 
     pub fn current_texture(&self) -> &wgpu::Texture {
@@ -354,6 +429,8 @@ pub async fn finish_encoder(
     encoder: wgpu::CommandEncoder,
 ) -> Result<RenderedFrame, RenderingError> {
     let previous_pending = session.pipelined_readback.take_pending();
+
+    session.pipelined_readback.perform_resize_if_needed(device);
 
     let texture = if session.current_is_left {
         &session.textures.0

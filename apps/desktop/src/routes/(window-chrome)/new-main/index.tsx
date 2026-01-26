@@ -1,13 +1,18 @@
 import { Button } from "@cap/ui-solid";
 import { useNavigate } from "@solidjs/router";
-import { createMutation, queryOptions, useQuery } from "@tanstack/solid-query";
+import {
+	createMutation,
+	queryOptions,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/solid-query";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
 	getAllWebviewWindows,
 	WebviewWindow,
 } from "@tauri-apps/api/webviewWindow";
-import { Effect, getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import * as shell from "@tauri-apps/plugin-shell";
@@ -28,8 +33,6 @@ import { Transition } from "solid-transition-group";
 import Mode from "~/components/Mode";
 import { RecoveryToast } from "~/components/RecoveryToast";
 import Tooltip from "~/components/Tooltip";
-import { createSolariumWindow } from "~/routes/debug";
-import { openDebugLibrary } from "~/routes/debug-library";
 import { Input } from "~/routes/editor/ui";
 import { authStore } from "~/store";
 import { createSignInMutation } from "~/utils/auth";
@@ -65,8 +68,10 @@ import IconLucideAppWindowMac from "~icons/lucide/app-window-mac";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
 import IconLucideBug from "~icons/lucide/bug";
 import IconLucideImage from "~icons/lucide/image";
+import IconLucideImport from "~icons/lucide/import";
 import IconLucideSearch from "~icons/lucide/search";
 import IconLucideSquarePlay from "~icons/lucide/square-play";
+import IconLucideVideo from "~icons/lucide/video";
 import IconMaterialSymbolsScreenshotFrame2Rounded from "~icons/material-symbols/screenshot-frame-2-rounded";
 import IconMdiMonitor from "~icons/mdi/monitor";
 import { WindowChromeHeader } from "../Context";
@@ -84,7 +89,7 @@ import TargetDropdownButton from "./TargetDropdownButton";
 import TargetMenuGrid from "./TargetMenuGrid";
 import TargetTypeButton from "./TargetTypeButton";
 
-const WINDOW_SIZE = { width: 330, height: 345 } as const;
+const WINDOW_SIZE = { width: 330, height: 395 } as const;
 
 const findCamera = (cameras: CameraInfo[], id: DeviceOrModelID) => {
 	return cameras.find((c) => {
@@ -136,31 +141,31 @@ const createDisplaySignature = (
 
 type TargetMenuPanelProps =
 	| {
-		variant: "display";
-		targets?: CaptureDisplayWithThumbnail[];
-		onSelect: (target: CaptureDisplayWithThumbnail) => void;
-	}
+			variant: "display";
+			targets?: CaptureDisplayWithThumbnail[];
+			onSelect: (target: CaptureDisplayWithThumbnail) => void;
+	  }
 	| {
-		variant: "window";
-		targets?: CaptureWindowWithThumbnail[];
-		onSelect: (target: CaptureWindowWithThumbnail) => void;
-	}
+			variant: "window";
+			targets?: CaptureWindowWithThumbnail[];
+			onSelect: (target: CaptureWindowWithThumbnail) => void;
+	  }
 	| {
-		variant: "recording";
-		targets?: RecordingWithPath[];
-		onSelect: (target: RecordingWithPath) => void;
-		onViewAll: () => void;
-		uploadProgress?: Record<string, number>;
-		reuploadingPaths?: Set<string>;
-		onReupload?: (path: string) => void;
-		onRefetch?: () => void;
-	}
+			variant: "recording";
+			targets?: RecordingWithPath[];
+			onSelect: (target: RecordingWithPath) => void;
+			onViewAll: () => void;
+			uploadProgress?: Record<string, number>;
+			reuploadingPaths?: Set<string>;
+			onReupload?: (path: string) => void;
+			onRefetch?: () => void;
+	  }
 	| {
-		variant: "screenshot";
-		targets?: ScreenshotWithPath[];
-		onSelect: (target: ScreenshotWithPath) => void;
-		onViewAll: () => void;
-	};
+			variant: "screenshot";
+			targets?: ScreenshotWithPath[];
+			onSelect: (target: ScreenshotWithPath) => void;
+			onViewAll: () => void;
+	  };
 
 type SharedTargetMenuProps = {
 	isLoading: boolean;
@@ -189,6 +194,32 @@ function TargetMenuPanel(props: TargetMenuPanelProps & SharedTargetMenuProps) {
 				: props.variant === "recording"
 					? "No matching recordings"
 					: "No matching screenshots";
+
+	const handleImport = async () => {
+		const result = await dialog.open({
+			filters: [
+				{
+					name: "Video Files",
+					extensions: ["mp4", "mov", "avi", "mkv", "webm", "wmv", "m4v", "flv"],
+				},
+			],
+			multiple: false,
+		});
+
+		if (result) {
+			try {
+				const projectPath = await commands.startVideoImport(result as string);
+				await commands.showWindow({ Editor: { project_path: projectPath } });
+				getCurrentWindow().hide();
+			} catch (e) {
+				console.error("Failed to import video:", e);
+				await dialog.message(
+					`Failed to import video: ${e instanceof Error ? e.message : String(e)}`,
+					{ title: "Import Error", kind: "error" },
+				);
+			}
+		}
+	};
 
 	const filteredDisplayTargets = createMemo<CaptureDisplayWithThumbnail[]>(
 		() => {
@@ -259,26 +290,39 @@ function TargetMenuPanel(props: TargetMenuPanelProps & SharedTargetMenuProps) {
 					<IconLucideArrowLeft class="size-3 text-gray-11" />
 					<span class="font-medium text-gray-12">Back</span>
 				</div>
-				<div class="relative flex-1 min-w-0 h-[36px] flex items-center">
-					<IconLucideSearch class="absolute left-2 top-[48%] -translate-y-1/2 pointer-events-none size-3 text-gray-10" />
-					<Input
-						type="search"
-						class="py-2 pl-6 h-full"
-						value={search()}
-						onInput={(event) => setSearch(event.currentTarget.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Escape" && search()) {
-								event.preventDefault();
-								setSearch("");
-							}
-						}}
-						placeholder={placeholder}
-						autoCapitalize="off"
-						autocorrect="off"
-						autocomplete="off"
-						spellcheck={false}
-						aria-label={placeholder}
-					/>
+				<div class="flex gap-2 flex-1 min-w-0">
+					<div class="relative flex-1 min-w-0 h-[36px] flex items-center">
+						<IconLucideSearch class="absolute left-2 top-[48%] -translate-y-1/2 pointer-events-none size-3 text-gray-10" />
+						<Input
+							type="search"
+							class="py-2 pl-6 h-full w-full"
+							value={search()}
+							onInput={(event) => setSearch(event.currentTarget.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Escape" && search()) {
+									event.preventDefault();
+									setSearch("");
+								}
+							}}
+							placeholder={placeholder}
+							autoCapitalize="off"
+							autocorrect="off"
+							autocomplete="off"
+							spellcheck={false}
+							aria-label={placeholder}
+						/>
+					</div>
+					<Show when={props.variant === "recording"}>
+						<Button
+							variant="gray"
+							size="sm"
+							class="h-[36px] px-3 shrink-0 flex items-center gap-1.5"
+							onClick={handleImport}
+						>
+							<IconLucideImport class="size-3.5" />
+							<span>Import</span>
+						</Button>
+					</Show>
 				</div>
 			</div>
 			<div class="flex flex-col flex-1 min-h-0 pt-4">
@@ -360,13 +404,31 @@ function createUpdateCheck() {
 
 		await new Promise((res) => setTimeout(res, 1000));
 
-		const update = await updater.check();
+		let update: updater.Update | undefined;
+		try {
+			const result = await updater.check();
+			if (result) update = result;
+		} catch (e) {
+			console.error("Failed to check for updates:", e);
+			await dialog.message(
+				"Unable to check for updates. Please download the latest version manually from cap.so/download. Your data will not be lost.\n\nIf this issue persists, please contact support.",
+				{ title: "Update Error", kind: "error" },
+			);
+			return;
+		}
+
 		if (!update) return;
 
-		const shouldUpdate = await dialog.confirm(
-			`Version ${update.version} of Cap is available, would you like to install it?`,
-			{ title: "Update Cap", okLabel: "Update", cancelLabel: "Ignore" },
-		);
+		let shouldUpdate: boolean | undefined;
+		try {
+			shouldUpdate = await dialog.confirm(
+				`Version ${update.version} of Cap is available, would you like to install it?`,
+				{ title: "Update Cap", okLabel: "Update", cancelLabel: "Ignore" },
+			);
+		} catch (e) {
+			console.error("Failed to show update dialog:", e);
+			return;
+		}
 
 		if (!shouldUpdate) return;
 		navigate("/update");
@@ -422,17 +484,25 @@ function Page() {
 	const [hasOpenedDisplayMenu, setHasOpenedDisplayMenu] = createSignal(false);
 	const [hasOpenedWindowMenu, setHasOpenedWindowMenu] = createSignal(false);
 
+	const queryClient = useQueryClient();
+	onMount(() => {
+		queryClient.prefetchQuery(listDisplaysWithThumbnails);
+		queryClient.prefetchQuery(listWindowsWithThumbnails);
+	});
+
 	let displayTriggerRef: HTMLButtonElement | undefined;
 	let windowTriggerRef: HTMLButtonElement | undefined;
 
 	const displayTargets = useQuery(() => ({
 		...listDisplaysWithThumbnails,
 		refetchInterval: false,
+		enabled: hasOpenedDisplayMenu(),
 	}));
 
 	const windowTargets = useQuery(() => ({
 		...listWindowsWithThumbnails,
 		refetchInterval: false,
+		enabled: hasOpenedWindowMenu(),
 	}));
 
 	const recordings = useQuery(() => listRecordings);
@@ -466,7 +536,7 @@ function Page() {
 			await commands.uploadExportedVideo(
 				path,
 				"Reupload",
-				new Channel<UploadProgress>(() => { }),
+				new Channel<UploadProgress>(() => {}),
 				null,
 			);
 		} finally {
@@ -579,15 +649,19 @@ function Page() {
 		return "Unable to load windows. Try using the Window button.";
 	};
 
-	const selectDisplayTarget = (target: CaptureDisplayWithThumbnail) => {
+	const selectDisplayTarget = async (target: CaptureDisplayWithThumbnail) => {
 		setOptions(
 			"captureTarget",
 			reconcile({ variant: "display", id: target.id }),
 		);
-		setOptions("targetMode", "display");
-		commands.openTargetSelectOverlays({ variant: "display", id: target.id });
 		setDisplayMenuOpen(false);
 		displayTriggerRef?.focus();
+		await commands.openTargetSelectOverlays(
+			{ variant: "display", id: target.id },
+			null,
+			"display",
+		);
+		setOptions("targetMode", "display");
 	};
 
 	const selectWindowTarget = async (target: CaptureWindowWithThumbnail) => {
@@ -595,10 +669,14 @@ function Page() {
 			"captureTarget",
 			reconcile({ variant: "window", id: target.id }),
 		);
-		setOptions("targetMode", "window");
-		commands.openTargetSelectOverlays({ variant: "window", id: target.id });
 		setWindowMenuOpen(false);
 		windowTriggerRef?.focus();
+		await commands.openTargetSelectOverlays(
+			{ variant: "window", id: target.id },
+			null,
+			"window",
+		);
+		setOptions("targetMode", "window");
 
 		try {
 			await commands.focusWindow(target.id);
@@ -623,9 +701,13 @@ function Page() {
 			__CAP__?: { initialTargetMode?: RecordingTargetMode | null };
 		};
 		const targetMode = __CAP__?.initialTargetMode ?? null;
-		setOptions({ targetMode });
-		if (targetMode) await commands.openTargetSelectOverlays(null);
-		else await commands.closeTargetSelectOverlays();
+		if (targetMode) {
+			await commands.openTargetSelectOverlays(null, null, targetMode);
+			setOptions({ targetMode });
+		} else {
+			setOptions({ targetMode });
+			await commands.closeTargetSelectOverlays();
+		}
 
 		const currentWindow = getCurrentWindow();
 
@@ -649,11 +731,30 @@ function Page() {
 			);
 		});
 
+		const unlistenSetTargetMode = events.requestSetTargetMode.listen(
+			async (event) => {
+				const newTargetMode = event.payload.target_mode;
+				const displayId = event.payload.display_id;
+				if (newTargetMode) {
+					await commands.openTargetSelectOverlays(
+						null,
+						displayId,
+						newTargetMode,
+					);
+					setOptions({ targetMode: newTargetMode });
+				} else {
+					setOptions({ targetMode: newTargetMode });
+					await commands.closeTargetSelectOverlays();
+				}
+			},
+		);
+
 		commands.updateAuthPlan();
 
 		onCleanup(async () => {
 			(await unlistenFocus)?.();
 			(await unlistenResize)?.();
+			(await unlistenSetTargetMode)?.();
 		});
 	});
 
@@ -770,16 +871,35 @@ function Page() {
 						screen: screen.id,
 					};
 				}
+				case "cameraOnly":
+					return rawOptions.captureTarget as ScreenCaptureTarget;
 			}
 		},
 	};
 
-	const toggleTargetMode = (mode: "display" | "window" | "area") => {
+	const toggleTargetMode = async (
+		mode: "display" | "window" | "area" | "camera",
+	) => {
 		if (isRecording()) return;
 		const nextMode = rawOptions.targetMode === mode ? null : mode;
-		setOptions("targetMode", nextMode);
-		if (nextMode) commands.openTargetSelectOverlays(null);
-		else commands.closeTargetSelectOverlays();
+		if (nextMode) {
+			if (nextMode === "camera") {
+				setOptions(
+					"captureTarget",
+					reconcile({ variant: "cameraOnly" } as ScreenCaptureTarget),
+				);
+				setOptions("captureSystemAudio", false);
+			}
+			await commands.openTargetSelectOverlays(
+				null,
+				null,
+				nextMode as RecordingTargetMode,
+			);
+			setOptions("targetMode", nextMode);
+		} else {
+			setOptions("targetMode", nextMode);
+			await commands.closeTargetSelectOverlays();
+		}
 	};
 
 	createEffect(() => {
@@ -858,92 +978,113 @@ function Page() {
 			exitToClass="scale-95"
 		>
 			<div class="flex flex-col gap-2 w-full">
-				<div class="flex flex-row gap-2 items-stretch w-full text-xs text-gray-11">
-					<div
-						class={cx(
-							"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
-							(rawOptions.targetMode === "display" || displayMenuOpen()) &&
-							"ring-blue-9",
-						)}
-					>
-						<TargetTypeButton
-							selected={rawOptions.targetMode === "display"}
-							Component={IconMdiMonitor}
-							disabled={isRecording()}
-							onClick={() => toggleTargetMode("display")}
-							name="Display"
-							class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
-						/>
-						<TargetDropdownButton
+				<div class="flex flex-col gap-2 w-full text-xs text-gray-11">
+					<div class="flex flex-row gap-2 items-stretch w-full">
+						<div
 							class={cx(
-								"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
-								displayMenuOpen() && "bg-gray-5",
+								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+								(rawOptions.targetMode === "display" || displayMenuOpen()) &&
+									"ring-blue-9",
 							)}
-							ref={displayTriggerRef}
+						>
+							<TargetTypeButton
+								selected={rawOptions.targetMode === "display"}
+								Component={IconMdiMonitor}
+								disabled={isRecording()}
+								onClick={() => {
+									toggleTargetMode("display");
+								}}
+								name="Display"
+								class="flex-1 rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 pl-5"
+							/>
+							<TargetDropdownButton
+								class={cx(
+									"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+									displayMenuOpen() && "bg-gray-5",
+								)}
+								ref={displayTriggerRef}
+								disabled={isRecording()}
+								expanded={displayMenuOpen()}
+								onClick={() => {
+									setDisplayMenuOpen((prev) => {
+										const next = !prev;
+										if (next) {
+											setWindowMenuOpen(false);
+											setHasOpenedDisplayMenu(true);
+											screens.refetch();
+											displayTargets.refetch();
+										}
+										return next;
+									});
+								}}
+								aria-haspopup="menu"
+								aria-label="Choose display"
+							/>
+						</div>
+						<div
+							class={cx(
+								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+								(rawOptions.targetMode === "window" || windowMenuOpen()) &&
+									"ring-blue-9",
+							)}
+						>
+							<TargetTypeButton
+								selected={rawOptions.targetMode === "window"}
+								Component={IconLucideAppWindowMac}
+								disabled={isRecording()}
+								onClick={() => {
+									toggleTargetMode("window");
+								}}
+								name="Window"
+								class="flex-1 rounded-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 pl-5"
+							/>
+							<TargetDropdownButton
+								class={cx(
+									"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+									windowMenuOpen() && "bg-gray-5",
+								)}
+								ref={windowTriggerRef}
+								disabled={isRecording()}
+								expanded={windowMenuOpen()}
+								onClick={() => {
+									setWindowMenuOpen((prev) => {
+										const next = !prev;
+										if (next) {
+											setDisplayMenuOpen(false);
+											setHasOpenedWindowMenu(true);
+											windows.refetch();
+											windowTargets.refetch();
+										}
+										return next;
+									});
+								}}
+								aria-haspopup="menu"
+								aria-label="Choose window"
+							/>
+						</div>
+					</div>
+					<div class="flex flex-row gap-2 items-stretch w-full">
+						<TargetTypeButton
+							selected={rawOptions.targetMode === "area"}
+							Component={IconMaterialSymbolsScreenshotFrame2Rounded}
 							disabled={isRecording()}
-							expanded={displayMenuOpen()}
 							onClick={() => {
-								setDisplayMenuOpen((prev) => {
-									const next = !prev;
-									if (next) {
-										setWindowMenuOpen(false);
-										setHasOpenedDisplayMenu(true);
-										screens.refetch();
-										displayTargets.refetch();
-									}
-									return next;
-								});
+								toggleTargetMode("area");
 							}}
-							aria-haspopup="menu"
-							aria-label="Choose display"
+							name="Area"
+							class="flex-1"
+						/>
+						<TargetTypeButton
+							selected={rawOptions.targetMode === "camera"}
+							Component={IconLucideVideo}
+							disabled={isRecording()}
+							onClick={() => {
+								toggleTargetMode("camera");
+							}}
+							name="Camera Only"
+							class="flex-1"
 						/>
 					</div>
-					<div
-						class={cx(
-							"flex flex-1 overflow-hidden rounded-lg bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
-							(rawOptions.targetMode === "window" || windowMenuOpen()) &&
-							"ring-blue-9",
-						)}
-					>
-						<TargetTypeButton
-							selected={rawOptions.targetMode === "window"}
-							Component={IconLucideAppWindowMac}
-							disabled={isRecording()}
-							onClick={() => toggleTargetMode("window")}
-							name="Window"
-							class="flex-1 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
-						/>
-						<TargetDropdownButton
-							class={cx(
-								"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
-								windowMenuOpen() && "bg-gray-5",
-							)}
-							ref={windowTriggerRef}
-							disabled={isRecording()}
-							expanded={windowMenuOpen()}
-							onClick={() => {
-								setWindowMenuOpen((prev) => {
-									const next = !prev;
-									if (next) {
-										setDisplayMenuOpen(false);
-										setHasOpenedWindowMenu(true);
-										windows.refetch();
-										windowTargets.refetch();
-									}
-									return next;
-								});
-							}}
-							aria-haspopup="menu"
-							aria-label="Choose window"
-						/>
-					</div>
-					<TargetTypeButton
-						selected={rawOptions.targetMode === "area"}
-						Component={IconMaterialSymbolsScreenshotFrame2Rounded}
-						disabled={isRecording()}
-						onClick={() => toggleTargetMode("area")}
-						name="Area"
-					/>
 				</div>
 				<BaseControls />
 			</div>
@@ -958,7 +1099,7 @@ function Page() {
 			}
 		}
 
-		await signIn.mutateAsync(abort).catch(() => { });
+		await signIn.mutateAsync(abort).catch(() => {});
 
 		for (const win of await getAllWebviewWindows()) {
 			if (win.label.startsWith("target-select-overlay")) {
@@ -971,7 +1112,7 @@ function Page() {
 	return (
 		<div
 			onMouseEnter={handleMouseEnter}
-			class="flex relative flex-col px-[13px] gap-2 pb-[8px] h-full min-h-0 text-(--text-primary)"
+			class="flex relative flex-col px-[13px] gap-2 pb-[8px] h-full min-h-0 text-[--text-primary]"
 		>
 			<WindowChromeHeader hideMaximize>
 				<div
@@ -1044,15 +1185,6 @@ function Page() {
 								<IconLucideBug class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
 							</button>
 						)}
-						{import.meta.env.DEV && (
-							<button
-								type="button"
-								onClick={() => openDebugLibrary()}
-								class="flex justify-center items-center w-5 h-5"
-							>
-								<IconLucideShapes class="text-gray-11 size-4 hover:text-gray-12" />
-							</button>
-						)}
 					</div>
 					{ostype() === "macos" && (
 						<div class="flex-1" data-tauri-drag-region />
@@ -1060,10 +1192,10 @@ function Page() {
 				</div>
 			</WindowChromeHeader>
 			<Show when={!activeMenu()}>
-				<div class="flex items-center justify-between mt-[18px] mb-[6px]">
+				<div class="flex items-center justify-between mt-[16px] mb-[6px]">
 					<div class="flex items-center space-x-1">
 						<a
-							class="*:w-[92px] *:h-auto text-(--text-primary)"
+							class="*:w-[92px] *:h-auto text-[--text-primary]"
 							target="_blank"
 							href={
 								auth.data
@@ -1083,9 +1215,9 @@ function Page() {
 										}
 									}}
 									class={cx(
-										"text-[0.6rem] rounded-lg px-1 py-0.5",
+										"text-[0.6rem] ml-2 rounded-lg border border-gray-5 px-1 py-0.5",
 										license.data?.type === "pro"
-											? "bg-(--blue-400) text-gray-1 dark:text-gray-12"
+											? "bg-[--blue-400] text-gray-1 dark:text-gray-12"
 											: "bg-gray-3 cursor-pointer hover:bg-gray-5",
 									)}
 								>

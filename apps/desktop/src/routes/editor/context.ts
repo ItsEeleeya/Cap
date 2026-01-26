@@ -11,18 +11,28 @@ import {
 	type Accessor,
 	batch,
 	createEffect,
+	createMemo,
 	createResource,
+	createRoot,
 	createSignal,
 	on,
 	onCleanup,
 } from "solid-js";
 import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 
+import { generalSettingsStore } from "~/store";
+
 import { createPresets } from "~/utils/createPresets";
 import { createCustomDomainQuery } from "~/utils/queries";
-import { createImageDataWS, createLazySignal } from "~/utils/socket";
+import {
+	type CanvasControls,
+	createImageDataWS,
+	createLazySignal,
+	type FrameData,
+} from "~/utils/socket";
 import {
 	commands,
+	type EditorPreviewQuality,
 	events,
 	type FramesRendered,
 	type MultipleSegments,
@@ -34,6 +44,10 @@ import {
 	type TimelineConfiguration,
 	type XY,
 } from "~/utils/tauri";
+import {
+	cleanup as cleanupCropVideoPreloader,
+	preloadCropVideoMetadata,
+} from "./cropVideoPreloader";
 import type { MaskSegment } from "./masks";
 import type { TextSegment } from "./text";
 import { createProgressBar } from "./utils";
@@ -54,17 +68,17 @@ export const OUTPUT_SIZE = {
 	y: 1080,
 };
 
-export type PreviewQuality = "quarter" | "half" | "full";
+export const DEFAULT_PREVIEW_QUALITY: EditorPreviewQuality = "half";
 
-export const DEFAULT_PREVIEW_QUALITY: PreviewQuality = "full";
-
-const previewQualityScale: Record<PreviewQuality, number> = {
+const previewQualityScale: Record<EditorPreviewQuality, number> = {
 	full: 1,
-	half: 0.5,
+	half: 0.65,
 	quarter: 0.25,
 };
 
-export const getPreviewResolution = (quality: PreviewQuality): XY<number> => {
+export const getPreviewResolution = (
+	quality: EditorPreviewQuality,
+): XY<number> => {
 	const scale = previewQualityScale[quality];
 	const width = (Math.max(2, Math.round(OUTPUT_SIZE.x * scale)) + 1) & ~1;
 	const height = (Math.max(2, Math.round(OUTPUT_SIZE.y * scale)) + 1) & ~1;
@@ -202,7 +216,8 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						let searchTime = time;
 						let _prevDuration = 0;
 						const currentSegmentIndex = segments.findIndex((segment) => {
-							const duration = segment.end - segment.start;
+							const duration =
+								(segment.end - segment.start) / segment.timescale;
 							if (searchTime > duration) {
 								searchTime -= duration;
 								_prevDuration += duration;
@@ -215,12 +230,15 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 						if (currentSegmentIndex === -1) return;
 						const segment = segments[currentSegmentIndex];
 
+						const splitPositionInRecording = searchTime * segment.timescale;
+
 						segments.splice(currentSegmentIndex + 1, 0, {
 							...segment,
-							start: segment.start + searchTime,
+							start: segment.start + splitPositionInRecording,
 							end: segment.end,
 						});
-						segments[currentSegmentIndex].end = segment.start + searchTime;
+						segments[currentSegmentIndex].end =
+							segment.start + splitPositionInRecording;
 					}),
 				);
 			},
@@ -509,9 +527,31 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 			),
 		);
 
-		const [previewQuality, setPreviewQuality] = createSignal<PreviewQuality>(
-			DEFAULT_PREVIEW_QUALITY,
-		);
+		const [storedSettings] = createResource(() => generalSettingsStore.get());
+		const initialPreviewQuality = createMemo((): EditorPreviewQuality => {
+			const stored = storedSettings()?.editorPreviewQuality;
+			if (stored === "quarter" || stored === "half" || stored === "full") {
+				return stored;
+			}
+			return DEFAULT_PREVIEW_QUALITY;
+		});
+
+		const [previewQuality, _setPreviewQuality] =
+			createSignal<EditorPreviewQuality>(DEFAULT_PREVIEW_QUALITY);
+
+		createEffect(() => {
+			const quality = initialPreviewQuality();
+			_setPreviewQuality(quality);
+		});
+
+		const setPreviewQuality = (quality: EditorPreviewQuality) => {
+			_setPreviewQuality(quality);
+			generalSettingsStore
+				.set({ editorPreviewQuality: quality })
+				.catch((error) => {
+					console.error("Failed to persist preview quality setting", error);
+				});
+		};
 
 		const previewResolutionBase = () => getPreviewResolution(previewQuality());
 
@@ -598,6 +638,12 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 			previewTime: null as number | null,
 			playbackTime: 0,
 			playing: false,
+			captions: {
+				isGenerating: false,
+				isDownloading: false,
+				downloadProgress: 0,
+				downloadingModel: null as string | null,
+			},
 			timeline: {
 				interactMode: "seek" as "seek" | "split",
 				selection: null as
@@ -691,7 +737,8 @@ export const [EditorContextProvider, useEditorContext] = createContextProvider(
 	null!,
 );
 
-export type FrameData = { width: number; height: number; data: ImageData };
+export type { CanvasControls, FrameData } from "~/utils/socket";
+export type { EditorPreviewQuality } from "~/utils/tauri";
 
 function transformMeta({ pretty_name, ...rawMeta }: RecordingMeta) {
 	if ("fps" in rawMeta) {
@@ -735,31 +782,89 @@ export type TransformedMeta = ReturnType<typeof transformMeta>;
 
 export const [EditorInstanceContextProvider, useEditorInstanceContext] =
 	createContextProvider(() => {
-		const [latestFrame, setLatestFrame] = createLazySignal<{
-			width: number;
-			data: ImageData;
-		}>();
+		const [latestFrame, setLatestFrame] = createLazySignal<FrameData>();
 
-		const [editorInstance] = createResource(async () => {
-			const instance = await commands.createEditorInstance();
+		const [_isConnected, setIsConnected] = createSignal(false);
+		const [isWorkerReady, setIsWorkerReady] = createSignal(false);
+		const [canvasControls, setCanvasControls] =
+			createSignal<CanvasControls | null>(null);
+		const [performanceMode, setPerformanceMode] = createSignal(false);
 
-			const [_ws, isConnected] = createImageDataWS(
-				instance.framesSocketUrl,
-				setLatestFrame,
-			);
+		let disposeWorkerReadyEffect: (() => void) | undefined;
 
-			createEffect(() => {
-				if (isConnected()) {
+		onCleanup(() => {
+			disposeWorkerReadyEffect?.();
+			cleanupCropVideoPreloader();
+		});
+
+		const [editorInstance, { refetch: refetchEditorInstance }] = createResource(
+			async () => {
+				console.log("[Editor] Creating editor instance...");
+
+				let instance;
+				let lastError;
+				for (let attempt = 0; attempt < 5; attempt++) {
+					try {
+						instance = await commands.createEditorInstance();
+						break;
+					} catch (e) {
+						lastError = e;
+						console.warn(
+							`[Editor] Attempt ${attempt + 1}/5 failed:`,
+							e,
+							"- retrying...",
+						);
+						await new Promise((resolve) =>
+							setTimeout(resolve, 500 * (attempt + 1)),
+						);
+					}
+				}
+
+				if (!instance) {
+					throw lastError;
+				}
+
+				console.log("[Editor] Editor instance created, setting up WebSocket");
+
+				preloadCropVideoMetadata(
+					`${instance.path}/content/segments/segment-0/display.mp4`,
+				);
+
+				const requestFrame = () => {
 					events.renderFrameEvent.emit({
-						frame_number: Math.floor(0),
+						frame_number: 0,
 						fps: FPS,
 						resolution_base: getPreviewResolution(DEFAULT_PREVIEW_QUALITY),
 					});
-				}
-			});
+				};
 
-			return instance;
-		});
+				const [ws, _wsConnected, workerReady, controls] = createImageDataWS(
+					instance.framesSocketUrl,
+					setLatestFrame,
+					requestFrame,
+				);
+
+				setCanvasControls(controls);
+
+				disposeWorkerReadyEffect = createRoot((dispose) => {
+					createEffect(() => {
+						setIsWorkerReady(workerReady());
+					});
+					return dispose;
+				});
+
+				ws.addEventListener("open", () => {
+					setIsConnected(true);
+					requestFrame();
+				});
+
+				ws.addEventListener("close", () => {
+					setIsConnected(false);
+				});
+
+				return instance;
+			},
+		);
 
 		const metaQuery = createQuery(() => ({
 			queryKey: ["editor", "meta"],
@@ -772,9 +877,14 @@ export const [EditorInstanceContextProvider, useEditorInstanceContext] =
 
 		return {
 			editorInstance,
+			refetchEditorInstance,
 			latestFrame,
 			presets: createPresets(),
 			metaQuery,
+			isWorkerReady,
+			canvasControls,
+			performanceMode,
+			setPerformanceMode,
 		};
 	}, null!);
 

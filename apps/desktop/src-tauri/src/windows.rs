@@ -21,7 +21,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, instrument, warn};
 
 use crate::{
-    App, ArcLock, RequestScreenCapturePrewarm,
+    App, ArcLock, RequestScreenCapturePrewarm, RequestSetTargetMode,
     editor_window::PendingEditorInstances,
     fake_window,
     general_settings::{self, AppTheme, GeneralSettingsStore},
@@ -34,6 +34,96 @@ use cap_recording::feeds;
 
 #[cfg(target_os = "macos")]
 use crate::platform::{self, WebviewWindowExt};
+
+const DEFAULT_FALLBACK_DISPLAY_WIDTH: f64 = 1920.0;
+const DEFAULT_FALLBACK_DISPLAY_HEIGHT: f64 = 1080.0;
+
+struct CursorMonitorInfo {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl CursorMonitorInfo {
+    fn get() -> Self {
+        let display = Display::get_containing_cursor().unwrap_or_else(Display::primary);
+        let bounds = display.raw_handle().logical_bounds();
+        let (x, y, width, height) = bounds
+            .map(|b| {
+                (
+                    b.position().x(),
+                    b.position().y(),
+                    b.size().width(),
+                    b.size().height(),
+                )
+            })
+            .unwrap_or((
+                0.0,
+                0.0,
+                DEFAULT_FALLBACK_DISPLAY_WIDTH,
+                DEFAULT_FALLBACK_DISPLAY_HEIGHT,
+            ));
+
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    fn center_position(&self, window_width: f64, window_height: f64) -> (f64, f64) {
+        let pos_x = self.x + (self.width - window_width) / 2.0;
+        let pos_y = self.y + (self.height - window_height) / 2.0;
+        (pos_x, pos_y)
+    }
+
+    fn bottom_center_position(
+        &self,
+        window_width: f64,
+        window_height: f64,
+        offset_y: f64,
+    ) -> (f64, f64) {
+        let pos_x = self.x + (self.width - window_width) / 2.0;
+        let pos_y = self.y + self.height - window_height - offset_y;
+        (pos_x, pos_y)
+    }
+
+    fn from_window(window: &tauri::WebviewWindow) -> Self {
+        let window_pos = window
+            .outer_position()
+            .ok()
+            .map(|p| (p.x as f64, p.y as f64))
+            .unwrap_or((0.0, 0.0));
+
+        for display in Display::list() {
+            if let Some(bounds) = display.raw_handle().logical_bounds() {
+                let (x, y, width, height) = (
+                    bounds.position().x(),
+                    bounds.position().y(),
+                    bounds.size().width(),
+                    bounds.size().height(),
+                );
+
+                if window_pos.0 >= x
+                    && window_pos.0 < x + width
+                    && window_pos.1 >= y
+                    && window_pos.1 < y + height
+                {
+                    return Self {
+                        x,
+                        y,
+                        width,
+                        height,
+                    };
+                }
+            }
+        }
+
+        Self::get()
+    }
+}
 
 #[derive(Clone, Deserialize, Type)]
 pub enum CapWindowDef {
@@ -141,6 +231,7 @@ impl CapWindowDef {
             Self::ModeSelect => "Cap Mode Selection",
             Self::Camera => "Cap Camera",
             Self::RecordingsOverlay => "Cap Recordings Overlay",
+            Self::TargetSelectOverlay { .. } => "Cap Target Select",
             _ => "Cap",
         }
     }
@@ -217,7 +308,7 @@ impl CapWindowDef {
     pub const fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Setup => (600.0, 600.0),
-            Self::Main => (330.0, 345.0),
+            Self::Main => (330.0, 395.0),
             Self::Editor { .. } => (1275.0, 800.0),
             Self::ScreenshotEditor { .. } => (800.0, 600.0),
             Self::Settings => (700.0, 540.0),
@@ -247,11 +338,14 @@ pub enum CapWindow {
     },
     TargetSelectOverlay {
         display_id: DisplayId,
+        target_mode: Option<RecordingTargetMode>,
     },
     CaptureArea {
         screen_id: DisplayId,
     },
-    Camera,
+    Camera {
+        centered: bool,
+    },
     InProgressRecording {
         countdown: Option<u32>,
     },
@@ -296,15 +390,93 @@ impl CapWindow {
             }
         }
 
-        let def = self.def(app);
-        if let Some(window) = def.get(app) {
-            window.show().ok();
-            window.unminimize().ok();
-            window.set_focus().ok();
+        if let Some(window) = self.def(app).get(app) {
+            let cursor_display_id = if let Self::Main { init_target_mode } = self {
+                if init_target_mode.is_some() {
+                    Display::get_containing_cursor()
+                        .map(|d| d.id().to_string())
+                        .or_else(|| Some(Display::primary().id().to_string()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            match self {
+                Self::Main { .. } => {
+                    let cursor_monitor = CursorMonitorInfo::get();
+                    let (pos_x, pos_y) = cursor_monitor.center_position(330.0, 395.0);
+                    let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
+
+                    if let Some(camera_window) = CapWindowDef::Camera.get(app) {
+                        const WINDOW_SIZE: f64 = 230.0 * 2.0;
+                        let camera_pos_x =
+                            cursor_monitor.x + cursor_monitor.width - WINDOW_SIZE - 100.0;
+                        let camera_pos_y =
+                            cursor_monitor.y + cursor_monitor.height - WINDOW_SIZE - 100.0;
+                        let _ = camera_window
+                            .set_position(tauri::LogicalPosition::new(camera_pos_x, camera_pos_y));
+                    }
+                }
+                Self::Camera { centered } => {
+                    let camera_monitor = CapWindowDef::Main
+                        .get(app)
+                        .map(|w| CursorMonitorInfo::from_window(&w))
+                        .unwrap_or_else(CursorMonitorInfo::get);
+
+                    if *centered {
+                        const CENTERED_WINDOW_SIZE: f64 = 400.0;
+                        let aspect_ratio = 16.0 / 9.0;
+                        let toolbar_height = 56.0;
+                        let window_width = CENTERED_WINDOW_SIZE * aspect_ratio;
+                        let window_height = CENTERED_WINDOW_SIZE + toolbar_height;
+                        let (camera_pos_x, camera_pos_y) =
+                            camera_monitor.center_position(window_width, window_height);
+                        let _ = window
+                            .set_position(tauri::LogicalPosition::new(camera_pos_x, camera_pos_y));
+                    } else {
+                        const WINDOW_SIZE: f64 = 230.0 * 2.0;
+                        let camera_pos_x =
+                            camera_monitor.x + camera_monitor.width - WINDOW_SIZE - 100.0;
+                        let camera_pos_y =
+                            camera_monitor.y + camera_monitor.height - WINDOW_SIZE - 100.0;
+                        let _ = window
+                            .set_position(tauri::LogicalPosition::new(camera_pos_x, camera_pos_y));
+                    }
+                }
+                _ => {}
+            }
+
+            if let Self::Main {
+                init_target_mode: Some(target_mode),
+            } = self
+            {
+                window.hide().ok();
+                let _ = RequestSetTargetMode {
+                    target_mode: Some(*target_mode),
+                    display_id: cursor_display_id,
+                }
+                .emit(app);
+            } else {
+                window.show().ok();
+                window.unminimize().ok();
+                window.set_focus().ok();
+
+                if let Self::Main { init_target_mode } = self {
+                    let _ = RequestSetTargetMode {
+                        target_mode: *init_target_mode,
+                        display_id: cursor_display_id,
+                    }
+                    .emit(app);
+                }
+            }
+
             return Ok(window);
         }
 
-        let monitor = app.primary_monitor()?.unwrap();
+        let _id = self.id(app);
+        let cursor_monitor = CursorMonitorInfo::get();
 
         let window = match self {
             Self::Setup => {
@@ -314,11 +486,13 @@ impl CapWindow {
                     .min_inner_size(600.0, 600.0)
                     .resizable(false)
                     .maximized(false)
-                    .center()
                     .focused(true)
                     .maximizable(false)
                     .shadow(true)
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(600.0, 600.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -326,8 +500,8 @@ impl CapWindow {
                     if let Err(e) = window.set_size(LogicalSize::new(600.0, 600.0)) {
                         warn!("Failed to set Setup window size on Windows: {}", e);
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center Setup window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position Setup window on Windows: {}", e);
                     }
                 }
 
@@ -346,13 +520,7 @@ impl CapWindow {
                     .minimizable(false)
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
-                    .center()
-                    .effects(
-                        tauri::window::EffectsBuilder::new()
-                            .effects([Effect::UnderWindowBackground, Effect::Mica])
-                            .state(tauri::window::EffectState::Active)
-                            .build(),
-                    )
+                    .content_protected(should_protect)
                     .initialization_script(format!(
                         "
                         window.__CAP__ = window.__CAP__ ?? {{}};
@@ -362,6 +530,12 @@ impl CapWindow {
                             .expect("Failed to serialize initial target mode")
                     ))
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(330.0, 395.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
+
+                #[cfg(target_os = "macos")]
+                crate::platform::set_window_level(window.as_ref().window(), 50);
 
                 #[cfg(target_os = "macos")]
                 {
@@ -384,7 +558,10 @@ impl CapWindow {
 
                 window
             }
-            Self::TargetSelectOverlay { display_id } => {
+            Self::TargetSelectOverlay {
+                display_id,
+                target_mode,
+            } => {
                 let Some(display) = scap_targets::Display::from_id(display_id) else {
                     return Err(tauri::Error::WindowNotFound);
                 };
@@ -392,10 +569,30 @@ impl CapWindow {
                     .map(|d| d.id())
                     == Some(display.id());
 
-                let mut builder = self
+                let title = CapWindowDef::TargetSelectOverlay {
+                    display_id: display_id.clone(),
+                }
+                .title();
+                let should_protect = should_protect_window(app, &title);
+
+                let target_mode_param = match target_mode {
+                    Some(RecordingTargetMode::Display) => "&targetMode=display",
+                    Some(RecordingTargetMode::Window) => "&targetMode=window",
+                    Some(RecordingTargetMode::Area) => "&targetMode=area",
+                    Some(RecordingTargetMode::Camera) => "&targetMode=camera",
+                    None => "",
+                };
+
+                let camera_ws_port = {
+                    let state = app.state::<ArcLock<App>>();
+                    let state = state.read().await;
+                    state.camera_ws_port
+                };
+
+                let mut window_builder = self
                     .window_builder(
                         app,
-                        format!("/target-select-overlay?displayId={display_id}&isHoveredDisplay={is_hovered_display}"),
+                        format!("/target-select-overlay?displayId={display_id}&isHoveredDisplay={is_hovered_display}{target_mode_param}"),
                     )
                     .maximized(false)
                     .resizable(false)
@@ -404,7 +601,12 @@ impl CapWindow {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .skip_taskbar(true)
-                    .transparent(true);
+                    .transparent(true)
+                    .visible(false)
+                    .initialization_script(format!(
+                        "window.__CAP__ = window.__CAP__ ?? {{}}; window.__CAP__.cameraWsPort = {};",
+                        camera_ws_port
+                    ));
 
                 #[cfg(target_os = "macos")]
                 {
@@ -474,8 +676,10 @@ impl CapWindow {
                     .min_inner_size(600.0, 465.0)
                     .resizable(true)
                     .maximized(false)
-                    .center()
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(600.0, 465.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -483,8 +687,8 @@ impl CapWindow {
                     if let Err(e) = window.set_size(LogicalSize::new(600.0, 465.0)) {
                         warn!("Failed to set Settings window size on Windows: {}", e);
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center Settings window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position Settings window on Windows: {}", e);
                     }
                 }
 
@@ -498,13 +702,20 @@ impl CapWindow {
                     let _ = camera.close();
                 };
 
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Regular)
+                    .ok();
+
                 let window = self
                     .window_builder(app, "/editor")
                     .maximizable(true)
                     .inner_size(1275.0, 800.0)
                     .min_inner_size(1275.0, 800.0)
-                    .center()
+                    .focused(true)
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(1275.0, 800.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -512,8 +723,8 @@ impl CapWindow {
                     if let Err(e) = window.set_size(LogicalSize::new(1275.0, 800.0)) {
                         warn!("Failed to set Editor window size on Windows: {}", e);
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center Editor window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position Editor window on Windows: {}", e);
                     }
                 }
 
@@ -527,13 +738,20 @@ impl CapWindow {
                     let _ = camera.close();
                 };
 
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Regular)
+                    .ok();
+
                 let window = self
                     .window_builder(app, "/screenshot-editor")
                     .maximizable(true)
                     .inner_size(1240.0, 800.0)
                     .min_inner_size(800.0, 600.0)
-                    .center()
+                    .focused(true)
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(1240.0, 800.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -544,8 +762,11 @@ impl CapWindow {
                             e
                         );
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center ScreenshotEditor window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!(
+                            "Failed to position ScreenshotEditor window on Windows: {}",
+                            e
+                        );
                     }
                 }
 
@@ -565,8 +786,10 @@ impl CapWindow {
                     .always_on_top(true)
                     .maximized(false)
                     .shadow(true)
-                    .center()
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(950.0, 850.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -574,8 +797,8 @@ impl CapWindow {
                     if let Err(e) = window.set_size(LogicalSize::new(950.0, 850.0)) {
                         warn!("Failed to set Upgrade window size on Windows: {}", e);
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center Upgrade window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position Upgrade window on Windows: {}", e);
                     }
                 }
 
@@ -594,10 +817,12 @@ impl CapWindow {
                     .resizable(false)
                     .maximized(false)
                     .maximizable(false)
-                    .center()
                     .focused(true)
                     .shadow(true)
                     .build()?;
+
+                let (pos_x, pos_y) = cursor_monitor.center_position(580.0, 340.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
 
                 #[cfg(windows)]
                 {
@@ -605,15 +830,16 @@ impl CapWindow {
                     if let Err(e) = window.set_size(LogicalSize::new(580.0, 340.0)) {
                         warn!("Failed to set ModeSelect window size on Windows: {}", e);
                     }
-                    if let Err(e) = window.center() {
-                        warn!("Failed to center ModeSelect window on Windows: {}", e);
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position ModeSelect window on Windows: {}", e);
                     }
                 }
 
                 window
             }
-            Self::Camera => {
-                const WINDOW_SIZE: f64 = 230.0 * 2.0;
+            Self::Camera { centered } => {
+                const DEFAULT_WINDOW_SIZE: f64 = 230.0 * 2.0;
+                const CENTERED_WINDOW_SIZE: f64 = 400.0;
 
                 let enable_native_camera_preview = GeneralSettingsStore::get(app)
                     .ok()
@@ -625,14 +851,11 @@ impl CapWindow {
                     let mut state = state.write().await;
 
                     if enable_native_camera_preview && state.camera_preview.is_initialized() {
-                        error!("Unable to initialize camera preview as one already exists!");
+                        warn!("Cleaning up stale camera preview before creating new one");
+                        state.camera_preview.on_window_close();
                         if let Some(window) = CapWindowDef::Camera.get(app) {
-                            window.show().ok();
+                            window.close().ok();
                         }
-                        return Err(anyhow!(
-                            "Unable to initialize camera preview as one already exists!"
-                        )
-                        .into());
                     }
 
                     let mut builder = self
@@ -644,23 +867,41 @@ impl CapWindow {
                         .always_on_top(true)
                         .visible_on_all_workspaces(true)
                         .skip_taskbar(true)
-                        .position(
-                            100.0,
-                            (monitor.size().height as f64) / monitor.scale_factor()
-                                - WINDOW_SIZE
-                                - 100.0,
-                        )
                         .initialization_script(format!(
                             "
 			                window.__CAP__ = window.__CAP__ ?? {{}};
 			                window.__CAP__.cameraWsPort = {};
+			                window.__CAP__.cameraOnlyMode = {};
 		                ",
-                            state.camera_ws_port
+                            state.camera_ws_port, centered
                         ))
                         .transparent(true)
-                        .visible(false); // We set this true in `CameraWindowState::init_window`
+                        .visible(false);
 
-                    let window = builder.build()?;
+                    let window = window_builder.build()?;
+
+                    let camera_monitor = CapWindowDef::Main
+                        .get(app)
+                        .map(|w| CursorMonitorInfo::from_window(&w))
+                        .unwrap_or(cursor_monitor);
+
+                    if *centered {
+                        let aspect_ratio = 16.0 / 9.0;
+                        let toolbar_height = 56.0;
+                        let window_width = CENTERED_WINDOW_SIZE * aspect_ratio;
+                        let window_height = CENTERED_WINDOW_SIZE + toolbar_height;
+                        let (camera_pos_x, camera_pos_y) =
+                            camera_monitor.center_position(window_width, window_height);
+                        let _ = window
+                            .set_position(tauri::LogicalPosition::new(camera_pos_x, camera_pos_y));
+                    } else {
+                        let camera_pos_x =
+                            camera_monitor.x + camera_monitor.width - DEFAULT_WINDOW_SIZE - 100.0;
+                        let camera_pos_y =
+                            camera_monitor.y + camera_monitor.height - DEFAULT_WINDOW_SIZE - 100.0;
+                        let _ = window
+                            .set_position(tauri::LogicalPosition::new(camera_pos_x, camera_pos_y));
+                    }
 
                     if let Some(id) = state.selected_camera_id.clone()
                         && !state.camera_in_use
@@ -783,19 +1024,7 @@ impl CapWindow {
                 let height = 150.0;
 
                 let title = CapWindowDef::RecordingControls.title();
-                let should_protect = should_protect_window(app, title);
-
-                let pos_x = ((monitor.size().width as f64) / monitor.scale_factor() - width) / 2.0;
-                let pos_y =
-                    (monitor.size().height as f64) / monitor.scale_factor() - height - 120.0;
-
-                debug!(
-                    "InProgressRecording window: monitor size={:?}, scale={}, pos=({}, {})",
-                    monitor.size(),
-                    monitor.scale_factor(),
-                    pos_x,
-                    pos_y
-                );
+                let should_protect = should_protect_window(app, &title);
 
                 #[cfg(target_os = "macos")]
                 let window = {
@@ -809,7 +1038,6 @@ impl CapWindow {
                         .visible_on_all_workspaces(true)
                         .content_protected(should_protect)
                         .inner_size(width, height)
-                        .position(pos_x, pos_y)
                         .skip_taskbar(true)
                         .initialization_script(format!(
                             "window.COUNTDOWN = {};",
@@ -830,18 +1058,59 @@ impl CapWindow {
                     .visible_on_all_workspaces(true)
                     .content_protected(should_protect)
                     .inner_size(width, height)
-                    .position(
-                        ((monitor.size().width as f64) / monitor.scale_factor() - width) / 2.0,
-                        (monitor.size().height as f64) / monitor.scale_factor() - height - 120.0,
-                    )
-                    .skip_taskbar(true)
+                    .skip_taskbar(false)
                     .initialization_script(format!(
                         "window.COUNTDOWN = {};",
                         countdown.unwrap_or_default()
                     ))
                     .build()?;
 
-                fake_window::spawn_fake_window_listener(app.clone(), window.clone());
+                let (pos_x, pos_y) = cursor_monitor.bottom_center_position(width, height, 120.0);
+                let _ = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y));
+
+                debug!(
+                    "InProgressRecording window: cursor_monitor=({}, {}, {}, {}), pos=({}, {})",
+                    cursor_monitor.x,
+                    cursor_monitor.y,
+                    cursor_monitor.width,
+                    cursor_monitor.height,
+                    pos_x,
+                    pos_y
+                );
+
+                debug!(
+                    "InProgressRecording window created: label={}, inner_size={:?}, outer_position={:?}",
+                    window.label(),
+                    window.inner_size(),
+                    window.outer_position()
+                );
+
+                #[cfg(target_os = "macos")]
+                {
+                    crate::platform::set_window_level(window.as_ref().window(), 1000);
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    let show_result = window.show();
+                    debug!(
+                        "InProgressRecording window.show() result: {:?}",
+                        show_result
+                    );
+                    fake_window::spawn_fake_window_listener(app.clone(), window.clone());
+                }
+
+                #[cfg(windows)]
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    let show_result = window.show();
+                    debug!(
+                        "InProgressRecording window.show() result: {:?}",
+                        show_result
+                    );
+                    window.set_focus().ok();
+                    fake_window::spawn_fake_window_listener(app.clone(), window.clone());
+                }
 
                 window
             }
@@ -855,14 +1124,16 @@ impl CapWindow {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .accept_first_mouse(true)
-                    .inner_size(
-                        (monitor.size().width as f64) / monitor.scale_factor(),
-                        (monitor.size().height as f64) / monitor.scale_factor(),
-                    )
+                    .content_protected(should_protect)
+                    .inner_size(cursor_monitor.width, cursor_monitor.height)
                     .skip_taskbar(true)
-                    .position(0.0, 0.0)
                     .transparent(true)
                     .build()?;
+
+                let _ = window.set_position(tauri::LogicalPosition::new(
+                    cursor_monitor.x,
+                    cursor_monitor.y,
+                ));
 
                 #[cfg(target_os = "macos")]
                 {
@@ -1015,14 +1286,18 @@ impl CapWindow {
                 CapWindowDef::Editor { id }
             }
             CapWindow::RecordingsOverlay => CapWindowDef::RecordingsOverlay,
-            CapWindow::TargetSelectOverlay { display_id } => CapWindowDef::TargetSelectOverlay {
-                display_id: display_id.clone(),
-            },
-            CapWindow::WindowCaptureOccluder { screen_id } => CapWindowDef::WindowCaptureOccluder {
-                screen_id: screen_id.clone(),
-            },
+            CapWindow::TargetSelectOverlay { display_id, .. } => {
+                CapWindowDef::TargetSelectOverlay {
+                    display_id: display_id.clone(),
+                }
+            }
+            CapWindow::WindowCaptureOccluder { screen_id } => {
+                CapWindowDef::WindowCaptureOccluder {
+                    screen_id: screen_id.clone(),
+                }
+            }
             CapWindow::CaptureArea { .. } => CapWindowDef::CaptureArea,
-            CapWindow::Camera => CapWindowDef::Camera,
+            CapWindow::Camera { .. } => CapWindowDef::Camera,
             CapWindow::InProgressRecording { .. } => CapWindowDef::RecordingControls,
             CapWindow::Upgrade => CapWindowDef::Upgrade,
             CapWindow::ModeSelect => CapWindowDef::ModeSelect,

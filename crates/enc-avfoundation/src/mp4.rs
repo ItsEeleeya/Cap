@@ -1,8 +1,10 @@
-use cap_media_info::{AudioInfo, VideoInfo};
+use cap_media_info::{AudioInfo, VideoInfo, ensure_even};
 use cidre::{cm::SampleTimingInfo, objc::Obj, *};
-use ffmpeg::frame;
+use ffmpeg::{frame, software::resampling};
 use std::{path::PathBuf, time::Duration};
 use tracing::*;
+
+const AAC_MAX_SAMPLE_RATE: u32 = 48000;
 
 // before pausing at all, subtract 0.
 // on pause, record last frame time.
@@ -16,16 +18,20 @@ pub struct MP4Encoder {
     asset_writer: arc::R<av::AssetWriter>,
     video_input: arc::R<av::AssetWriterInput>,
     audio_input: Option<arc::R<av::AssetWriterInput>>,
+    audio_resampler: Option<resampling::Context>,
+    audio_output_rate: u32,
     last_frame_timestamp: Option<Duration>,
     pause_timestamp: Option<Duration>,
     timestamp_offset: Duration,
     is_writing: bool,
     is_paused: bool,
+    writer_failed: bool,
     video_frames_appended: usize,
     audio_frames_appended: usize,
     last_timestamp: Option<Duration>,
     last_video_pts: Option<Duration>,
-    last_audio_pts: Option<Duration>,
+    last_audio_end_pts: Option<i64>,
+    last_audio_timescale: Option<i32>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -44,6 +50,8 @@ pub enum InitError {
     AudioAssetWriterInputCreate(&'static cidre::ns::Exception),
     #[error("AddAudioInput/{0}")]
     AddAudioInput(&'static cidre::ns::Exception),
+    #[error("AudioResampler/{0}")]
+    AudioResampler(ffmpeg::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -60,6 +68,8 @@ pub enum QueueFrameError {
     NotReadyForMore,
     #[error("NoEncoder")]
     NoEncoder,
+    #[error("ResamplingFailed/{0}")]
+    ResamplingFailed(ffmpeg::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -110,12 +120,15 @@ impl MP4Encoder {
                 .ok_or(InitError::NoVideoSettingsAssistant)?
                 .copy_mut();
 
-            let downscale = output_height
-                .map(|h| h as f32 / video_config.height as f32)
-                .unwrap_or(1.0);
-
-            let output_width = (video_config.width as f32 * downscale) as u32;
-            let output_height = output_height.unwrap_or(video_config.height);
+            let output_height = ensure_even(output_height.unwrap_or(video_config.height));
+            let output_width = if video_config.height == 0 {
+                ensure_even(video_config.width)
+            } else {
+                ensure_even(
+                    ((video_config.width as u64 * output_height as u64)
+                        / video_config.height as u64) as u32,
+                )
+            };
 
             output_settings.insert(
                 av::video_settings_keys::width(),
@@ -183,10 +196,42 @@ impl MP4Encoder {
             video_input
         };
 
-        let audio_input = audio_config
-            .as_ref()
-            .map(|config| {
+        let (audio_input, audio_resampler, audio_output_rate) = match audio_config.as_ref() {
+            Some(config) => {
                 debug!("{config:?}");
+
+                let output_rate = config.sample_rate.min(AAC_MAX_SAMPLE_RATE);
+
+                let resampler = if config.sample_rate > AAC_MAX_SAMPLE_RATE {
+                    info!(
+                        input_rate = config.sample_rate,
+                        output_rate,
+                        "Audio sample rate {} exceeds AAC max {}, resampling",
+                        config.sample_rate,
+                        AAC_MAX_SAMPLE_RATE
+                    );
+
+                    let mut output_config = *config;
+                    output_config.sample_rate = output_rate;
+
+                    Some(
+                        ffmpeg::software::resampler(
+                            (
+                                config.sample_format,
+                                config.channel_layout(),
+                                config.sample_rate,
+                            ),
+                            (
+                                output_config.sample_format,
+                                output_config.channel_layout(),
+                                output_config.sample_rate,
+                            ),
+                        )
+                        .map_err(InitError::AudioResampler)?,
+                    )
+                } else {
+                    None
+                };
 
                 let output_settings = cidre::ns::Dictionary::with_keys_values(
                     &[
@@ -197,7 +242,7 @@ impl MP4Encoder {
                     &[
                         cat::AudioFormat::MPEG4_AAC.as_ref(),
                         (config.channels as u32).as_ref(),
-                        (config.sample_rate).as_ref(),
+                        output_rate.as_ref(),
                     ],
                 );
 
@@ -213,15 +258,18 @@ impl MP4Encoder {
                     .add_input(&audio_input)
                     .map_err(InitError::AddAudioInput)?;
 
-                Ok::<_, InitError>(audio_input)
-            })
-            .transpose()?;
+                (Some(audio_input), resampler, output_rate)
+            }
+            None => (None, None, 0),
+        };
 
         asset_writer.start_writing();
 
         Ok(Self {
             config: video_config,
             audio_input,
+            audio_resampler,
+            audio_output_rate,
             asset_writer,
             video_input,
             last_frame_timestamp: None,
@@ -229,21 +277,25 @@ impl MP4Encoder {
             timestamp_offset: Duration::ZERO,
             is_writing: false,
             is_paused: false,
+            writer_failed: false,
             video_frames_appended: 0,
             audio_frames_appended: 0,
             last_timestamp: None,
             last_video_pts: None,
-            last_audio_pts: None,
+            last_audio_end_pts: None,
+            last_audio_timescale: None,
         })
     }
 
-    /// Expects frames with whatever pts values you like
-    /// They will be made relative when encoding
     pub fn queue_video_frame(
         &mut self,
         frame: arc::R<cm::SampleBuf>,
         timestamp: Duration,
     ) -> Result<(), QueueFrameError> {
+        if self.writer_failed {
+            return Err(QueueFrameError::Failed);
+        }
+
         if self.is_paused {
             return Ok(());
         };
@@ -255,7 +307,7 @@ impl MP4Encoder {
         if !self.is_writing {
             self.is_writing = true;
             self.asset_writer
-                .start_session_at_src_time(cm::Time::new(timestamp.as_millis() as i64, 1_000));
+                .start_session_at_src_time(cm::Time::zero());
         }
 
         self.last_frame_timestamp = Some(timestamp);
@@ -294,12 +346,23 @@ impl MP4Encoder {
 
         self.last_video_pts = Some(pts_duration);
 
-        let mut timing = frame.timing_info(0).unwrap();
-        timing.pts = cm::Time::new(pts_duration.as_millis() as i64, 1_000);
+        let frame_duration_ms = self.video_frame_duration().as_millis() as i64;
+        let timing = SampleTimingInfo {
+            duration: cm::Time::new(frame_duration_ms.max(1), 1_000),
+            pts: cm::Time::new(pts_duration.as_millis() as i64, 1_000),
+            dts: cm::Time::invalid(),
+        };
         let new_frame = frame.copy_with_new_timing(&[timing]).unwrap();
         drop(frame);
 
-        append_sample_buf(&mut self.video_input, &self.asset_writer, &new_frame)?;
+        match append_sample_buf(&mut self.video_input, &self.asset_writer, &new_frame) {
+            Ok(()) => {}
+            Err(QueueFrameError::WriterFailed(err)) => {
+                self.writer_failed = true;
+                return Err(QueueFrameError::WriterFailed(err));
+            }
+            Err(e) => return Err(e),
+        }
 
         self.video_frames_appended += 1;
         self.last_timestamp = Some(timestamp);
@@ -307,14 +370,16 @@ impl MP4Encoder {
         Ok(())
     }
 
-    /// Expects frames with pts values relative to the first frame's pts
-    /// in the timebase of 1 / sample rate
     pub fn queue_audio_frame(
         &mut self,
         frame: &frame::Audio,
         timestamp: Duration,
     ) -> Result<(), QueueFrameError> {
-        if self.is_paused || !self.is_writing {
+        if self.writer_failed {
+            return Err(QueueFrameError::Failed);
+        }
+
+        if self.is_paused {
             return Ok(());
         }
 
@@ -329,8 +394,57 @@ impl MP4Encoder {
             self.pause_timestamp = None;
         }
 
+        if !self.is_writing {
+            self.is_writing = true;
+            self.asset_writer
+                .start_session_at_src_time(cm::Time::zero());
+        }
+
         if !audio_input.is_ready_for_more_media_data() {
             return Err(QueueFrameError::NotReadyForMore);
+        }
+
+        let processed_frame: std::borrow::Cow<'_, frame::Audio> =
+            if let Some(resampler) = &mut self.audio_resampler {
+                let mut resampled = frame::Audio::empty();
+                match resampler.run(frame, &mut resampled) {
+                    Ok(_) => {
+                        resampled.set_rate(self.audio_output_rate);
+                        if resampled.samples() == 0 {
+                            warn!(
+                                input_samples = frame.samples(),
+                                input_rate = frame.rate(),
+                                output_rate = self.audio_output_rate,
+                                "Audio resampling produced 0 samples"
+                            );
+                            return Ok(());
+                        }
+                        std::borrow::Cow::Owned(resampled)
+                    }
+                    Err(e) => {
+                        error!(
+                            error = %e,
+                            input_samples = frame.samples(),
+                            input_rate = frame.rate(),
+                            output_rate = self.audio_output_rate,
+                            "Audio resampling failed"
+                        );
+                        return Err(QueueFrameError::ResamplingFailed(e));
+                    }
+                }
+            } else {
+                std::borrow::Cow::Borrowed(frame)
+            };
+
+        let frame = processed_frame.as_ref();
+
+        if frame.samples() == 0 {
+            warn!(
+                rate = frame.rate(),
+                channels = frame.channels(),
+                "Received audio frame with 0 samples, skipping"
+            );
+            return Ok(());
         }
 
         let audio_desc = cat::audio::StreamBasicDesc::common_f32(
@@ -364,39 +478,19 @@ impl MP4Encoder {
         let format_desc =
             cm::AudioFormatDesc::with_asbd(&audio_desc).map_err(QueueFrameError::Construct)?;
 
-        let mut pts_duration = timestamp
-            .checked_sub(self.timestamp_offset)
-            .unwrap_or(Duration::ZERO);
-
-        if let Some(last_pts) = self.last_audio_pts
-            && pts_duration <= last_pts
-        {
-            let frame_duration = Self::audio_frame_duration(frame);
-            let adjusted_pts = last_pts + frame_duration;
-
-            trace!(
-                ?timestamp,
-                ?last_pts,
-                adjusted_pts = ?adjusted_pts,
-                frame_duration_ns = frame_duration.as_nanos(),
-                samples = frame.samples(),
-                sample_rate = frame.rate(),
-                "Monotonic audio pts correction",
-            );
-
-            if let Some(new_offset) = timestamp.checked_sub(adjusted_pts) {
-                self.timestamp_offset = new_offset;
+        let sample_rate = frame.rate().max(1) as i32;
+        let pts_value = match (self.last_audio_end_pts, self.last_audio_timescale) {
+            (Some(end), Some(scale)) if scale == sample_rate => end,
+            (Some(end), Some(scale)) => {
+                duration_to_timescale_value(timescale_value_to_duration(end, scale), sample_rate)
             }
+            _ => 0,
+        };
 
-            pts_duration = adjusted_pts;
-        }
+        self.last_audio_end_pts = Some(pts_value.saturating_add(frame.samples() as i64));
+        self.last_audio_timescale = Some(sample_rate);
 
-        self.last_audio_pts = Some(pts_duration);
-
-        let pts = cm::Time::new(
-            (pts_duration.as_secs_f64() * frame.rate() as f64) as i64,
-            frame.rate() as i32,
-        );
+        let pts = cm::Time::new(pts_value, sample_rate);
 
         let buffer = cm::SampleBuf::create(
             Some(&block_buf),
@@ -404,7 +498,7 @@ impl MP4Encoder {
             Some(format_desc.as_ref()),
             frame.samples() as isize,
             &[SampleTimingInfo {
-                duration: cm::Time::new(1, frame.rate() as i32),
+                duration: cm::Time::new(1, sample_rate),
                 pts,
                 dts: cm::Time::invalid(),
             }],
@@ -412,7 +506,14 @@ impl MP4Encoder {
         )
         .map_err(QueueFrameError::Construct)?;
 
-        append_sample_buf(audio_input, &self.asset_writer, &buffer)?;
+        match append_sample_buf(audio_input, &self.asset_writer, &buffer) {
+            Ok(()) => {}
+            Err(QueueFrameError::WriterFailed(err)) => {
+                self.writer_failed = true;
+                return Err(QueueFrameError::WriterFailed(err));
+            }
+            Err(e) => return Err(e),
+        }
 
         self.audio_frames_appended += 1;
         self.last_timestamp = Some(timestamp);
@@ -433,23 +534,6 @@ impl MP4Encoder {
         let nanos = (numerator / denominator).max(1);
 
         Duration::from_nanos(nanos as u64)
-    }
-
-    fn audio_frame_duration(frame: &frame::Audio) -> Duration {
-        let rate = frame.rate();
-
-        if rate == 0 {
-            return Duration::from_millis(1);
-        }
-
-        let samples = frame.samples() as u128;
-        if samples == 0 {
-            return Duration::from_nanos(1);
-        }
-
-        let nanos = (samples * 1_000_000_000u128) / rate as u128;
-
-        Duration::from_nanos(nanos.max(1) as u64)
     }
 
     pub fn pause(&mut self) {
@@ -516,12 +600,18 @@ impl MP4Encoder {
 
         self.is_writing = false;
 
-        self.asset_writer.end_session_at_src_time(cm::Time::new(
-            end_timestamp
-                .saturating_sub(self.timestamp_offset)
-                .as_millis() as i64,
-            1000,
-        ));
+        let mut end_session_time = end_timestamp.saturating_sub(self.timestamp_offset);
+
+        if let Some(audio_end_pts) = self.last_audio_end_pts
+            && let Some(timescale) = self.last_audio_timescale
+            && timescale > 0
+        {
+            let audio_end_time = timescale_value_to_duration(audio_end_pts, timescale);
+            end_session_time = end_session_time.max(audio_end_time);
+        }
+
+        self.asset_writer
+            .end_session_at_src_time(cm::Time::new(end_session_time.as_millis() as i64, 1000));
         self.video_input.mark_as_finished();
         if let Some(i) = self.audio_input.as_mut() {
             i.mark_as_finished()
@@ -564,6 +654,20 @@ where
     let mut option = None;
     op(&mut option).into()?;
     Ok(unsafe { option.unwrap_unchecked() })
+}
+
+fn duration_to_timescale_value(duration: Duration, timescale: i32) -> i64 {
+    let nanos = duration.as_nanos();
+    let scale = timescale.max(1) as u128;
+    let value = (nanos.saturating_mul(scale).saturating_add(500_000_000)) / 1_000_000_000;
+    value.min(i64::MAX as u128) as i64
+}
+
+fn timescale_value_to_duration(value: i64, timescale: i32) -> Duration {
+    let scale = timescale.max(1) as u128;
+    let v = u128::try_from(value.max(0) as u64).unwrap_or(0);
+    let nanos = (v.saturating_mul(1_000_000_000u128) / scale).min(u64::MAX as u128) as u64;
+    Duration::from_nanos(nanos)
 }
 
 fn get_average_bitrate(width: f32, height: f32, fps: f32) -> f32 {
@@ -670,18 +774,31 @@ fn append_sample_buf(
     writer: &av::AssetWriter,
     frame: &cm::SampleBuf,
 ) -> Result<(), QueueFrameError> {
+    let status = writer.status();
+    if status == av::asset::writer::Status::Failed {
+        return Err(match writer.error() {
+            Some(err) => QueueFrameError::WriterFailed(err),
+            None => QueueFrameError::Failed,
+        });
+    }
+    if status != av::asset::writer::Status::Writing {
+        return Err(QueueFrameError::Failed);
+    }
+
     match input.append_sample_buf(frame) {
         Ok(true) => {}
         Ok(false) => {
-            if writer.status() == av::asset::writer::Status::Failed {
+            let status = writer.status();
+            if status == av::asset::writer::Status::Failed {
                 return Err(match writer.error() {
                     Some(err) => QueueFrameError::WriterFailed(err),
                     None => QueueFrameError::Failed,
                 });
             }
-            if writer.status() == av::asset::writer::Status::Writing {
+            if status == av::asset::writer::Status::Writing {
                 return Err(QueueFrameError::NotReadyForMore);
             }
+            return Err(QueueFrameError::Failed);
         }
         Err(e) => return Err(QueueFrameError::AppendError(e.retained())),
     }

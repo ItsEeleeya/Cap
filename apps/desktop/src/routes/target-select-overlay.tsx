@@ -114,8 +114,15 @@ function Inner() {
 	const [params] = useSearchParams<{
 		displayId: DisplayId;
 		isHoveredDisplay: string;
+		targetMode: "display" | "window" | "area" | "camera";
 	}>();
 	const [options, setOptions] = useOptions();
+
+	onMount(() => {
+		if (params.targetMode) {
+			setOptions("targetMode", params.targetMode);
+		}
+	});
 
 	const [toggleModeSelect, setToggleModeSelect] = createSignal(false);
 
@@ -129,6 +136,13 @@ function Inner() {
 		setTargetUnderCursor(reconcile(event.payload));
 	});
 	onCleanup(() => unsubTargetUnderCursor.then((unsub) => unsub()));
+
+	const unsubSetTargetMode = events.requestSetTargetMode.listen((event) => {
+		if (event.payload.target_mode) {
+			setOptions("targetMode", event.payload.target_mode);
+		}
+	});
+	onCleanup(() => unsubSetTargetMode.then((unsub) => unsub()));
 
 	const windowIcon = useQuery(() => ({
 		queryKey: ["windowIcon", targetUnderCursor.window?.id],
@@ -189,33 +203,48 @@ function Inner() {
 		}
 	});
 
-	createEffect((prevMode: "display" | "window" | "area" | null | undefined) => {
-		const mode = options.targetMode ?? null;
-		if (prevMode === "area" && mode !== "area") {
-			const target = pendingAreaTarget();
-			if (target) {
-				setOptions(
-					"captureTarget",
-					reconcile({
-						variant: "area",
-						screen: target.screen,
-						bounds: {
-							position: {
-								x: target.bounds.position.x,
-								y: target.bounds.position.y,
+	createEffect(
+		(prevMode: "display" | "window" | "area" | "camera" | null | undefined) => {
+			const mode = options.targetMode ?? null;
+			if (prevMode === "area" && mode !== "area") {
+				const target = pendingAreaTarget();
+				if (target) {
+					setOptions(
+						"captureTarget",
+						reconcile({
+							variant: "area",
+							screen: target.screen,
+							bounds: {
+								position: {
+									x: target.bounds.position.x,
+									y: target.bounds.position.y,
+								},
+								size: {
+									width: target.bounds.size.width,
+									height: target.bounds.size.height,
+								},
 							},
-							size: {
-								width: target.bounds.size.width,
-								height: target.bounds.size.height,
-							},
-						},
-					}),
-				);
+						}),
+					);
+				}
+				setPendingAreaTarget(null);
+				setInitialAreaBounds(undefined);
 			}
-			setPendingAreaTarget(null);
-			setInitialAreaBounds(undefined);
+			return mode;
+		},
+	);
+
+	createEffect(() => {
+		if (options.targetMode === "camera") {
+			setOptions(
+				"captureTarget",
+				reconcile({ variant: "cameraOnly" } as ScreenCaptureTarget),
+			);
+			setOptions("captureSystemAudio", false);
+			WebviewWindow.getByLabel("camera").then((win) => {
+				if (win) win.close();
+			});
 		}
-		return mode;
 	});
 
 	const unsubOnEscapePress = events.onEscapePress.listen(() => {
@@ -240,6 +269,26 @@ function Inner() {
 
 	return (
 		<Switch>
+			<Match when={options.targetMode === "camera"}>
+				<div class="relative w-screen h-screen flex flex-col items-center justify-center bg-black/70">
+					<div class="absolute inset-0 bg-black/60 -z-10" />
+					<div class="flex flex-col items-center text-white mb-4">
+						<span class="mb-2 text-3xl font-semibold">Camera Only</span>
+						<span class="text-xs text-gray-11">
+							Record using only your camera and microphone
+						</span>
+					</div>
+					<div class="w-full max-w-[480px] px-6 mb-4">
+						<div class="w-full aspect-video rounded-2xl border border-gray-6 bg-black overflow-hidden">
+							<CameraPreviewInline />
+						</div>
+					</div>
+					<RecordingControls
+						target={{ variant: "cameraOnly" } as ScreenCaptureTarget}
+						showBackground
+					/>
+				</div>
+			</Match>
 			<Match when={options.targetMode === "display" && params.displayId}>
 				{(displayId) => (
 					<div
@@ -380,7 +429,7 @@ function Inner() {
 										setOptions({
 											targetMode: "area",
 										});
-										commands.openTargetSelectOverlays(null);
+										commands.openTargetSelectOverlays(null, null, "area");
 									}}
 								>
 									Adjust recording area
@@ -424,8 +473,19 @@ function Inner() {
 					const [snapToRatioEnabled, setSnapToRatioEnabled] =
 						createSignal(true);
 					const [isInteracting, setIsInteracting] = createSignal(false);
+					const isActiveDisplay = createMemo(() => {
+						const activeDisplayId = targetUnderCursor.display_id;
+						if (activeDisplayId) {
+							return activeDisplayId === displayId();
+						}
+						return params.isHoveredDisplay === "true";
+					});
+					const shouldShowOverlay = createMemo(
+						() => isInteracting() || isActiveDisplay(),
+					);
 					const shouldShowSelectionHint = createMemo(() => {
 						if (initialAreaBounds() !== undefined) return false;
+						if (!isActiveDisplay()) return false;
 						const bounds = crop();
 						return bounds.width <= 1 && bounds.height <= 1 && !isInteracting();
 					});
@@ -493,8 +553,8 @@ function Inner() {
 						if (options.mode === "screenshot") return;
 						const bounds = crop();
 						const interacting = isInteracting();
+						const displayInfo = areaDisplayInfo.data;
 
-						// Find the camera window if we haven't yet
 						let win = cameraWindow();
 						if (!win) {
 							// Try to find it
@@ -568,6 +628,11 @@ function Inner() {
 							bounds.width > newWidth + padding * 2 &&
 							bounds.height > newHeight + padding * 2
 						) {
+							const displayOriginX =
+								displayInfo?.logical_bounds?.position?.x ?? 0;
+							const displayOriginY =
+								displayInfo?.logical_bounds?.position?.y ?? 0;
+
 							const newX = Math.round(
 								bounds.x + bounds.width - newWidth - padding,
 							);
@@ -576,8 +641,8 @@ function Inner() {
 							);
 
 							setTargetState({
-								x: newX * scaleFactor,
-								y: newY * scaleFactor,
+								x: (newX + displayOriginX) * scaleFactor,
+								y: (newY + displayOriginY) * scaleFactor,
 								width: newWidth * scaleFactor,
 								height: newHeight * scaleFactor,
 							});
@@ -704,6 +769,7 @@ function Inner() {
 					createEffect(() => {
 						if (isInteracting()) return;
 						if (!isValid()) return;
+						if (!isActiveDisplay()) return;
 						const screenId = displayId();
 						if (!screenId) return;
 						const bounds = crop();
@@ -756,6 +822,14 @@ function Inner() {
 								);
 
 								try {
+									const allWindows = await WebviewWindow.getAll();
+									for (const win of allWindows) {
+										if (win.label.startsWith("target-select-overlay-")) {
+											await win.hide();
+										}
+									}
+									await new Promise((resolve) => setTimeout(resolve, 50));
+
 									const path = await invoke<string>("take_screenshot", {
 										target,
 									});
@@ -771,7 +845,12 @@ function Inner() {
 					});
 
 					return (
-						<div class="fixed w-screen h-screen">
+						<div
+							class="fixed w-screen h-screen"
+							classList={{
+								"opacity-0 pointer-events-none": !shouldShowOverlay(),
+							}}
+						>
 							<div
 								ref={controlsEl}
 								class="fixed z-50 transition-opacity"
@@ -840,6 +919,204 @@ function Inner() {
 	);
 }
 
+const WS_INITIAL_BACKOFF_MS = 1000;
+const WS_MAX_BACKOFF_MS = 30000;
+const WS_MAX_RETRIES = 10;
+const WS_JITTER_FACTOR = 0.3;
+
+function calculateBackoffWithJitter(
+	retryCount: number,
+	initialMs: number,
+	maxMs: number,
+	jitterFactor: number,
+): number {
+	const exponentialBackoff = Math.min(initialMs * 2 ** retryCount, maxMs);
+	const jitterRange = exponentialBackoff * jitterFactor;
+	const jitter = Math.random() * jitterRange * 2 - jitterRange;
+	return Math.max(initialMs, Math.floor(exponentialBackoff + jitter));
+}
+
+function CameraPreviewInline() {
+	const [frame, setFrame] = createSignal<ImageData | null>(null);
+	const [connectionFailed, setConnectionFailed] = createSignal(false);
+	let canvasRef: HTMLCanvasElement | undefined;
+	let ws: WebSocket | undefined;
+	let retryCount = 0;
+	let reconnectTimeoutId: ReturnType<typeof setTimeout> | undefined;
+	let isCleanedUp = false;
+
+	const cameraWsPort = (window as any).__CAP__?.cameraWsPort;
+
+	const scheduleReconnect = () => {
+		if (isCleanedUp) return;
+
+		if (retryCount >= WS_MAX_RETRIES) {
+			setConnectionFailed(true);
+			return;
+		}
+
+		const backoffMs = calculateBackoffWithJitter(
+			retryCount,
+			WS_INITIAL_BACKOFF_MS,
+			WS_MAX_BACKOFF_MS,
+			WS_JITTER_FACTOR,
+		);
+
+		reconnectTimeoutId = setTimeout(() => {
+			if (isCleanedUp) return;
+			retryCount += 1;
+			ws = createSocket();
+		}, backoffMs);
+	};
+
+	const resetBackoff = () => {
+		retryCount = 0;
+		setConnectionFailed(false);
+		if (reconnectTimeoutId !== undefined) {
+			clearTimeout(reconnectTimeoutId);
+			reconnectTimeoutId = undefined;
+		}
+	};
+
+	const createSocket = () => {
+		if (!cameraWsPort) return undefined;
+
+		const socket = new WebSocket(`ws://localhost:${cameraWsPort}`);
+		socket.binaryType = "arraybuffer";
+
+		socket.onopen = () => {
+			resetBackoff();
+		};
+
+		socket.onclose = () => {
+			if (!isCleanedUp) {
+				scheduleReconnect();
+			}
+		};
+
+		socket.onerror = () => {
+			socket.close();
+		};
+
+		socket.onmessage = (event) => {
+			const buffer = event.data as ArrayBuffer;
+			const clamped = new Uint8ClampedArray(buffer);
+			if (clamped.length < 24) return;
+
+			const MAX_FRAME_DIMENSION = 8192;
+			const MAX_STRIDE_BYTES = MAX_FRAME_DIMENSION * 4 * 2;
+			const MAX_FRAME_SIZE = MAX_FRAME_DIMENSION * MAX_FRAME_DIMENSION * 4;
+
+			const metadataOffset = clamped.length - 24;
+			const meta = new DataView(buffer, metadataOffset, 24);
+			const strideBytes = meta.getUint32(0, true);
+			const height = meta.getUint32(4, true);
+			const width = meta.getUint32(8, true);
+
+			if (!width || !height || strideBytes === 0) return;
+
+			if (
+				width > MAX_FRAME_DIMENSION ||
+				height > MAX_FRAME_DIMENSION ||
+				strideBytes > MAX_STRIDE_BYTES
+			)
+				return;
+
+			const source = clamped.subarray(0, metadataOffset);
+			const expectedRowBytes = width * 4;
+			const availableLength = strideBytes * height;
+
+			if (
+				expectedRowBytes > MAX_STRIDE_BYTES ||
+				availableLength > MAX_FRAME_SIZE
+			)
+				return;
+
+			if (strideBytes < expectedRowBytes || source.length < availableLength)
+				return;
+
+			const expectedLength = expectedRowBytes * height;
+
+			if (expectedLength > MAX_FRAME_SIZE) return;
+
+			let pixels: Uint8ClampedArray;
+
+			if (strideBytes === expectedRowBytes) {
+				pixels = source.subarray(0, expectedLength);
+			} else {
+				pixels = new Uint8ClampedArray(expectedLength);
+				for (let row = 0; row < height; row += 1) {
+					const srcStart = row * strideBytes;
+					const destStart = row * expectedRowBytes;
+					pixels.set(
+						source.subarray(srcStart, srcStart + expectedRowBytes),
+						destStart,
+					);
+				}
+			}
+
+			setFrame(new ImageData(new Uint8ClampedArray(pixels), width, height));
+		};
+
+		return socket;
+	};
+
+	ws = createSocket();
+
+	onCleanup(() => {
+		isCleanedUp = true;
+		if (reconnectTimeoutId !== undefined) {
+			clearTimeout(reconnectTimeoutId);
+		}
+		ws?.close();
+	});
+
+	createEffect(() => {
+		const image = frame();
+		const canvas = canvasRef;
+		if (!image || !canvas) return;
+		canvas.width = image.width;
+		canvas.height = image.height;
+		const ctx = canvas.getContext("2d");
+		ctx?.putImageData(image, 0, 0);
+	});
+
+	const handleRetryConnection = () => {
+		resetBackoff();
+		if (ws) {
+			ws.close();
+		}
+		ws = createSocket();
+	};
+
+	return (
+		<div class="flex items-center justify-center w-full h-full bg-black">
+			<Show
+				when={!connectionFailed()}
+				fallback={
+					<div class="flex flex-col items-center gap-2 text-center px-4">
+						<div class="text-sm text-red-400">Camera connection failed</div>
+						<button
+							type="button"
+							onClick={handleRetryConnection}
+							class="text-xs text-blue-400 hover:text-blue-300 underline"
+						>
+							Try again
+						</button>
+					</div>
+				}
+			>
+				<Show
+					when={frame()}
+					fallback={<div class="text-sm text-gray-11">Loading camera...</div>}
+				>
+					<canvas ref={canvasRef} class="w-full h-full object-contain" />
+				</Show>
+			</Show>
+		</div>
+	);
+}
+
 function RecordingControls(props: {
 	target: ScreenCaptureTarget;
 	setToggleModeSelect?: (value: boolean) => void;
@@ -862,6 +1139,24 @@ function RecordingControls(props: {
 		},
 	}));
 	const setCamera = createCameraMutation();
+
+	onMount(async () => {
+		if (rawOptions.micName) {
+			setMicInput
+				.mutateAsync(rawOptions.micName)
+				.catch((error) => console.error("Failed to set mic input:", error));
+		}
+
+		if (rawOptions.cameraID && "ModelID" in rawOptions.cameraID)
+			await setCamera.mutateAsync({ ModelID: rawOptions.cameraID.ModelID });
+		else if (rawOptions.cameraID && "DeviceID" in rawOptions.cameraID)
+			await setCamera.mutateAsync({ DeviceID: rawOptions.cameraID.DeviceID });
+
+		if (props.target.variant === "cameraOnly") {
+			const win = await WebviewWindow.getByLabel("camera");
+			if (win) win.close();
+		}
+	});
 
 	const selectedCamera = createMemo(() => {
 		if (!rawOptions.cameraID) return null;
@@ -1081,6 +1376,7 @@ function RecordingControls(props: {
 									else setCamera.mutate({ DeviceID: camera.device_id });
 								}}
 								permissions={permissions()}
+								hidePreviewButton={props.target.variant === "cameraOnly"}
 							/>
 							<MicrophoneSelect
 								disabled={devices.isPending}

@@ -21,126 +21,130 @@ const Mode = (props: ModeProps) => {
 	};
 
 	return (
-		<div class="relative">
+		<div class="flex gap-2 relative justify-end items-center p-1.5 rounded-full border border-gray-5 bg-gray-3 w-fit">
 			<div
-				class="absolute -left-2 -top-2 p-1 rounded-full w-fit group apple-glass z-10"
+				class="absolute -left-1.5 -top-2 p-1 rounded-full w-fit bg-gray-5 group"
 				onClick={handleInfoClick}
 				onMouseEnter={() => setIsInfoHovered(true)}
 				onMouseLeave={() => setIsInfoHovered(false)}
 			>
-				<IconCapInfo class="invert transition-opacity duration-200 cursor-pointer size-2.5 dark:invert-0 apple-vibrancy-fill group-hover:opacity-50" />
+				<IconCapInfo class="invert transition-opacity duration-200 cursor-pointer size-2.5 dark:invert-0 group-hover:opacity-50" />
 			</div>
 
-			<div class="flex gap-2 relative justify-end items-center p-1.5 rounded-full w-fit apple-glass">
-				{!isInfoHovered() && (
-					<Tooltip
-						placement="top"
-						content="Instant mode"
-						openDelay={0}
-						closeDelay={0}
+			{!isInfoHovered() && (
+				<Tooltip
+					placement="top"
+					content="Instant mode"
+					openDelay={0}
+					closeDelay={0}
+				>
+					<div
+						onClick={() => {
+							setOptions({ mode: "instant" });
+							commands.setRecordingMode("instant");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "instant"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-blue-500"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
 					>
-						<div
-							onClick={() => {
-								setOptions({ mode: "instant" });
-								commands.setRecordingMode("instant");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "instant"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 hover:bg-gray-7/40 ring-blue-500"
-									: "hover:bg-gray-7/70 apple-vibrancy-fill"
-								}`}
-						>
-							<IconCapInstant class="invert size-4 dark:invert-0" />
-						</div>
-					</Tooltip>
-				)}
+						<IconCapInstant class="invert size-4 dark:invert-0" />
+					</div>
+				</Tooltip>
+			)}
 
-				{!isInfoHovered() && (
-					<Tooltip
-						placement="top"
-						content="Studio mode"
-						openDelay={0}
-						closeDelay={0}
+			{!isInfoHovered() && (
+				<Tooltip
+					placement="top"
+					content="Studio mode"
+					openDelay={0}
+					closeDelay={0}
+				>
+					<div
+						onClick={() => {
+							setOptions({ mode: "studio" });
+							commands.setRecordingMode("studio");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "studio"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-blue-500"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
 					>
-						<div
-							onClick={() => {
-								setOptions({ mode: "studio" });
-								commands.setRecordingMode("studio");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "studio"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-blue-500"
-									: "hover:bg-gray-7/70 apple-vibrancy-fill"
-								}`}
-						>
-							<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
-						</div>
-					</Tooltip>
-				)}
+						<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
+					</div>
+				</Tooltip>
+			)}
 
-				{!isInfoHovered() && (
-					<Tooltip
-						placement="top"
-						content="Screenshot mode"
-						openDelay={0}
-						closeDelay={0}
+			{!isInfoHovered() && (
+				<Tooltip
+					placement="top"
+					content="Screenshot mode"
+					openDelay={0}
+					closeDelay={0}
+				>
+					<div
+						onClick={() => {
+							setOptions({ mode: "screenshot" });
+							commands.setRecordingMode("screenshot");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "screenshot"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-blue-500"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
 					>
-						<div
-							onClick={() => {
-								setOptions({ mode: "screenshot" });
-								commands.setRecordingMode("screenshot");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "screenshot"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-7 hover:bg-gray-7 ring-blue-500"
-									: "hover:bg-gray-7/70 apple-vibrancy-fill"
-								}`}
-						>
-							<IconCapScreenshot class="size-3.5 invert dark:invert-0" />
-						</div>
-					</Tooltip>
-				)}
+						<IconCapScreenshot class="size-3.5 invert dark:invert-0" />
+					</div>
+				</Tooltip>
+			)}
 
-				{isInfoHovered() && (
-					<>
-						<div
-							onClick={() => {
-								setOptions({ mode: "instant" });
-								commands.setRecordingMode("instant");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "instant"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-500"
-									: "hover:bg-gray-7/70"
-								}`}
-						>
-							<IconCapInstant class="invert size-4 dark:invert-0" />
-						</div>
+			{isInfoHovered() && (
+				<>
+					<div
+						onClick={() => {
+							setOptions({ mode: "instant" });
+							commands.setRecordingMode("instant");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "instant"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-500"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
+					>
+						<IconCapInstant class="invert size-4 dark:invert-0" />
+					</div>
 
-						<div
-							onClick={() => {
-								setOptions({ mode: "studio" });
-								commands.setRecordingMode("studio");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "studio"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-10"
-									: "hover:bg-gray-7/70"
-								}`}
-						>
-							<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
-						</div>
+					<div
+						onClick={() => {
+							setOptions({ mode: "studio" });
+							commands.setRecordingMode("studio");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "studio"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-10"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
+					>
+						<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
+					</div>
 
-						<div
-							onClick={() => {
-								setOptions({ mode: "screenshot" });
-								commands.setRecordingMode("screenshot");
-							}}
-							class={`flex justify-center items-center transition-all duration-200 rounded-full size-7  ${rawOptions.mode === "screenshot"
-									? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-10"
-									: "hover:bg-gray-7/70"
-								}`}
-						>
-							<IconCapScreenshot class="size-3.5 invert dark:invert-0" />
-						</div>
-					</>
-				)}
-			</div>
+					<div
+						onClick={() => {
+							setOptions({ mode: "screenshot" });
+							commands.setRecordingMode("screenshot");
+						}}
+						class={`flex justify-center items-center transition-all duration-200 rounded-full size-7 hover:cursor-pointer ${
+							rawOptions.mode === "screenshot"
+								? "ring-2 ring-offset-1 ring-offset-gray-1 bg-gray-5 hover:bg-gray-7 ring-blue-10"
+								: "bg-gray-3 hover:bg-gray-7"
+						}`}
+					>
+						<IconCapScreenshot class="size-3.5 invert dark:invert-0" />
+					</div>
+				</>
+			)}
 		</div>
 	);
 };

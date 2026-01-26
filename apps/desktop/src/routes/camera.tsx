@@ -44,6 +44,16 @@ const CAMERA_DEFAULT_SIZE = 230;
 const CAMERA_PRESET_SMALL = 230;
 const CAMERA_PRESET_LARGE = 400;
 
+const getCameraOnlyMode = () => {
+	return window.__CAP__?.cameraOnlyMode === true;
+};
+
+const getCameraOnlyInitialState = (): CameraWindowState => ({
+	size: CAMERA_PRESET_LARGE,
+	shape: "full",
+	mirrored: false,
+});
+
 export default function () {
 	document.documentElement.classList.toggle("dark", true);
 
@@ -78,12 +88,18 @@ export default function () {
 }
 
 function NativeCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
+	const isCameraOnlyMode = getCameraOnlyMode();
+
 	const [state, setState] = makePersisted(
-		createStore<CameraWindowState>({
-			size: CAMERA_DEFAULT_SIZE,
-			shape: "round",
-			mirrored: false,
-		}),
+		createStore<CameraWindowState>(
+			isCameraOnlyMode
+				? getCameraOnlyInitialState()
+				: {
+						size: CAMERA_DEFAULT_SIZE,
+						shape: "round",
+						mirrored: false,
+					},
+		),
 		{ name: "cameraWindowState" },
 	);
 
@@ -95,8 +111,15 @@ function NativeCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 		corner: "",
 	});
 
+	onMount(() => {
+		if (isCameraOnlyMode) {
+			const cameraOnlyState = getCameraOnlyInitialState();
+			setState("size", cameraOnlyState.size);
+			setState("shape", cameraOnlyState.shape);
+		}
+	});
+
 	createEffect(() => {
-		// Support for legacy size strings.
 		let currentSize = state.size as number | string;
 		if (typeof currentSize !== "number" || Number.isNaN(currentSize)) {
 			currentSize =
@@ -284,18 +307,30 @@ function ControlButton(
 
 function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 	const { rawOptions } = useRecordingOptions();
+	const isCameraOnlyMode = getCameraOnlyMode();
 
 	const [state, setState] = makePersisted(
-		createStore<CameraWindowState>({
-			size: CAMERA_DEFAULT_SIZE,
-			shape: "round",
-			mirrored: false,
-		}),
+		createStore<CameraWindowState>(
+			isCameraOnlyMode
+				? getCameraOnlyInitialState()
+				: {
+						size: CAMERA_DEFAULT_SIZE,
+						shape: "round",
+						mirrored: false,
+					},
+		),
 		{ name: "cameraWindowState" },
 	);
 
+	onMount(() => {
+		if (isCameraOnlyMode) {
+			const cameraOnlyState = getCameraOnlyInitialState();
+			setState("size", cameraOnlyState.size);
+			setState("shape", cameraOnlyState.shape);
+		}
+	});
+
 	createEffect(() => {
-		// Support for legacy size strings.
 		const currentSize = state.size as number | string;
 		if (typeof currentSize !== "number" || Number.isNaN(currentSize)) {
 			setState(
@@ -313,7 +348,7 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 		corner: "",
 	});
 
-	const [hasPositioned, setHasPositioned] = createSignal(false);
+	const [hasPositioned, setHasPositioned] = createSignal(isCameraOnlyMode);
 
 	const [latestFrame, setLatestFrame] = createLazySignal<{
 		width: number;
@@ -324,6 +359,36 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 		width: number;
 		height: number;
 	} | null>(null);
+
+	const [externalContainerSize, setExternalContainerSize] = createSignal<{
+		width: number;
+		height: number;
+	} | null>(null);
+
+	let containerRef: HTMLDivElement | undefined;
+
+	onMount(() => {
+		if (!containerRef) return;
+
+		const updateContainerSize = () => {
+			if (!containerRef) return;
+			const rect = containerRef.getBoundingClientRect();
+			const currentSize = externalContainerSize();
+			if (
+				!currentSize ||
+				Math.abs(currentSize.width - rect.width) > 1 ||
+				Math.abs(currentSize.height - rect.height) > 1
+			) {
+				setExternalContainerSize({ width: rect.width, height: rect.height });
+			}
+		};
+
+		const resizeObserver = new ResizeObserver(updateContainerSize);
+		resizeObserver.observe(containerRef);
+		updateContainerSize();
+
+		onCleanup(() => resizeObserver.disconnect());
+	});
 
 	function imageDataHandler(imageData: { width: number; data: ImageData }) {
 		setLatestFrame(imageData);
@@ -353,17 +418,14 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 		socket.binaryType = "arraybuffer";
 
 		socket.addEventListener("open", () => {
-			console.log("WebSocket connected");
 			setIsConnected(true);
 		});
 
 		socket.addEventListener("close", () => {
-			console.log("WebSocket disconnected");
 			setIsConnected(false);
 		});
 
-		socket.addEventListener("error", (error) => {
-			console.error("WebSocket error:", error);
+		socket.addEventListener("error", () => {
 			setIsConnected(false);
 		});
 
@@ -436,7 +498,6 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 
 	const reconnectInterval = setInterval(() => {
 		if (!ws || ws.readyState !== WebSocket.OPEN) {
-			console.log("Attempting to reconnect...");
 			if (ws) ws.close();
 			ws = createSocket();
 		}
@@ -666,6 +727,7 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 				onMouseDown={handleResizeStart("se")}
 			/>
 			<div
+				ref={containerRef}
 				class={cx(
 					"flex flex-col flex-1 relative overflow-hidden pointer-events-none border-none shadow-lg bg-gray-1 text-gray-12",
 					state.shape === "round" ? "rounded-full" : "rounded-3xl",
@@ -678,6 +740,7 @@ function LegacyCameraPreviewPage(props: { disconnected: Accessor<boolean> }) {
 							latestFrame={latestFrame}
 							state={state}
 							ref={cameraCanvasRef}
+							containerSize={externalContainerSize() ?? undefined}
 						/>
 					</Show>
 				</Suspense>
