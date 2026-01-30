@@ -58,8 +58,9 @@ import {
 	type ScreenCaptureTarget,
 	type TargetUnderCursor,
 } from "~/utils/tauri";
-import CameraSelect from "./(window-chrome)/new-main/CameraSelect";
-import MicrophoneSelect from "./(window-chrome)/new-main/MicrophoneSelect";
+import { CameraSelectBase } from "./(window-chrome)/new-main/CameraSelect";
+import InfoPill from "./(window-chrome)/new-main/InfoPill";
+import { MicrophoneSelectBase } from "./(window-chrome)/new-main/MicrophoneSelect";
 import {
 	RecordingOptionsProvider,
 	useRecordingOptions,
@@ -937,6 +938,7 @@ function calculateBackoffWithJitter(
 }
 
 function CameraPreviewInline() {
+	const { rawOptions } = useRecordingOptions();
 	const [frame, setFrame] = createSignal<ImageData | null>(null);
 	const [connectionFailed, setConnectionFailed] = createSignal(false);
 	let canvasRef: HTMLCanvasElement | undefined;
@@ -946,6 +948,7 @@ function CameraPreviewInline() {
 	let isCleanedUp = false;
 
 	const cameraWsPort = (window as any).__CAP__?.cameraWsPort;
+	const hasCameraSelected = () => rawOptions.cameraID !== null;
 
 	const scheduleReconnect = () => {
 		if (isCleanedUp) return;
@@ -1061,7 +1064,34 @@ function CameraPreviewInline() {
 		return socket;
 	};
 
-	ws = createSocket();
+	createEffect(() => {
+		if (reconnectTimeoutId !== undefined) {
+			clearTimeout(reconnectTimeoutId);
+			reconnectTimeoutId = undefined;
+		}
+
+		if (hasCameraSelected()) {
+			if (
+				!ws ||
+				ws.readyState === WebSocket.CLOSED ||
+				ws.readyState === WebSocket.CLOSING
+			) {
+				resetBackoff();
+				ws = createSocket();
+			}
+		} else {
+			if (
+				ws &&
+				ws.readyState !== WebSocket.CLOSING &&
+				ws.readyState !== WebSocket.CLOSED
+			) {
+				ws.close();
+			}
+			ws = undefined;
+			setFrame(null);
+			setConnectionFailed(false);
+		}
+	});
 
 	onCleanup(() => {
 		isCleanedUp = true;
@@ -1092,25 +1122,35 @@ function CameraPreviewInline() {
 	return (
 		<div class="flex items-center justify-center w-full h-full bg-black">
 			<Show
-				when={!connectionFailed()}
+				when={hasCameraSelected()}
 				fallback={
 					<div class="flex flex-col items-center gap-2 text-center px-4">
-						<div class="text-sm text-red-400">Camera connection failed</div>
-						<button
-							type="button"
-							onClick={handleRetryConnection}
-							class="text-xs text-blue-400 hover:text-blue-300 underline"
-						>
-							Try again
-						</button>
+						<IconCapCamera class="size-8 text-gray-9 mb-2" />
+						<div class="text-sm text-gray-11">Please select a camera</div>
 					</div>
 				}
 			>
 				<Show
-					when={frame()}
-					fallback={<div class="text-sm text-gray-11">Loading camera...</div>}
+					when={!connectionFailed()}
+					fallback={
+						<div class="flex flex-col items-center gap-2 text-center px-4">
+							<div class="text-sm text-red-400">Camera connection failed</div>
+							<button
+								type="button"
+								onClick={handleRetryConnection}
+								class="text-xs text-blue-400 hover:text-blue-300 underline"
+							>
+								Try again
+							</button>
+						</div>
+					}
 				>
-					<canvas ref={canvasRef} class="w-full h-full object-contain" />
+					<Show
+						when={frame()}
+						fallback={<div class="text-sm text-gray-11">Loading camera...</div>}
+					>
+						<canvas ref={canvasRef} class="w-full h-full object-contain" />
+					</Show>
 				</Show>
 			</Show>
 		</div>
@@ -1147,12 +1187,19 @@ function RecordingControls(props: {
 				.catch((error) => console.error("Failed to set mic input:", error));
 		}
 
+		const isCameraOnly = props.target.variant === "cameraOnly";
 		if (rawOptions.cameraID && "ModelID" in rawOptions.cameraID)
-			await setCamera.mutateAsync({ ModelID: rawOptions.cameraID.ModelID });
+			await setCamera.mutateAsync({
+				model: { ModelID: rawOptions.cameraID.ModelID },
+				skipCameraWindow: isCameraOnly,
+			});
 		else if (rawOptions.cameraID && "DeviceID" in rawOptions.cameraID)
-			await setCamera.mutateAsync({ DeviceID: rawOptions.cameraID.DeviceID });
+			await setCamera.mutateAsync({
+				model: { DeviceID: rawOptions.cameraID.DeviceID },
+				skipCameraWindow: isCameraOnly,
+			});
 
-		if (props.target.variant === "cameraOnly") {
+		if (isCameraOnly) {
 			const win = await WebviewWindow.getByLabel("camera");
 			if (win) win.close();
 		}
@@ -1365,25 +1412,40 @@ function RecordingControls(props: {
 				<Show when={(rawOptions.mode as string) !== "screenshot"}>
 					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
 						<div class="grid grid-cols-2 gap-2 w-full">
-							<CameraSelect
+							<CameraSelectBase
 								disabled={devices.isPending}
 								options={cameras()}
 								value={selectedCamera() ?? null}
 								onChange={(camera) => {
-									if (!camera) setCamera.mutate(null);
+									const isCameraOnly = props.target.variant === "cameraOnly";
+									if (!camera) setCamera.mutate({ model: null });
 									else if (camera.model_id)
-										setCamera.mutate({ ModelID: camera.model_id });
-									else setCamera.mutate({ DeviceID: camera.device_id });
+										setCamera.mutate({
+											model: { ModelID: camera.model_id },
+											skipCameraWindow: isCameraOnly,
+										});
+									else
+										setCamera.mutate({
+											model: { DeviceID: camera.device_id },
+											skipCameraWindow: isCameraOnly,
+										});
 								}}
 								permissions={permissions()}
 								hidePreviewButton={props.target.variant === "cameraOnly"}
+								PillComponent={InfoPill}
+								class="flex flex-row gap-2 items-center px-2 w-full h-[42px] rounded-lg border border-gray-5 transition-colors cursor-default disabled:opacity-70 bg-gray-3 disabled:text-gray-11 KSelect"
+								iconClass="text-gray-10 size-4"
 							/>
-							<MicrophoneSelect
+							<MicrophoneSelectBase
 								disabled={devices.isPending}
 								options={mics()}
 								value={selectedMicName()}
 								onChange={(value) => setMicInput.mutate(value)}
 								permissions={permissions()}
+								PillComponent={InfoPill}
+								class="flex overflow-hidden relative z-10 flex-row gap-2 items-center px-2 w-full h-[42px] rounded-lg border border-gray-5 transition-colors cursor-default disabled:opacity-70 bg-gray-3 disabled:text-gray-11 KSelect"
+								levelIndicatorClass="bg-blue-7"
+								iconClass="text-gray-10 size-4"
 							/>
 						</div>
 					</div>
