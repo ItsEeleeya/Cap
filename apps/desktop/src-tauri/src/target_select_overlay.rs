@@ -12,7 +12,7 @@ use crate::{
     App, ArcLock, general_settings,
     recording_settings::RecordingTargetMode,
     window_exclusion::WindowExclusion,
-    windows::{CapWindowId, ShowCapWindow},
+    windows::{CapWindow, CapWindowDef},
 };
 use scap_targets::{
     Display, DisplayId, Window, WindowId,
@@ -90,9 +90,9 @@ pub async fn open_target_select_overlays(
         .unwrap_or_else(|| Display::primary().id());
 
     for (id, window) in app.webview_windows() {
-        if let Ok(CapWindowId::TargetSelectOverlay {
+        if let Ok(CapWindowDef::TargetSelectOverlay {
             display_id: existing_id,
-        }) = CapWindowId::from_str(&id)
+        }) = CapWindowDef::from_str(&id)
             && !display_ids
                 .iter()
                 .any(|display_id| display_id == &existing_id)
@@ -105,7 +105,7 @@ pub async fn open_target_select_overlays(
     for display_id in &display_ids {
         let should_focus = display_id == &focus_display_id;
 
-        let existing_window = CapWindowId::TargetSelectOverlay {
+        let existing_window = CapWindowDef::TargetSelectOverlay {
             display_id: display_id.clone(),
         }
         .get(&app);
@@ -119,7 +119,7 @@ pub async fn open_target_select_overlays(
 
             state.spawn(display_id, window.clone());
         } else if start.elapsed() < Duration::from_secs(1) {
-            if let Ok(window) = (ShowCapWindow::TargetSelectOverlay {
+            if let Ok(window) = (CapWindow::TargetSelectOverlay {
                 display_id: display_id.clone(),
                 target_mode,
             })
@@ -135,7 +135,7 @@ pub async fn open_target_select_overlays(
             let app_clone = app.clone();
             let display_id_clone = display_id.clone();
             tokio::spawn(async move {
-                if let Ok(window) = (ShowCapWindow::TargetSelectOverlay {
+                if let Ok(window) = (CapWindow::TargetSelectOverlay {
                     display_id: display_id_clone,
                     target_mode,
                 })
@@ -151,7 +151,7 @@ pub async fn open_target_select_overlays(
         }
     }
 
-    let focus_window = CapWindowId::TargetSelectOverlay {
+    let focus_window = CapWindowDef::TargetSelectOverlay {
         display_id: focus_display_id,
     }
     .get(&app);
@@ -297,7 +297,7 @@ pub async fn close_target_select_overlays(
     let mut closed_display_ids = Vec::new();
 
     for (id, window) in app.webview_windows() {
-        if let Ok(CapWindowId::TargetSelectOverlay { display_id }) = CapWindowId::from_str(&id) {
+        if let Ok(CapWindowDef::TargetSelectOverlay { display_id }) = CapWindowDef::from_str(&id) {
             let _ = window.hide();
             closed_display_ids.push(display_id);
         }
@@ -418,8 +418,8 @@ impl WindowFocusManager {
                 let mut main_window_was_seen = false;
 
                 loop {
-                    let cap_main = CapWindowId::Main.get(app);
-                    let cap_settings = CapWindowId::Settings.get(app);
+                    let cap_main = CapWindowDef::Main.get(app);
+                    let cap_settings = CapWindowDef::Settings.get(app);
 
                     let main_window_available = cap_main.is_some();
                     let settings_window_available = cap_settings.is_some();

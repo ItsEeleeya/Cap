@@ -5,6 +5,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
 	Effect,
 	EffectState,
+	LogicalPosition,
 	type WindowOptions,
 } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
@@ -170,6 +171,7 @@ export default function Debug() {
 							url: "/solarium-cap-main",
 							hiddenTitle: true,
 							titleBarStyle: "overlay",
+							trafficLightPosition: new LogicalPosition(-50, -50),
 							resizable: false,
 							alwaysOnTop: true,
 							// windowEffects: {

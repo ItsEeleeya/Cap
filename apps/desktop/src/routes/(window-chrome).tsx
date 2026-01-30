@@ -93,13 +93,13 @@ function Header() {
 		>
 			{ctx.state()?.items}
 			{isWindows && <CaptionControlsWindows11 class="!ml-auto" />}
-			{isMacOS && (
+			{/* {isMacOS && (
 				<CaptionControlsMacOS
 					class="!mr-auto ml-3"
 					showMinimize={false}
 					showZoom={false}
 				/>
-			)}
+			)} */}
 		</header>
 	);
 }

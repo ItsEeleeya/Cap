@@ -706,7 +706,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
                         match recording::take_screenshot(app.clone(), target).await {
                             Ok(path) => {
-                                let _ = ShowCapWindow::ScreenshotEditor { path }.show(&app).await;
+                                let _ = CapWindow::ScreenshotEditor { path }.show(&app).await;
                             }
                             Err(e) => {
                                 tracing::error!("Failed to take screenshot: {e}");
@@ -737,7 +737,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
                             match crate::import::start_video_import(app.clone(), path).await {
                                 Ok(project_path) => {
-                                    let _ = ShowCapWindow::Editor { project_path }.show(&app).await;
+                                    let _ = CapWindow::Editor { project_path }.show(&app).await;
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to import video: {e}");

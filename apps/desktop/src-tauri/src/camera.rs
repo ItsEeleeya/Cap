@@ -322,7 +322,7 @@ impl CameraPreviewManager {
 // crashes after ~4-5 toggle cycles.
 //
 // Pause/Resume hide/show the window while keeping GPU resources alive.
-// See the comment in windows.rs ShowCapWindow::Camera for the critical detail
+// See the comment in windows.rs CapWindow::Camera for the critical detail
 // about avoiding order_front_regardless().
 #[derive(Clone)]
 enum ReconfigureEvent {
@@ -853,7 +853,7 @@ impl Renderer {
                 }
                 Err(ReconfigureEvent::Resume) => {
                     // On resume, we just need to present a frame to wake up the surface.
-                    // The actual window.show() happens in windows.rs ShowCapWindow::Camera.
+                    // The actual window.show() happens in windows.rs CapWindow::Camera.
                     if let Some(surface) = &self.surface
                         && let Ok(texture) = surface.get_current_texture()
                     {
