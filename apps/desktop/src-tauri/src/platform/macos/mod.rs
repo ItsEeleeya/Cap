@@ -1,4 +1,4 @@
-use objc2::{available, rc::Retained, MainThreadMarker, Message};
+use objc2::{MainThreadMarker, Message, available, rc::Retained};
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSColor, NSGlassEffectView, NSGlassEffectViewStyle, NSWindow,
     NSWindowButton, NSWindowOrderingMode,

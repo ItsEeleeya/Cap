@@ -996,7 +996,7 @@ impl CapWindow {
                             panel.order_front_regardless();
                             panel.show();
 
-                            crate::platform::apply_squircle_corners(&window, 16.0);
+                            crate::platform::apply_squircle_corners(&window, 26.0);
 
                             app.set_activation_policy(ActivationPolicy::Regular).ok();
                         }
@@ -2073,7 +2073,10 @@ pub fn create_window_try_with_material_hosting(
         });
     }
 
-    builder.build().map_err(|e| e.to_string())?;
+    let wv = builder.build().map_err(|e| e.to_string())?;
+    if config.focus {
+        crate::platform::apply_squircle_corners(&wv, 26.0);
+    }
     Ok(())
 }
 

@@ -31,7 +31,7 @@ import {
 } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { Transition } from "solid-transition-group";
-import Mode from "~/components/Mode";
+import Mode from "./solarium-recording-mode";
 import { RecoveryToast } from "~/components/RecoveryToast";
 import Tooltip from "~/components/Tooltip";
 import { Input } from "~/routes/editor/ui";
@@ -94,6 +94,7 @@ import TargetDropdownButton from "../(window-chrome)/new-main/TargetDropdownButt
 import TargetMenuGrid from "../(window-chrome)/new-main/TargetMenuGrid";
 import TargetTypeButton from "../(window-chrome)/new-main/TargetTypeButton";
 import useRequestPermission from "../(window-chrome)/new-main/useRequestPermission";
+import XCircleFill from "./components/x.circle.fill.svg";
 
 const WINDOW_SIZE = { width: 300, height: 395 } as const;
 
@@ -1631,16 +1632,21 @@ function Page() {
 	return (
 		<div
 			onMouseEnter={handleMouseEnter}
-			class="flex relative flex-col px-[13px] gap-2 pb-[8px] h-full min-h-0 text-[--text-primary]"
+			class="apple-glass-clear rounded-[28px] before flex relative flex-col gap-2 pb-2 h-full min-h-0 text-[--text-primary] transform-3d rotate-y-30 -rotate-x-12 transform-stroke"
 		>
+			<div class="size-full fixed top-0 left-0 -z-50 backdrop-blur-[3px] backdrop-saturate-[1.3] backdrop-brightness-50" />
 			<div
 				class={cx(
-					"flex items-center mx-2 w-full",
+					"apple-glass rounded-full flex items-center mt-2 mr-2 ml-auto w-fit p-2 px-3",
 					ostype() === "macos" && "flex-row-reverse",
 				)}
 				data-tauri-drag-region
 			>
-				<div class="flex gap-1 items-center" data-tauri-drag-region>
+				<div class="fixed size-13 top-0 left-0 flex items-center w-20 gap-2 pl-4">
+					<IconCapCircleX class="apple-vibrancy-fill size-5" onClick={() => getCurrentWindow().close()} />
+					<IconLucideMinus class="apple-vibrancy-fill size-5" onClick={() => getCurrentWindow().minimize()} />
+				</div>
+				<div class="flex gap-2 items-center flex-row-reverse" data-tauri-drag-region>
 					<Tooltip content={<span>Settings</span>}>
 						<button
 							type="button"
@@ -1650,7 +1656,7 @@ function Page() {
 							}}
 							class="flex items-center justify-center size-5 -ml-[1.5px] focus:outline-none"
 						>
-							<IconCapSettings class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							<IconCapSettings class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 						</button>
 					</Tooltip>
 					<Tooltip content={<span>Screenshots</span>}>
@@ -1669,7 +1675,7 @@ function Page() {
 							}}
 							class="flex justify-center items-center size-5 focus:outline-none"
 						>
-							<IconLucideImage class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							<IconLucideImage class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 						</button>
 					</Tooltip>
 					<Tooltip content={<span>Recordings</span>}>
@@ -1688,7 +1694,7 @@ function Page() {
 							}}
 							class="flex justify-center items-center size-5 focus:outline-none"
 						>
-							<IconLucideSquarePlay class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							<IconLucideSquarePlay class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 						</button>
 					</Tooltip>
 					<ChangelogButton />
@@ -1700,7 +1706,7 @@ function Page() {
 							}}
 							class="flex justify-center items-center focus:outline-none"
 						>
-							<IconLucideBug class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							<IconLucideBug class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 						</button>
 					)}
 				</div>

@@ -70,7 +70,7 @@ const ChangelogButton = () => {
 				onClick={handleChangelogClick}
 				class="flex relative justify-center items-center size-5"
 			>
-				<IconLucideBell class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+				<IconLucideBell class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 				{changelogState.hasUpdate && (
 					<div
 						style={{ "background-color": "#FF4747" }}
