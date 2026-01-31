@@ -224,6 +224,12 @@ async setTheme(theme: AppTheme) : Promise<void> {
 async createWindowTryWithMaterialHosting(configString: string) : Promise<null> {
     return await TAURI_INVOKE("create_window_try_with_material_hosting", { configString });
 },
+async addToolbarShell() : Promise<void> {
+    await TAURI_INVOKE("add_toolbar_shell");
+},
+async hideZoomButton() : Promise<void> {
+    await TAURI_INVOKE("hide_zoom_button");
+},
 async globalMessageDialog(message: string) : Promise<void> {
     await TAURI_INVOKE("global_message_dialog", { message });
 },

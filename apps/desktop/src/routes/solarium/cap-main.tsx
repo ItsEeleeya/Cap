@@ -31,7 +31,7 @@ import {
 } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { Transition } from "solid-transition-group";
-import Mode from "./solarium-recording-mode";
+import CapLogoRings from "~/assets/CapLogoRings.svg";
 import { RecoveryToast } from "~/components/RecoveryToast";
 import Tooltip from "~/components/Tooltip";
 import { Input } from "~/routes/editor/ui";
@@ -79,22 +79,28 @@ import IconLucideSquarePlay from "~icons/lucide/square-play";
 import IconLucideVideo from "~icons/lucide/video";
 import IconMaterialSymbolsScreenshotFrame2Rounded from "~icons/material-symbols/screenshot-frame-2-rounded";
 import IconMdiMonitor from "~icons/mdi/monitor";
-import { WindowChromeContext, WindowChromeHeader } from "../(window-chrome)/Context";
 import {
-	RecordingOptionsProvider,
-	useRecordingOptions,
-} from "../(window-chrome)/OptionsContext";
+	WindowChromeContext,
+	WindowChromeHeader,
+} from "../(window-chrome)/Context";
 import CameraSelect from "../(window-chrome)/new-main/CameraSelect";
 import ChangelogButton from "../(window-chrome)/new-main/ChangeLogButton";
 import MicrophoneSelect from "../(window-chrome)/new-main/MicrophoneSelect";
 import ModeInfoPanel from "../(window-chrome)/new-main/ModeInfoPanel";
 import SystemAudio from "../(window-chrome)/new-main/SystemAudio";
-import type { RecordingWithPath, ScreenshotWithPath } from "../(window-chrome)/new-main/TargetCard";
+import type {
+	RecordingWithPath,
+	ScreenshotWithPath,
+} from "../(window-chrome)/new-main/TargetCard";
 import TargetDropdownButton from "../(window-chrome)/new-main/TargetDropdownButton";
 import TargetMenuGrid from "../(window-chrome)/new-main/TargetMenuGrid";
 import TargetTypeButton from "../(window-chrome)/new-main/TargetTypeButton";
 import useRequestPermission from "../(window-chrome)/new-main/useRequestPermission";
-import XCircleFill from "./components/x.circle.fill.svg";
+import {
+	RecordingOptionsProvider,
+	useRecordingOptions,
+} from "../(window-chrome)/OptionsContext";
+import Mode from "./solarium-recording-mode";
 
 const WINDOW_SIZE = { width: 300, height: 395 } as const;
 
@@ -148,45 +154,45 @@ const createDisplaySignature = (
 
 type TargetMenuPanelProps =
 	| {
-		variant: "display";
-		targets?: CaptureDisplayWithThumbnail[];
-		onSelect: (target: CaptureDisplayWithThumbnail) => void;
-	}
+			variant: "display";
+			targets?: CaptureDisplayWithThumbnail[];
+			onSelect: (target: CaptureDisplayWithThumbnail) => void;
+	  }
 	| {
-		variant: "window";
-		targets?: CaptureWindowWithThumbnail[];
-		onSelect: (target: CaptureWindowWithThumbnail) => void;
-	}
+			variant: "window";
+			targets?: CaptureWindowWithThumbnail[];
+			onSelect: (target: CaptureWindowWithThumbnail) => void;
+	  }
 	| {
-		variant: "recording";
-		targets?: RecordingWithPath[];
-		onSelect: (target: RecordingWithPath) => void;
-		onViewAll: () => void;
-		uploadProgress?: Record<string, number>;
-		reuploadingPaths?: Set<string>;
-		onReupload?: (path: string) => void;
-		onRefetch?: () => void;
-	}
+			variant: "recording";
+			targets?: RecordingWithPath[];
+			onSelect: (target: RecordingWithPath) => void;
+			onViewAll: () => void;
+			uploadProgress?: Record<string, number>;
+			reuploadingPaths?: Set<string>;
+			onReupload?: (path: string) => void;
+			onRefetch?: () => void;
+	  }
 	| {
-		variant: "screenshot";
-		targets?: ScreenshotWithPath[];
-		onSelect: (target: ScreenshotWithPath) => void;
-		onViewAll: () => void;
-	}
+			variant: "screenshot";
+			targets?: ScreenshotWithPath[];
+			onSelect: (target: ScreenshotWithPath) => void;
+			onViewAll: () => void;
+	  }
 	| {
-		variant: "camera";
-		targets?: CameraWithDetails[];
-		selectedTarget: CameraWithDetails | null;
-		onSelect: (target: CameraWithDetails | null) => void;
-		permissions?: OSPermissionsCheck;
-	}
+			variant: "camera";
+			targets?: CameraWithDetails[];
+			selectedTarget: CameraWithDetails | null;
+			onSelect: (target: CameraWithDetails | null) => void;
+			permissions?: OSPermissionsCheck;
+	  }
 	| {
-		variant: "microphone";
-		targets?: MicrophoneWithDetails[];
-		selectedTarget: MicrophoneWithDetails | null;
-		onSelect: (target: MicrophoneWithDetails | null) => void;
-		permissions?: OSPermissionsCheck;
-	};
+			variant: "microphone";
+			targets?: MicrophoneWithDetails[];
+			selectedTarget: MicrophoneWithDetails | null;
+			onSelect: (target: MicrophoneWithDetails | null) => void;
+			permissions?: OSPermissionsCheck;
+	  };
 
 type SharedTargetMenuProps = {
 	isLoading: boolean;
@@ -197,27 +203,27 @@ type SharedTargetMenuProps = {
 
 type DeviceListPanelProps =
 	| {
-		variant: "camera";
-		targets: CameraWithDetails[];
-		selectedTarget: CameraWithDetails | null;
-		onSelect: (target: CameraWithDetails | null) => void;
-		isLoading?: boolean;
-		errorMessage?: string;
-		disabled?: boolean;
-		emptyMessage?: string;
-		permissions?: OSPermissionsCheck;
-	}
+			variant: "camera";
+			targets: CameraWithDetails[];
+			selectedTarget: CameraWithDetails | null;
+			onSelect: (target: CameraWithDetails | null) => void;
+			isLoading?: boolean;
+			errorMessage?: string;
+			disabled?: boolean;
+			emptyMessage?: string;
+			permissions?: OSPermissionsCheck;
+	  }
 	| {
-		variant: "microphone";
-		targets: MicrophoneWithDetails[];
-		selectedTarget: MicrophoneWithDetails | null;
-		onSelect: (target: MicrophoneWithDetails | null) => void;
-		isLoading?: boolean;
-		errorMessage?: string;
-		disabled?: boolean;
-		emptyMessage?: string;
-		permissions?: OSPermissionsCheck;
-	};
+			variant: "microphone";
+			targets: MicrophoneWithDetails[];
+			selectedTarget: MicrophoneWithDetails | null;
+			onSelect: (target: MicrophoneWithDetails | null) => void;
+			isLoading?: boolean;
+			errorMessage?: string;
+			disabled?: boolean;
+			emptyMessage?: string;
+			permissions?: OSPermissionsCheck;
+	  };
 
 function CameraListItem(props: {
 	camera: CameraWithDetails;
@@ -1030,7 +1036,7 @@ function Page() {
 			await commands.uploadExportedVideo(
 				path,
 				"Reupload",
-				new Channel<UploadProgress>(() => { }),
+				new Channel<UploadProgress>(() => {}),
 				null,
 			);
 		} finally {
@@ -1210,6 +1216,9 @@ function Page() {
 		}
 
 		const currentWindow = getCurrentWindow();
+
+		commands.addToolbarShell();
+		commands.hideZoomButton();
 
 		currentWindow.setSize(
 			new LogicalSize(WINDOW_SIZE.width, WINDOW_SIZE.height),
@@ -1504,7 +1513,7 @@ function Page() {
 							class={cx(
 								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "display" || displayMenuOpen()) &&
-								"ring-blue-9",
+									"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1545,7 +1554,7 @@ function Page() {
 							class={cx(
 								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "window" || windowMenuOpen()) &&
-								"ring-blue-9",
+									"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1619,7 +1628,7 @@ function Page() {
 			}
 		}
 
-		await signIn.mutateAsync(abort).catch(() => { });
+		await signIn.mutateAsync(abort).catch(() => {});
 
 		for (const win of await getAllWebviewWindows()) {
 			if (win.label.startsWith("target-select-overlay")) {
@@ -1631,10 +1640,10 @@ function Page() {
 
 	return (
 		<div
+			data-tauri-drag-region
 			onMouseEnter={handleMouseEnter}
-			class="apple-glass-clear rounded-[28px] before flex relative flex-col gap-2 pb-2 h-full min-h-0 text-[--text-primary] transform-3d rotate-y-30 -rotate-x-12 transform-stroke"
+			class="apple-glass rounded-[28px] before flex relative flex-col gap-2 pb-2 h-full min-h-0 text-[--text-primary]"
 		>
-			<div class="size-full fixed top-0 left-0 -z-50 backdrop-blur-[3px] backdrop-saturate-[1.3] backdrop-brightness-50" />
 			<div
 				class={cx(
 					"apple-glass rounded-full flex items-center mt-2 mr-2 ml-auto w-fit p-2 px-3",
@@ -1642,11 +1651,20 @@ function Page() {
 				)}
 				data-tauri-drag-region
 			>
-				<div class="fixed size-13 top-0 left-0 flex items-center w-20 gap-2 pl-4">
-					<IconCapCircleX class="apple-vibrancy-fill size-5" onClick={() => getCurrentWindow().close()} />
-					<IconLucideMinus class="apple-vibrancy-fill size-5" onClick={() => getCurrentWindow().minimize()} />
-				</div>
-				<div class="flex gap-2 items-center flex-row-reverse" data-tauri-drag-region>
+				{/* <div class="fixed size-13 top-0 left-0 flex items-center w-20 gap-2 pl-4">
+					<IconCapCircleX
+						class="apple-vibrancy-fill size-5"
+						onClick={() => getCurrentWindow().close()}
+					/>
+					<IconLucideMinus
+						class="apple-vibrancy-fill size-5"
+						onClick={() => getCurrentWindow().minimize()}
+					/>
+				</div> */}
+				<div
+					class="flex gap-2 items-center flex-row-reverse"
+					data-tauri-drag-region
+				>
 					<Tooltip content={<span>Settings</span>}>
 						<button
 							type="button"
@@ -1710,15 +1728,18 @@ function Page() {
 						</button>
 					)}
 				</div>
-				{ostype() === "macos" && (
-					<div class="flex-1" data-tauri-drag-region />
-				)}
+				{ostype() === "macos" && <div class="flex-1" data-tauri-drag-region />}
 			</div>
+
 			<Show when={!activeMenu()}>
-				<div class="flex items-center justify-between mt-[16px] mb-[6px]">
-					<div class="flex items-center space-x-1">
+				<div class="flex items-center justify-between my-3">
+					<div
+						data-tauri-drag-region
+						class="flex items-center space-x-1 px-2.5 w-full"
+					>
 						<a
-							class="*:w-[92px] *:h-auto text-[--text-primary]"
+							data-tauri-drag-region
+							class="size-14 aspect-square apple-glass rounded-[18px] bg-black/05 p-[6px] hover:scale-110 transition-transform duration-300 ease-in-out"
 							target="_blank"
 							href={
 								auth.data
@@ -1726,46 +1747,61 @@ function Page() {
 									: import.meta.env.VITE_SERVER_URL
 							}
 						>
-							<IconCapLogoFullDark class="hidden dark:block" />
-							<IconCapLogoFull class="block dark:hidden" />
+							<img src={CapLogoRings} class="size-full" />
 						</a>
-						<ErrorBoundary fallback={null}>
-							<Suspense>
-								<span
-									onClick={async () => {
-										if (license.data?.type !== "pro") {
-											await commands.showWindow("Upgrade");
-										}
-									}}
-									class={cx(
-										"text-[0.6rem] ml-2 rounded-lg border border-gray-5 px-1 py-0.5",
-										license.data?.type === "pro"
-											? "bg-[--blue-400] text-gray-1 dark:text-gray-12"
-											: "bg-gray-3 cursor-pointer hover:bg-gray-5",
-									)}
+
+						<div class="flex flex-col w-full gap-0.5">
+							<div class="flex items-center gap-2">
+								<p
+									data-tauri-drag-region
+									class="font-extrabold opacity-90 text-2xl pl-0.5"
 								>
-									{license.data?.type === "commercial"
-										? "Commercial"
-										: license.data?.type === "pro"
-											? "Pro"
-											: "Personal"}
-								</span>
-							</Suspense>
-						</ErrorBoundary>
+									Cap
+								</p>
+
+								<ErrorBoundary fallback={null}>
+									<Suspense>
+										<span
+											data-tauri-drag-region
+											onClick={async () => {
+												if (license.data?.type !== "pro") {
+													await commands.showWindow("Upgrade");
+												}
+											}}
+											class={cx(
+												"text-[0.6rem] rounded-full apple-glass border border-gray-5 px-1 py-0.5",
+												// TODO: Changed for demonstration purposes only
+												license.data?.type !== "pro"
+													? "bg-blue-2 text-gray-11 dark:text-gray-12 font-medium"
+													: "bg-gray-3 cursor-pointer hover:bg-gray-5",
+											)}
+										>
+											{license.data?.type === "commercial"
+												? "Commercial"
+												: license.data?.type === "pro"
+													? "Pro"
+													: "Pro"}
+										</span>
+									</Suspense>
+								</ErrorBoundary>
+							</div>
+
+							<Mode
+								onInfoClick={() => {
+									setModeInfoMenuOpen(true);
+									setDisplayMenuOpen(false);
+									setWindowMenuOpen(false);
+									setRecordingsMenuOpen(false);
+									setScreenshotsMenuOpen(false);
+									setCameraMenuOpen(false);
+									setMicrophoneMenuOpen(false);
+								}}
+							/>
+						</div>
 					</div>
-					<Mode
-						onInfoClick={() => {
-							setModeInfoMenuOpen(true);
-							setDisplayMenuOpen(false);
-							setWindowMenuOpen(false);
-							setRecordingsMenuOpen(false);
-							setScreenshotsMenuOpen(false);
-							setCameraMenuOpen(false);
-							setMicrophoneMenuOpen(false);
-						}}
-					/>
 				</div>
 			</Show>
+
 			<div class="flex-1 min-h-0 w-full flex flex-col">
 				<Show when={signIn.isPending}>
 					<div class="flex absolute inset-0 justify-center items-center bg-gray-1 animate-in fade-in">
@@ -1937,6 +1973,7 @@ function Page() {
 				</Show>
 			</div>
 			<RecoveryToast />
+			{/* <div class="size-full fixed top-0 left-0 -z-50 backdrop-blur-[3px] backdrop-saturate-[1.3] backdrop-brightness-50" /> */}
 		</div>
 	);
 }

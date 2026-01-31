@@ -2823,6 +2823,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             get_display_frame_for_cropping,
             windows::set_theme,
             windows::create_window_try_with_material_hosting,
+            windows::add_toolbar_shell,
+            windows::hide_zoom_button,
             global_message_dialog,
             show_window,
             write_clipboard_string,

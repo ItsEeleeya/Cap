@@ -1,5 +1,6 @@
 import { useNavigate } from "@solidjs/router";
 import { createQuery } from "@tanstack/solid-query";
+import { getVersion } from "@tauri-apps/api/app";
 import type { WebviewOptions } from "@tauri-apps/api/webview";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
@@ -8,7 +9,6 @@ import {
 	LogicalPosition,
 	type WindowOptions,
 } from "@tauri-apps/api/window";
-import { getVersion } from "@tauri-apps/api/app";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { createSignal, createUniqueId, For, onMount } from "solid-js";
@@ -65,7 +65,7 @@ export default function Debug() {
 	const orderedFails = () => Object.entries(fails.data ?? {});
 
 	return (
-		<main class="w-full h-full bg-gray-2 text-(--text-primary) p-4">
+		<main class="w-full h-full bg-gray-2 text-(--text-primary) p-4 overflow-scroll">
 			<h2 class="text-2xl font-bold">Debug Windows</h2>
 			<div class="py-4 gap-3 inline-flex">
 				<button
@@ -81,6 +81,50 @@ export default function Debug() {
 					}
 				>
 					Show Recording Controls Window
+				</button>
+			</div>
+
+			<h2 class="text-2xl font-bold">Solarium</h2>
+			<div class="py-4 gap-3 inline-flex">
+				<button
+					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+					onClick={() => {
+						createSolariumWindow({
+							decorations: false,
+							shadow: false,
+							label: "recording-controls-solarium",
+							title: "Recording Controls",
+							url: "/solarium-recording-controls",
+							transparent: true,
+						});
+					}}
+				>
+					Show Recording Controls
+				</button>
+				<button
+					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+					onClick={async () => {
+						await WebviewWindow.getByLabel("solarium-cap-main").then((w) =>
+							w?.close(),
+						);
+						createSolariumWindow({
+							label: "solarium-cap-main",
+							title: "Cap",
+							url: "/solarium-cap-main",
+							hiddenTitle: true,
+							titleBarStyle: "overlay",
+							trafficLightPosition: new LogicalPosition(-50, -50),
+							resizable: false,
+							alwaysOnTop: true,
+							// windowEffects: {
+							// 	effects: [Effect.UnderWindowBackground, Effect.Mica],
+							// 	state: EffectState.Active,
+							// },
+							transparent: true,
+						});
+					}}
+				>
+					Show Solarium Main
 				</button>
 			</div>
 
@@ -141,50 +185,6 @@ export default function Debug() {
 					}}
 				</For>
 			</ul>
-
-			<h2 class="text-2xl font-bold">Solarium</h2>
-			<div class="py-4 gap-3 inline-flex">
-				<button
-					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
-					onClick={() => {
-						createSolariumWindow({
-							decorations: false,
-							shadow: false,
-							label: "recording-controls-solarium",
-							title: "Recording Controls",
-							url: "/solarium-recording-controls",
-							transparent: true,
-						});
-					}}
-				>
-					Show Recording Controls
-				</button>
-				<button
-					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
-					onClick={async () => {
-						await WebviewWindow.getByLabel("solarium-cap-main").then((w) =>
-							w?.close(),
-						);
-						createSolariumWindow({
-							label: "solarium-cap-main",
-							title: "Cap",
-							url: "/solarium-cap-main",
-							hiddenTitle: true,
-							titleBarStyle: "overlay",
-							trafficLightPosition: new LogicalPosition(-50, -50),
-							resizable: false,
-							alwaysOnTop: true,
-							// windowEffects: {
-							// 	effects: [Effect.UnderWindowBackground, Effect.Mica],
-							// 	state: EffectState.Active,
-							// },
-							transparent: true,
-						});
-					}}
-				>
-					Show Solarium Main
-				</button>
-			</div>
 		</main>
 	);
 }

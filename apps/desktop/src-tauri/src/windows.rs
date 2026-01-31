@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use futures::pin_mut;
 use scap_targets::{Display, DisplayId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::{
     ops::Deref,
@@ -2078,6 +2078,44 @@ pub fn create_window_try_with_material_hosting(
         crate::platform::apply_squircle_corners(&wv, 26.0);
     }
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn add_toolbar_shell(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    dispatch2::run_on_main(move |mtm| {
+        use crate::platform::*;
+        use objc2_app_kit::{NSToolbar, NSWindowToolbarStyle};
+
+        let nswindow = window.objc2_nswindow();
+
+        let toolbar = NSToolbar::new(mtm);
+        toolbar.setAllowsUserCustomization(false);
+        toolbar.setAutosavesConfiguration(false);
+        toolbar.setDisplayMode(objc2_app_kit::NSToolbarDisplayMode::IconOnly);
+        toolbar.setAllowsDisplayModeCustomization(false);
+
+        nswindow.setToolbar(Some(&toolbar));
+        nswindow.setToolbarStyle(NSWindowToolbarStyle::Unified);
+    });
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn hide_zoom_button(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    dispatch2::run_on_main(move |_| {
+        use crate::platform::*;
+        use objc2_app_kit::{NSToolbar, NSWindowButton, NSWindowToolbarStyle};
+
+        let nswindow = window.objc2_nswindow();
+        if let Some(button) = nswindow.standardWindowButton(NSWindowButton::ZoomButton) {
+            button.setHidden(true);
+        }
+    });
 }
 
 #[tauri::command]
