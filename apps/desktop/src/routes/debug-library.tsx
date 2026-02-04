@@ -330,7 +330,7 @@ function ViewWithSidebar(
 
 /* ------------------------------ window focus ------------------------------- */
 
-function createWindowFocus(): Accessor<boolean> {
+export function createWindowFocus(): Accessor<boolean> {
 	const [focused, setFocused] = createSignal(true);
 
 	onMount(async () => {

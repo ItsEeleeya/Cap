@@ -3,24 +3,58 @@ import { createSignal } from "solid-js";
 import Tooltip from "~/components/Tooltip";
 import { useRecordingOptions } from "~/routes/(window-chrome)/OptionsContext";
 import { commands } from "~/utils/tauri";
+import { SolariumTab, SolariumTabs } from "./SolariumTabs";
 
 interface ModeProps {
 	onInfoClick?: () => void;
 }
 
-export default function Mode(props: ModeProps) {
+export default function Mode(_props: ModeProps) {
 	const { rawOptions, setOptions } = useRecordingOptions();
-	const [isInfoHovered, setIsInfoHovered] = createSignal(false);
 
-	const handleInfoClick = () => {
-		if (props.onInfoClick) {
-			props.onInfoClick();
-		} else {
-			commands.showWindow("ModeSelect");
+	const handleValueChange = (value: string) => {
+		if (value === "instant" || value === "studio" || value === "screenshot") {
+			setOptions({ mode: value });
 		}
 	};
 
-	return <div class="apple-glass p-2 rounded-full text-xs w-full">Hello!</div>;
+	return (
+		<div class="flex flex-row-reverse gap-1.5">
+			<button
+				type="button"
+				class="apple-glass-subdued rounded-full h-8 aspect-square inline-flex items-center justify-center"
+			>
+				<IconCapInfo class="apple-vibrancy-fill invert transition-opacity duration-200 p-1 dark:invert-0 group-hover:opacity-50" />
+			</button>
+			<div class="apple-glass-subdued p-0.5 rounded-full text-xs w-full h-8">
+				<SolariumTabs
+					onSnap={() => commands.performHapticFeedback("alignment", "now")}
+					value={rawOptions.mode}
+					onValueChange={handleValueChange}
+					class="w-full"
+				>
+					<SolariumTab
+						value="studio"
+						class="flex-1 flex justify-center items-center"
+					>
+						<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
+					</SolariumTab>
+					<SolariumTab
+						value="instant"
+						class="flex-1 flex justify-center items-center"
+					>
+						<IconCapInstant class="invert size-4 dark:invert-0" />
+					</SolariumTab>
+					<SolariumTab
+						value="screenshot"
+						class="flex-1 flex justify-center items-center"
+					>
+						<IconCapScreenshot class="size-3.5 invert dark:invert-0" />
+					</SolariumTab>
+				</SolariumTabs>
+			</div>
+		</div>
+	);
 }
 
 const _Mode = (props: ModeProps) => {

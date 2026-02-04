@@ -9,8 +9,8 @@ export default function InfoPill(
 			{...props}
 			type="button"
 			class={cx(
-				"px-2 py-0.5 rounded-full text-white text-[11px]",
-				props.variant === "blue" ? "bg-blue-9" : "bg-red-9",
+				"px-2 py-0.5 rounded-full text-white text-[11px] apple-glass",
+				props.variant === "blue" ? "bg-blue-9/60" : "bg-red-9/60",
 			)}
 		/>
 	);

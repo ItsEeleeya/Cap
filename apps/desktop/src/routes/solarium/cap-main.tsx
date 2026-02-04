@@ -31,7 +31,14 @@ import {
 } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { Transition } from "solid-transition-group";
+import DemoAvatar from "~/assets/avatar.jpeg";
 import CapLogoRings from "~/assets/CapLogoRings.svg";
+import Demo2 from "~/assets/demo/display 2.jpg";
+import Demo3 from "~/assets/demo/display 3.jpg";
+import Demo1 from "~/assets/demo/display1.jpg";
+import Demo4 from "~/assets/demo/display4.jpg";
+import Demo5 from "~/assets/demo/display5.jpeg";
+import { ProgressiveBlur } from "~/components/ProgressiveMask";
 import { RecoveryToast } from "~/components/RecoveryToast";
 import Tooltip from "~/components/Tooltip";
 import { Input } from "~/routes/editor/ui";
@@ -100,9 +107,10 @@ import {
 	RecordingOptionsProvider,
 	useRecordingOptions,
 } from "../(window-chrome)/OptionsContext";
+import { createWindowFocus } from "../debug-library";
 import Mode from "./solarium-recording-mode";
 
-const WINDOW_SIZE = { width: 300, height: 395 } as const;
+const WINDOW_SIZE = { width: 300, height: 495 } as const;
 
 const findCamera = (cameras: CameraWithDetails[], id: DeviceOrModelID) => {
 	return cameras.find((c) => {
@@ -1218,7 +1226,7 @@ function Page() {
 		const currentWindow = getCurrentWindow();
 
 		commands.addToolbarShell();
-		commands.hideZoomButton();
+		// commands.hideZoomButton();
 
 		currentWindow.setSize(
 			new LogicalSize(WINDOW_SIZE.width, WINDOW_SIZE.height),
@@ -1454,44 +1462,47 @@ function Page() {
 	const signIn = createSignInMutation();
 
 	const BaseControls = () => (
-		<div class="space-y-2">
-			<CameraSelect
-				disabled={devices.isPending}
-				options={devices.cameras}
-				value={options.camera() ?? null}
-				onChange={(c) => {
-					if (!c) setCamera.mutate({ model: null });
-					else if (c.model_id)
-						setCamera.mutate({ model: { ModelID: c.model_id } });
-					else setCamera.mutate({ model: { DeviceID: c.device_id } });
-				}}
-				permissions={devices.permissions}
-				onOpen={() => {
-					setCameraMenuOpen(true);
-					setDisplayMenuOpen(false);
-					setWindowMenuOpen(false);
-					setRecordingsMenuOpen(false);
-					setScreenshotsMenuOpen(false);
-					setModeInfoMenuOpen(false);
-					setMicrophoneMenuOpen(false);
-				}}
-			/>
-			<MicrophoneSelect
-				disabled={devices.isPending}
-				options={devices.microphones.map((m) => m.name)}
-				value={options.micName()?.name ?? null}
-				onChange={(v) => setMicInput.mutate(v)}
-				permissions={devices.permissions}
-				onOpen={() => {
-					setMicrophoneMenuOpen(true);
-					setDisplayMenuOpen(false);
-					setWindowMenuOpen(false);
-					setRecordingsMenuOpen(false);
-					setScreenshotsMenuOpen(false);
-					setModeInfoMenuOpen(false);
-					setCameraMenuOpen(false);
-				}}
-			/>
+		<div class="space-y-2 px-2.5">
+			<div class="apple-glass rounded-2xl flex flex-col gap-0.5 justify-between px-1">
+				<CameraSelect
+					disabled={devices.isPending}
+					options={devices.cameras}
+					value={options.camera() ?? null}
+					onChange={(c) => {
+						if (!c) setCamera.mutate({ model: null });
+						else if (c.model_id)
+							setCamera.mutate({ model: { ModelID: c.model_id } });
+						else setCamera.mutate({ model: { DeviceID: c.device_id } });
+					}}
+					permissions={devices.permissions}
+					onOpen={() => {
+						setCameraMenuOpen(true);
+						setDisplayMenuOpen(false);
+						setWindowMenuOpen(false);
+						setRecordingsMenuOpen(false);
+						setScreenshotsMenuOpen(false);
+						setModeInfoMenuOpen(false);
+						setMicrophoneMenuOpen(false);
+					}}
+				/>
+				<div class="w-11/12 border-t self-center apple-vibrancy-tertiary-fill opacity-80" />
+				<MicrophoneSelect
+					disabled={devices.isPending}
+					options={devices.microphones.map((m) => m.name)}
+					value={options.micName()?.name ?? null}
+					onChange={(v) => setMicInput.mutate(v)}
+					permissions={devices.permissions}
+					onOpen={() => {
+						setMicrophoneMenuOpen(true);
+						setDisplayMenuOpen(false);
+						setWindowMenuOpen(false);
+						setRecordingsMenuOpen(false);
+						setScreenshotsMenuOpen(false);
+						setModeInfoMenuOpen(false);
+						setCameraMenuOpen(false);
+					}}
+				/>
+			</div>
 			<SystemAudio />
 		</div>
 	);
@@ -1506,12 +1517,12 @@ function Page() {
 			exitClass="scale-100"
 			exitToClass="scale-95"
 		>
-			<div class="flex flex-col gap-2 w-full">
-				<div class="flex flex-col gap-2 w-full text-xs text-gray-11">
+			<div class="flex flex-col gap-2 size-full">
+				<div class="flex flex-col gap-2 size-full text-xs text-gray-11 px-2.5 py-1.5">
 					<div class="flex flex-row gap-2 items-stretch w-full">
 						<div
 							class={cx(
-								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+								"apple-glass flex flex-1 overflow-hidden rounded-2xl ring-1 ring-transparent transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "display" || displayMenuOpen()) &&
 									"ring-blue-9",
 							)}
@@ -1528,7 +1539,7 @@ function Page() {
 							/>
 							<TargetDropdownButton
 								class={cx(
-									"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+									"rounded-none focus-visible:ring-0 focus-visible:ring-offset-0",
 									displayMenuOpen() && "bg-gray-5",
 								)}
 								ref={displayTriggerRef}
@@ -1552,7 +1563,7 @@ function Page() {
 						</div>
 						<div
 							class={cx(
-								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
+								"apple-glass flex flex-1 overflow-hidden rounded-2xl ring-1 ring-transparent transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "window" || windowMenuOpen()) &&
 									"ring-blue-9",
 							)}
@@ -1569,7 +1580,7 @@ function Page() {
 							/>
 							<TargetDropdownButton
 								class={cx(
-									"rounded-none border-l border-gray-6 focus-visible:ring-0 focus-visible:ring-offset-0",
+									"rounded-none focus-visible:ring-0 focus-visible:ring-offset-0",
 									windowMenuOpen() && "bg-gray-5",
 								)}
 								ref={windowTriggerRef}
@@ -1601,7 +1612,7 @@ function Page() {
 								toggleTargetMode("area");
 							}}
 							name="Area"
-							class="flex-1"
+							class="flex-1 apple-glass"
 						/>
 						<TargetTypeButton
 							selected={rawOptions.targetMode === "camera"}
@@ -1611,11 +1622,38 @@ function Page() {
 								toggleTargetMode("camera");
 							}}
 							name="Camera Only"
-							class="flex-1"
+							class="flex-1 apple-glass"
 						/>
 					</div>
 				</div>
 				<BaseControls />
+				<div class="h-full rounded-xl flex flex-col justify-center gap-1.5">
+					<button
+						type="button"
+						class="group p-2 apple-glass rounded-full inline-flex items-center gap-1 text-xs fixed bottom-5 right-2 z-[50]"
+					>
+						<p class="apple-vibrancy-fill group-hover:visible hidden">
+							Recents
+						</p>
+						<IconCapChevronDown class="*:apple-vibrancy-fill size-4 text-gray-11 transition-transform duration-150 rotate-270" />
+					</button>
+
+					<div class="size-full fade-mask fade-right-36 fade-right-intensity-100 pt-2">
+						<ProgressiveBlur
+							position="right"
+							blur="sm"
+							class="absolute -right-5"
+							height="50px"
+						/>
+						<div class="*:h-12 *:object-fill *:aspect-vide *:apple-glass *:rounded-xl inline-flex gap-2 overflow-x-scroll overscroll-contain scrollbar-none pl-3.5 pr-25">
+							<img src={Demo1} />
+							<img src={Demo2} />
+							<img src={Demo3} />
+							<img src={Demo4} />
+							<img src={Demo5} />
+						</div>
+					</div>
+				</div>
 			</div>
 		</Transition>
 	);
@@ -1638,20 +1676,37 @@ function Page() {
 	});
 	onCleanup(() => startSignInCleanup.then((cb) => cb()));
 
+	const focused = createWindowFocus();
+	// const focused = () => true;
+
 	return (
 		<div
 			data-tauri-drag-region
 			onMouseEnter={handleMouseEnter}
-			class="apple-glass rounded-[28px] before flex relative flex-col gap-2 pb-2 h-full min-h-0 text-[--text-primary]"
+			class="rounded-[28px] before flex relative flex-col gap-2 h-full min-h-0 text-[--text-primary]"
+			classList={{
+				"apple-glass": focused(),
+				"apple-glass-subdued": !focused(),
+			}}
 		>
 			<div
 				class={cx(
-					"apple-glass rounded-full flex items-center mt-2 mr-2 ml-auto w-fit p-2 px-3",
+					"flex justify-start items-center h-13 p-2 gap-2 w-full",
 					ostype() === "macos" && "flex-row-reverse",
 				)}
 				data-tauri-drag-region
 			>
-				{/* <div class="fixed size-13 top-0 left-0 flex items-center w-20 gap-2 pl-4">
+				<div class="apple-glass rounded-full *:rounded-full h-full aspect-square flex overflow-clip p-0.5">
+					<img src={DemoAvatar} />
+				</div>
+				<div
+					class={cx(
+						"apple-glass rounded-full flex items-center w-fit h-full px-3",
+						ostype() === "macos" && "flex-row-reverse",
+					)}
+					data-tauri-drag-region
+				>
+					{/* <div class="fixed size-13 top-0 left-0 flex items-center w-20 gap-2 pl-4">
 					<IconCapCircleX
 						class="apple-vibrancy-fill size-5"
 						onClick={() => getCurrentWindow().close()}
@@ -1661,23 +1716,23 @@ function Page() {
 						onClick={() => getCurrentWindow().minimize()}
 					/>
 				</div> */}
-				<div
-					class="flex gap-2 items-center flex-row-reverse"
-					data-tauri-drag-region
-				>
-					<Tooltip content={<span>Settings</span>}>
-						<button
-							type="button"
-							onClick={async () => {
-								await commands.showWindow({ Settings: { page: "general" } });
-								getCurrentWindow().hide();
-							}}
-							class="flex items-center justify-center size-5 -ml-[1.5px] focus:outline-none"
-						>
-							<IconCapSettings class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
-						</button>
-					</Tooltip>
-					<Tooltip content={<span>Screenshots</span>}>
+					<div
+						class="flex gap-3 items-center flex-row-reverse"
+						data-tauri-drag-region
+					>
+						<Tooltip content={<span>Settings</span>}>
+							<button
+								type="button"
+								onClick={async () => {
+									await commands.showWindow({ Settings: { page: "general" } });
+									getCurrentWindow().hide();
+								}}
+								class="flex items-center justify-center size-5 -ml-[1.5px] focus:outline-none"
+							>
+								<IconCapSettings class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
+							</button>
+						</Tooltip>
+						{/* <Tooltip content={<span>Screenshots</span>}>
 						<button
 							type="button"
 							onClick={() => {
@@ -1714,32 +1769,35 @@ function Page() {
 						>
 							<IconLucideSquarePlay class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
 						</button>
-					</Tooltip>
-					<ChangelogButton />
-					{import.meta.env.DEV && (
-						<button
-							type="button"
-							onClick={() => {
-								new WebviewWindow("debug", { url: "/debug" });
-							}}
-							class="flex justify-center items-center focus:outline-none"
-						>
-							<IconLucideBug class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
-						</button>
+					</Tooltip> */}
+						<ChangelogButton />
+						{import.meta.env.DEV && (
+							<button
+								type="button"
+								onClick={() => {
+									new WebviewWindow("debug", { url: "/debug" });
+								}}
+								class="flex justify-center items-center focus:outline-none"
+							>
+								<IconLucideBug class="transition-colors text-gray-11 size-4.5 hover:text-gray-12" />
+							</button>
+						)}
+					</div>
+					{ostype() === "macos" && (
+						<div class="flex-1" data-tauri-drag-region />
 					)}
 				</div>
-				{ostype() === "macos" && <div class="flex-1" data-tauri-drag-region />}
 			</div>
 
 			<Show when={!activeMenu()}>
-				<div class="flex items-center justify-between my-3">
+				<div class="flex items-center justify-between">
 					<div
 						data-tauri-drag-region
 						class="flex items-center space-x-1 px-2.5 w-full"
 					>
 						<a
 							data-tauri-drag-region
-							class="size-14 aspect-square apple-glass rounded-[18px] bg-black/05 p-[6px] hover:scale-110 transition-transform duration-300 ease-in-out"
+							class="size-15 aspect-square apple-glass bg-white/10 rounded-[18px] bg-black/05 p-[6px] hover:scale-110 transition-transform duration-300 ease-in-out"
 							target="_blank"
 							href={
 								auth.data
@@ -1750,8 +1808,8 @@ function Page() {
 							<img src={CapLogoRings} class="size-full" />
 						</a>
 
-						<div class="flex flex-col w-full gap-0.5">
-							<div class="flex items-center gap-2">
+						<div data-tauri-drag-region class="flex flex-col w-full gap-0.5">
+							<div data-tauri-drag-region class="flex items-center gap-2">
 								<p
 									data-tauri-drag-region
 									class="font-extrabold opacity-90 text-2xl pl-0.5"
@@ -1769,11 +1827,11 @@ function Page() {
 												}
 											}}
 											class={cx(
-												"text-[0.6rem] rounded-full apple-glass border border-gray-5 px-1 py-0.5",
+												"text-[0.7rem] rounded-full apple-glass px-1.5 py-0.5",
 												// TODO: Changed for demonstration purposes only
 												license.data?.type !== "pro"
-													? "bg-blue-2 text-gray-11 dark:text-gray-12 font-medium"
-													: "bg-gray-3 cursor-pointer hover:bg-gray-5",
+													? "bg-blue-2/40 dark:text-gray-12 font-semibold"
+													: "bg-gray-3/40 cursor-pointer hover:bg-gray-5",
 											)}
 										>
 											{license.data?.type === "commercial"
@@ -1802,7 +1860,7 @@ function Page() {
 				</div>
 			</Show>
 
-			<div class="flex-1 min-h-0 w-full flex flex-col">
+			<div class="flex-1 min-h-0 size-full flex flex-col">
 				<Show when={signIn.isPending}>
 					<div class="flex absolute inset-0 justify-center items-center bg-gray-1 animate-in fade-in">
 						<div class="flex flex-col gap-4 justify-center items-center">

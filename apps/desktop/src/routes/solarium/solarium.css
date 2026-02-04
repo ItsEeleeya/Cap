@@ -18,7 +18,7 @@
 	-apple-visual-effect: -apple-system-blur-material-chrome;
 }
 
-.apple-glass {
+.apple-glass-adaptive {
 	-apple-visual-effect: -apple-system-glass-material;
 }
 
@@ -26,15 +26,15 @@
 	-apple-visual-effect: -apple-system-glass-material-clear;
 }
 
-.apple-glass-subdued {
+.apple-glass-adaptive-subdued {
 	-apple-visual-effect: -apple-system-glass-material-subdued;
 }
 
-.apple-glass-media-controls {
+.apple-glass {
 	-apple-visual-effect: -apple-system-glass-material-media-controls;
 }
 
-.apple-glass-media-controls-subdued {
+.apple-glass-subdued {
 	-apple-visual-effect: -apple-system-glass-material-media-controls-subdued;
 }
 

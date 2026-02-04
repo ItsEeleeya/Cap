@@ -151,9 +151,6 @@ function AppearanceSection(props: {
 
 	return (
 		<div class="flex flex-col gap-4">
-			<div class="flex flex-col border-b border-gray-2">
-				<h2 class="text-lg font-medium text-gray-12">General Settings</h2>
-			</div>
 			<div
 				class="flex justify-start items-center text-gray-12"
 				onContextMenu={(e) => e.preventDefault()}
@@ -361,9 +358,24 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	}) => {
 		return (
 			<SettingItem label={props.label} description={props.description}>
-				<button
+				<select
+					class={`flex flex-row gap-1 text-xs truncate outline-none min-w-20 bg-gray-3 px- py-2 h-full rounded-2xl`}
+					value={props.value}
+					onChange={(e) => {
+						const currentValue = props.value;
+						const option = props.options.find(
+							(opt) => opt.value === currentValue,
+						);
+					}}
+				>
+					<For each={props.options}>
+						{(option) => <option value={option.value}>{option.text}</option>}
+					</For>
+				</select>
+
+				{/* <button
 					type="button"
-					class="flex flex-row gap-1 text-xs bg-gray-3 items-center px-2.5 py-1.5 rounded-md border border-gray-4"
+					class="flex flex-row gap-1 text-xs bg-gray-3 items-center px-2.5 py-1.5 rounded-xl border border-gray-4"
 					onClick={async () => {
 						const currentValue = props.value;
 						const items = props.options.map((option) =>
@@ -388,13 +400,13 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 						return option ? option.text : currentValue;
 					})()}
 					<IconCapChevronDown class="size-4" />
-				</button>
+				</button> */}
 			</SettingItem>
 		);
 	};
 
 	return (
-		<div class="flex flex-col h-full custom-scroll">
+		<div class="flex flex-col h-full overflow-y-scroll scrollbar-none overscroll-contain p-1 pt-12">
 			<div class="p-4 space-y-6">
 				<AppearanceSection
 					currentTheme={settings.theme ?? "system"}
@@ -605,7 +617,7 @@ function SettingGroup(
 			<h3 class={cx("mb-3 text-sm text-gray-12 w-fit", props.titleStyling)}>
 				{props.title}
 			</h3>
-			<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2">
+			<div class="px-3 rounded-xl divide-y divide-gray-3 border-gray-3 bg-gray-2">
 				{props.children}
 			</div>
 		</div>

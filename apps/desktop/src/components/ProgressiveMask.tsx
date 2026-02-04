@@ -4,7 +4,7 @@ import { createMemo, For, type JSX } from "solid-js";
 export interface ProgressiveBlurProps {
 	class?: string;
 	height?: string;
-	position?: "top" | "bottom" | "both";
+	position?: "top" | "bottom" | "both" | "left" | "right";
 	blur?: "xs" | "sm" | "md" | "lg" | "xl" | number[];
 	children?: JSX.Element;
 }
@@ -33,13 +33,17 @@ export function ProgressiveBlur(props: ProgressiveBlurProps) {
 	const divElements = Array.from({ length: middleCount });
 
 	const containerClass = cx(
-		"gradient-blur pointer-events-none absolute inset-x-0",
+		"gradient-blur pointer-events-none absolute",
 		className,
 		position === "top"
-			? "-top-0.5"
+			? "inset-x-0 -top-0.5"
 			: position === "bottom"
-				? "bottom-0"
-				: "inset-y-0",
+				? "inset-x-0 bottom-0"
+				: position === "left"
+					? "inset-y-0 left-0"
+					: position === "right"
+						? "inset-y-0 right-0"
+						: "inset-0", // both
 	);
 
 	const baseMask = createMemo(() => {
@@ -50,44 +54,74 @@ export function ProgressiveBlur(props: ProgressiveBlurProps) {
 	const firstMask = createMemo(() => {
 		if (position === "bottom") {
 			return `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 37.5%)`;
-		} else if (position === "top") {
-			return `linear-gradient(to top, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 37.5%)`;
-		} else {
-			return baseMask();
 		}
+		if (position === "top") {
+			return `linear-gradient(to top, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 37.5%)`;
+		}
+		if (position === "right") {
+			return `linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 37.5%)`;
+		}
+		if (position === "left") {
+			return `linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12.5%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 37.5%)`;
+		}
+		return baseMask();
 	});
 
 	const lastMask = createMemo(() => {
 		if (position === "bottom") {
 			return `linear-gradient(to bottom, rgba(0,0,0,0) 87.5%, rgba(0,0,0,1) 100%)`;
-		} else if (position === "top") {
-			return `linear-gradient(to top, rgba(0,0,0,0) 87.5%, rgba(0,0,0,1) 100%)`;
-		} else {
-			return baseMask();
 		}
+		if (position === "top") {
+			return `linear-gradient(to top, rgba(0,0,0,0) 87.5%, rgba(0,0,0,1) 100%)`;
+		}
+		if (position === "right") {
+			return `linear-gradient(to right, rgba(0,0,0,0) 87.5%, rgba(0,0,0,1) 100%)`;
+		}
+		if (position === "left") {
+			return `linear-gradient(to left, rgba(0,0,0,0) 87.5%, rgba(0,0,0,1) 100%)`;
+		}
+		return baseMask();
 	});
 
 	const middleMask = (index: number) => {
-		// index is 0..(middleCount-1), matching blurIndex = index + 1 from the React code
 		const blurIndex = index + 1;
 		const startPercent = blurIndex * 12.5;
 		const midPercent = (blurIndex + 1) * 12.5;
 		const endPercent = (blurIndex + 2) * 12.5;
 
-		if (position === "bottom") {
-			return `linear-gradient(to bottom, rgba(0,0,0,0) ${startPercent}%, rgba(0,0,0,1) ${midPercent}%, rgba(0,0,0,1) ${endPercent}%, rgba(0,0,0,0) ${endPercent + 12.5}%)`;
-		} else if (position === "top") {
-			return `linear-gradient(to top, rgba(0,0,0,0) ${startPercent}%, rgba(0,0,0,1) ${midPercent}%, rgba(0,0,0,1) ${endPercent}%, rgba(0,0,0,0) ${endPercent + 12.5}%)`;
-		} else {
-			return baseMask();
-		}
+		const dir =
+			position === "bottom"
+				? "to bottom"
+				: position === "top"
+					? "to top"
+					: position === "right"
+						? "to right"
+						: position === "left"
+							? "to left"
+							: null;
+
+		if (!dir) return baseMask();
+
+		return `linear-gradient(${dir},
+			rgba(0,0,0,0) ${startPercent}%,
+			rgba(0,0,0,1) ${midPercent}%,
+			rgba(0,0,0,1) ${endPercent}%,
+			rgba(0,0,0,0) ${endPercent + 12.5}%
+		)`;
 	};
 
 	return (
 		<div
 			class={containerClass}
 			style={{
-				height: position === "both" ? "100%" : height,
+				height:
+					position === "both" || position === "left" || position === "right"
+						? "100%"
+						: height,
+				width:
+					position === "left" || position === "right"
+						? height // reuse "height" as thickness for sides
+						: "100%",
 			}}
 		>
 			{/* First blur layer */}

@@ -30,11 +30,12 @@ export function ToggleSettingItem(props: {
 }) {
 	return (
 		<SettingItem {...props}>
-			<Toggle
+			{/* <Toggle
 				size="sm"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
-			/>
+			/> */}
+			<input class="min-w-10" type="checkbox" switch />
 		</SettingItem>
 	);
 }

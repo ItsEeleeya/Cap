@@ -153,31 +153,26 @@ function Inner() {
 						);
 					}}
 				>
+					<Route path="/settings" component={SettingsLayout}>
+						<Route path="/" component={SettingsGeneralPage} />
+						<Route path="/general" component={SettingsGeneralPage} />
+						<Route path="/recordings" component={SettingsRecordingsPage} />
+						<Route path="/screenshots" component={SettingsScreenshotsPage} />
+						<Route path="/hotkeys" component={SettingsHotkeysPage} />
+						<Route path="/changelog" component={SettingsChangelogPage} />
+						<Route path="/feedback" component={SettingsFeedbackPage} />
+						<Route path="/experimental" component={SettingsExperimentalPage} />
+						<Route path="/license" component={SettingsLicensePage} />
+						<Route path="/integrations" component={SettingsIntegrationsPage} />
+						<Route
+							path="/integrations/s3-config"
+							component={SettingsS3ConfigPage}
+						/>
+					</Route>
+
 					<Route path="/" component={WindowChromeLayout}>
 						<Route path="/" component={NewMainPage} />
 						<Route path="/setup" component={SetupPage} />
-						<Route path="/settings" component={SettingsLayout}>
-							<Route path="/" component={SettingsGeneralPage} />
-							<Route path="/general" component={SettingsGeneralPage} />
-							<Route path="/recordings" component={SettingsRecordingsPage} />
-							<Route path="/screenshots" component={SettingsScreenshotsPage} />
-							<Route path="/hotkeys" component={SettingsHotkeysPage} />
-							<Route path="/changelog" component={SettingsChangelogPage} />
-							<Route path="/feedback" component={SettingsFeedbackPage} />
-							<Route
-								path="/experimental"
-								component={SettingsExperimentalPage}
-							/>
-							<Route path="/license" component={SettingsLicensePage} />
-							<Route
-								path="/integrations"
-								component={SettingsIntegrationsPage}
-							/>
-							<Route
-								path="/integrations/s3-config"
-								component={SettingsS3ConfigPage}
-							/>
-						</Route>
 						<Route path="/upgrade" component={UpgradePage} />
 						<Route path="/update" component={UpdatePage} />
 					</Route>
