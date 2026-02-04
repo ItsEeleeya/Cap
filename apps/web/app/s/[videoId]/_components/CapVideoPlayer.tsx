@@ -52,6 +52,11 @@ function getProgressStatusText(
 
 type EnhancedAudioStatus = "PROCESSING" | "COMPLETE" | "ERROR" | "SKIPPED";
 
+interface CaptionOption {
+	code: string;
+	name: string;
+}
+
 interface Props {
 	videoSrc: string;
 	videoId: Video.VideoId;
@@ -75,6 +80,11 @@ interface Props {
 	onSeek?: (time: number) => void;
 	enhancedAudioUrl?: string | null;
 	enhancedAudioStatus?: EnhancedAudioStatus | null;
+	captionLanguage?: string;
+	onCaptionLanguageChange?: (language: string) => void;
+	availableCaptions?: CaptionOption[];
+	isCaptionLoading?: boolean;
+	hasCaptions?: boolean;
 }
 
 export function CapVideoPlayer({
@@ -94,6 +104,11 @@ export function CapVideoPlayer({
 	onSeek,
 	enhancedAudioUrl,
 	enhancedAudioStatus,
+	captionLanguage,
+	onCaptionLanguageChange,
+	availableCaptions = [],
+	isCaptionLoading = false,
+	hasCaptions = false,
 }: Props) {
 	const [currentCue, setCurrentCue] = useState<string>("");
 	const [controlsVisible, setControlsVisible] = useState(false);
@@ -414,9 +429,9 @@ export function CapVideoPlayer({
 			setupTracks();
 		};
 
-		// Monitor for track changes and ensure they stay hidden
 		const handleTrackChange = () => {
 			ensureTracksHidden();
+			setupTracks();
 		};
 
 		video.addEventListener("loadeddata", handleLoadedData);
@@ -756,9 +771,9 @@ export function CapVideoPlayer({
 						<MediaPlayerSeekForward />
 						<MediaPlayerVolume
 							expandable
-							enhancedAudioEnabled={enhancedAudioEnabled}
-							enhancedAudioMuted={enhancedAudioMuted}
-							setEnhancedAudioMuted={setEnhancedAudioMuted}
+							// enhancedAudioEnabled={enhancedAudioEnabled}
+							// enhancedAudioMuted={enhancedAudioMuted}
+							// setEnhancedAudioMuted={setEnhancedAudioMuted}
 						/>
 						<MediaPlayerTime />
 					</div>
@@ -769,22 +784,27 @@ export function CapVideoPlayer({
 								toggleCaptions={toggleCaptions}
 							/>
 						)}
-						<MediaPlayerEnhancedAudio
+						{/* <MediaPlayerEnhancedAudio
 							enhancedAudioStatus={enhancedAudioStatus}
 							enhancedAudioEnabled={enhancedAudioEnabled}
 							setEnhancedAudioEnabled={setEnhancedAudioEnabled}
-						/>
+						/> */}
 						<MediaPlayerSettings
-							enhancedAudioStatus={enhancedAudioStatus}
-							enhancedAudioEnabled={enhancedAudioEnabled}
-							setEnhancedAudioEnabled={setEnhancedAudioEnabled}
+							// enhancedAudioStatus={enhancedAudioStatus}
+							// enhancedAudioEnabled={enhancedAudioEnabled}
+							// setEnhancedAudioEnabled={setEnhancedAudioEnabled}
+							captionLanguage={captionLanguage}
+							onCaptionLanguageChange={onCaptionLanguageChange}
+							availableCaptions={availableCaptions}
+							isCaptionLoading={isCaptionLoading}
+							hasCaptions={hasCaptions}
 						/>
 						<MediaPlayerPiP />
 						<MediaPlayerFullscreen />
 					</div>
 				</div>
 			</MediaPlayerControls>
-			{enhancedAudioUrl && (
+			{/* {enhancedAudioUrl && (
 				<>
 					<audio
 						ref={enhancedAudioRef}
@@ -801,7 +821,7 @@ export function CapVideoPlayer({
 						enhancedAudioMuted={enhancedAudioMuted}
 					/>
 				</>
-			)}
+			)} */}
 		</MediaPlayer>
 	);
 }
