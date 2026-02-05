@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::AtomicBool,
+        atomic::{AtomicBool, Ordering},
         mpsc::{RecvTimeoutError, SyncSender, TrySendError, sync_channel},
     },
     time::Duration,
@@ -122,7 +122,7 @@ impl Muxer for WindowsMuxer {
         output_path: PathBuf,
         video_config: Option<VideoInfo>,
         audio_config: Option<AudioInfo>,
-        _pause_flag: Arc<AtomicBool>,
+        pause_flag: Arc<AtomicBool>,
         tasks: &mut TaskPool,
     ) -> anyhow::Result<Self>
     where
@@ -159,6 +159,7 @@ impl Muxer for WindowsMuxer {
 
         {
             let output = output.clone();
+            let pause_flag = pause_flag.clone();
 
             tasks.spawn_thread("windows-encoder", move || {
                 cap_mediafoundation_utils::thread_init();
@@ -313,52 +314,58 @@ impl Muxer for WindowsMuxer {
                         let result = encoder.run(
                             Arc::new(AtomicBool::default()),
                             || {
-                                match video_rx.recv_timeout(frame_interval) {
-                                    Ok(Some((frame, timestamp))) => {
-                                        last_texture = Some(frame.texture().clone());
-                                        last_timestamp = Some(timestamp);
-                                    }
-                                    Ok(None) => {
-                                        trace!("End of stream signal received");
-                                        return Ok(None);
-                                    }
-                                    Err(RecvTimeoutError::Timeout) => {
-                                        if let Some(last_ts) = last_timestamp {
-                                            let new_ts = last_ts.saturating_add(frame_interval);
-                                            last_timestamp = Some(new_ts);
-                                            frames_reused += 1;
-                                            if frames_reused.is_multiple_of(30) {
-                                                debug!(
-                                                    frames_reused = frames_reused,
-                                                    frame_count = frame_count,
-                                                    "Frame pacing: reusing frames due to slow capture"
-                                                );
+                                loop {
+                                    match video_rx.recv_timeout(frame_interval) {
+                                        Ok(Some((frame, timestamp))) => {
+                                            last_texture = Some(frame.texture().clone());
+                                            last_timestamp = Some(timestamp);
+                                        }
+                                        Ok(None) => {
+                                            trace!("End of stream signal received");
+                                            return Ok(None);
+                                        }
+                                        Err(RecvTimeoutError::Timeout) => {
+                                            if pause_flag.load(Ordering::Acquire) {
+                                                last_timestamp = None;
+                                                continue;
+                                            } else if let Some(last_ts) = last_timestamp {
+                                                let new_ts = last_ts.saturating_add(frame_interval);
+                                                last_timestamp = Some(new_ts);
+                                                frames_reused += 1;
+                                                if frames_reused.is_multiple_of(30) {
+                                                    debug!(
+                                                        frames_reused = frames_reused,
+                                                        frame_count = frame_count,
+                                                        "Frame pacing: reusing frames due to slow capture"
+                                                    );
+                                                }
                                             }
                                         }
-                                    }
-                                    Err(RecvTimeoutError::Disconnected) => {
-                                        trace!("Channel disconnected");
-                                        return Ok(None);
-                                    }
-                                }
-
-                                if let (Some(texture), Some(ts)) = (&last_texture, last_timestamp) {
-                                    let normalized_ts = normalize_timestamp(ts, &mut first_timestamp);
-                                    frame_count += 1;
-                                    let frame_time = duration_to_timespan(normalized_ts);
-                                    Ok(Some((texture.clone(), frame_time)))
-                                } else {
-                                    match video_rx.recv() {
-                                        Ok(Some((frame, timestamp))) => {
-                                            let texture = frame.texture().clone();
-                                            last_texture = Some(texture.clone());
-                                            last_timestamp = Some(timestamp);
-                                            let normalized_ts = normalize_timestamp(timestamp, &mut first_timestamp);
-                                            frame_count = 1;
-                                            let frame_time = duration_to_timespan(normalized_ts);
-                                            Ok(Some((texture, frame_time)))
+                                        Err(RecvTimeoutError::Disconnected) => {
+                                            trace!("Channel disconnected");
+                                            return Ok(None);
                                         }
-                                        Ok(None) | Err(_) => Ok(None),
+                                    }
+
+                                    if let (Some(texture), Some(ts)) = (&last_texture, last_timestamp) {
+                                        let normalized_ts = normalize_timestamp(ts, &mut first_timestamp);
+                                        frame_count += 1;
+                                        let frame_time = duration_to_timespan(normalized_ts);
+                                        return Ok(Some((texture.clone(), frame_time)));
+                                    } else {
+                                        match video_rx.recv() {
+                                            Ok(Some((frame, timestamp))) => {
+                                                let texture = frame.texture().clone();
+                                                last_texture = Some(texture.clone());
+                                                last_timestamp = Some(timestamp);
+                                                let normalized_ts =
+                                                    normalize_timestamp(timestamp, &mut first_timestamp);
+                                                frame_count = 1;
+                                                let frame_time = duration_to_timespan(normalized_ts);
+                                                return Ok(Some((texture, frame_time)));
+                                            }
+                                            Ok(None) | Err(_) => return Ok(None),
+                                        }
                                     }
                                 }
                             },
@@ -422,6 +429,10 @@ impl Muxer for WindowsMuxer {
                                 }
                                 Ok(None) => break,
                                 Err(RecvTimeoutError::Timeout) => {
+                                    if pause_flag.load(Ordering::Acquire) {
+                                        last_timestamp = None;
+                                        continue;
+                                    }
                                     if let Some(last_ts) = last_timestamp {
                                         let new_ts = last_ts.saturating_add(frame_interval);
                                         last_timestamp = Some(new_ts);
@@ -629,7 +640,7 @@ impl Muxer for WindowsCameraMuxer {
         output_path: PathBuf,
         video_config: Option<VideoInfo>,
         audio_config: Option<AudioInfo>,
-        _pause_flag: Arc<AtomicBool>,
+        pause_flag: Arc<AtomicBool>,
         tasks: &mut TaskPool,
     ) -> anyhow::Result<Self>
     where
@@ -686,6 +697,7 @@ impl Muxer for WindowsCameraMuxer {
 
         {
             let output = output.clone();
+            let pause_flag = pause_flag.clone();
             let encoder_preferences = config.encoder_preferences;
 
             tasks.spawn_thread("windows-camera-encoder", move || {
@@ -827,49 +839,63 @@ impl Muxer for WindowsCameraMuxer {
                         let result = encoder.run(
                             Arc::new(AtomicBool::default()),
                             || {
-                                match video_rx.recv_timeout(frame_interval) {
-                                    Ok(Some((frame, timestamp))) => {
-                                        last_frame = Some(frame);
-                                        last_timestamp = Some(timestamp);
-                                    }
-                                    Ok(None) => {
-                                        trace!("End of camera stream signal received");
-                                        return Ok(None);
-                                    }
-                                    Err(RecvTimeoutError::Timeout) => {
-                                        if let Some(last_ts) = last_timestamp {
-                                            let new_ts = last_ts.saturating_add(frame_interval);
-                                            last_timestamp = Some(new_ts);
-                                        }
-                                    }
-                                    Err(RecvTimeoutError::Disconnected) => {
-                                        trace!("Camera channel disconnected");
-                                        return Ok(None);
-                                    }
-                                }
-
-                                if let (Some(frame), Some(ts)) = (&last_frame, last_timestamp) {
-                                    let normalized_ts = normalize_camera_timestamp(ts, &mut first_timestamp);
-                                    frame_count += 1;
-                                    if frame_count.is_multiple_of(30) {
-                                        debug!(
-                                            "Windows camera encoder: processed {} frames",
-                                            frame_count
-                                        );
-                                    }
-                                    let texture = upload_mf_buffer_to_texture(&d3d_device, frame, &mut camera_buffers)?;
-                                    Ok(Some((texture, duration_to_timespan(normalized_ts))))
-                                } else {
-                                    match video_rx.recv() {
+                                loop {
+                                    match video_rx.recv_timeout(frame_interval) {
                                         Ok(Some((frame, timestamp))) => {
-                                            last_frame = Some(frame.clone());
+                                            last_frame = Some(frame);
                                             last_timestamp = Some(timestamp);
-                                            let normalized_ts = normalize_camera_timestamp(timestamp, &mut first_timestamp);
-                                            frame_count = 1;
-                                            let texture = upload_mf_buffer_to_texture(&d3d_device, &frame, &mut camera_buffers)?;
-                                            Ok(Some((texture, duration_to_timespan(normalized_ts))))
                                         }
-                                        Ok(None) | Err(_) => Ok(None),
+                                        Ok(None) => {
+                                            trace!("End of camera stream signal received");
+                                            return Ok(None);
+                                        }
+                                        Err(RecvTimeoutError::Timeout) => {
+                                            if pause_flag.load(Ordering::Acquire) {
+                                                last_timestamp = None;
+                                                continue;
+                                            } else if let Some(last_ts) = last_timestamp {
+                                                let new_ts = last_ts.saturating_add(frame_interval);
+                                                last_timestamp = Some(new_ts);
+                                            }
+                                        }
+                                        Err(RecvTimeoutError::Disconnected) => {
+                                            trace!("Camera channel disconnected");
+                                            return Ok(None);
+                                        }
+                                    }
+
+                                    if let (Some(frame), Some(ts)) = (&last_frame, last_timestamp) {
+                                        let normalized_ts =
+                                            normalize_camera_timestamp(ts, &mut first_timestamp);
+                                        frame_count += 1;
+                                        if frame_count.is_multiple_of(30) {
+                                            debug!(
+                                                "Windows camera encoder: processed {} frames",
+                                                frame_count
+                                            );
+                                        }
+                                        let texture =
+                                            upload_mf_buffer_to_texture(&d3d_device, frame, &mut camera_buffers)?;
+                                        return Ok(Some((texture, duration_to_timespan(normalized_ts))));
+                                    } else {
+                                        match video_rx.recv() {
+                                            Ok(Some((frame, timestamp))) => {
+                                                last_frame = Some(frame.clone());
+                                                last_timestamp = Some(timestamp);
+                                                let normalized_ts = normalize_camera_timestamp(
+                                                    timestamp,
+                                                    &mut first_timestamp,
+                                                );
+                                                frame_count = 1;
+                                                let texture = upload_mf_buffer_to_texture(
+                                                    &d3d_device,
+                                                    &frame,
+                                                    &mut camera_buffers,
+                                                )?;
+                                                return Ok(Some((texture, duration_to_timespan(normalized_ts))));
+                                            }
+                                            Ok(None) | Err(_) => return Ok(None),
+                                        }
                                     }
                                 }
                             },
@@ -929,6 +955,10 @@ impl Muxer for WindowsCameraMuxer {
                                 }
                                 Ok(None) => break,
                                 Err(RecvTimeoutError::Timeout) => {
+                                    if pause_flag.load(Ordering::Acquire) {
+                                        last_timestamp = None;
+                                        continue;
+                                    }
                                     if let Some(last_ts) = last_timestamp {
                                         let new_ts = last_ts.saturating_add(frame_interval);
                                         last_timestamp = Some(new_ts);
