@@ -24,6 +24,7 @@ import { createStore, reconcile } from "solid-js/store";
 import themePreviewAuto from "~/assets/theme-previews/auto.jpg";
 import themePreviewDark from "~/assets/theme-previews/dark.jpg";
 import themePreviewLight from "~/assets/theme-previews/light.jpg";
+import { SmoothRect } from "~/components/primitive";
 import { Input } from "~/routes/editor/ui";
 import { authStore, generalSettingsStore } from "~/store";
 import {
@@ -406,205 +407,195 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	};
 
 	return (
-		<div class="flex flex-col h-full overflow-y-scroll scrollbar-none overscroll-contain p-1 pt-12">
-			<div class="p-4 space-y-6">
-				<AppearanceSection
-					currentTheme={settings.theme ?? "system"}
-					onThemeChange={(newTheme) => {
-						setSettings("theme", newTheme);
-						generalSettingsStore.set({ theme: newTheme });
-					}}
-				/>
+		<div class="p-4 space-y-6">
+			<AppearanceSection
+				currentTheme={settings.theme ?? "system"}
+				onThemeChange={(newTheme) => {
+					setSettings("theme", newTheme);
+					generalSettingsStore.set({ theme: newTheme });
+				}}
+			/>
 
-				{ostype === "macos" && (
-					<SettingGroup title="App">
-						<ToggleSettingItem
-							label="Always show dock icon"
-							description="Show Cap in the dock even when there are no windows available to close."
-							value={!settings.hideDockIcon}
-							onChange={(v) => handleChange("hideDockIcon", !v)}
-						/>
-						<ToggleSettingItem
-							label="Enable system notifications"
-							description="Show system notifications for events like copying to clipboard, saving files, and more. You may need to manually allow Cap access via your system's notification settings."
-							value={!!settings.enableNotifications}
-							onChange={async (value) => {
-								if (value) {
-									// Check current permission state
-									console.log("Checking notification permission status");
-									const permissionGranted = await isPermissionGranted();
-									console.log(
-										`Current permission status: ${permissionGranted}`,
-									);
+			{ostype === "macos" && (
+				<SettingGroup title="App">
+					<ToggleSettingItem
+						label="Always show dock icon"
+						description="Show Cap in the dock even when there are no windows available to close."
+						value={!settings.hideDockIcon}
+						onChange={(v) => handleChange("hideDockIcon", !v)}
+					/>
+					<ToggleSettingItem
+						label="Enable system notifications"
+						description="Show system notifications for events like copying to clipboard, saving files, and more. You may need to manually allow Cap access via your system's notification settings."
+						value={!!settings.enableNotifications}
+						onChange={async (value) => {
+							if (value) {
+								// Check current permission state
+								console.log("Checking notification permission status");
+								const permissionGranted = await isPermissionGranted();
+								console.log(`Current permission status: ${permissionGranted}`);
 
-									if (!permissionGranted) {
-										// Request permission if not granted
-										console.log(
-											"Permission not granted, requesting permission",
-										);
-										const permission = await requestPermission();
-										console.log(`Permission request result: ${permission}`);
-										if (permission !== "granted") {
-											// If permission denied, don't enable the setting
-											console.log("Permission denied, aborting setting change");
-											return;
-										}
+								if (!permissionGranted) {
+									// Request permission if not granted
+									console.log("Permission not granted, requesting permission");
+									const permission = await requestPermission();
+									console.log(`Permission request result: ${permission}`);
+									if (permission !== "granted") {
+										// If permission denied, don't enable the setting
+										console.log("Permission denied, aborting setting change");
+										return;
 									}
 								}
-								handleChange("enableNotifications", value);
-							}}
-						/>
-					</SettingGroup>
-				)}
+							}
+							handleChange("enableNotifications", value);
+						}}
+					/>
+				</SettingGroup>
+			)}
 
-				<SettingGroup title="Recording">
+			<SettingGroup title="Recording">
+				<SelectSettingItem
+					label="Instant mode max resolution"
+					description="Choose the maximum resolution for Instant Mode recordings."
+					value={settings.instantModeMaxResolution ?? 1920}
+					onChange={(value) => handleChange("instantModeMaxResolution", value)}
+					options={INSTANT_MODE_RESOLUTION_OPTIONS.map((option) => ({
+						text: option.label,
+						value: option.value,
+					}))}
+				/>
+				<SelectSettingItem
+					label="Recording countdown"
+					description="Countdown before recording starts"
+					value={settings.recordingCountdown ?? 0}
+					onChange={(value) => handleChange("recordingCountdown", value)}
+					options={[
+						{ text: "Off", value: 0 },
+						{ text: "3 seconds", value: 3 },
+						{ text: "5 seconds", value: 5 },
+						{ text: "10 seconds", value: 10 },
+					]}
+				/>
+				<SelectSettingItem
+					label="Main window recording start behaviour"
+					description="The main window recording start behaviour"
+					value={settings.mainWindowRecordingStartBehaviour ?? "close"}
+					onChange={(value) =>
+						handleChange("mainWindowRecordingStartBehaviour", value)
+					}
+					options={[
+						{ text: "Close", value: "close" },
+						{ text: "Minimise", value: "minimise" },
+					]}
+				/>
+				<SelectSettingItem
+					label="Studio recording finish behaviour"
+					description="The studio recording finish behaviour"
+					value={settings.postStudioRecordingBehaviour ?? "openEditor"}
+					onChange={(value) =>
+						handleChange("postStudioRecordingBehaviour", value)
+					}
+					options={[
+						{ text: "Open editor", value: "openEditor" },
+						{
+							text: "Show in overlay",
+							value: "showOverlay",
+						},
+					]}
+				/>
+				<SelectSettingItem
+					label="After deleting recording behaviour"
+					description="Should Cap reopen after deleting an in progress recording?"
+					value={settings.postDeletionBehaviour ?? "doNothing"}
+					onChange={(value) => handleChange("postDeletionBehaviour", value)}
+					options={[
+						{ text: "Do Nothing", value: "doNothing" },
+						{
+							text: "Reopen Recording Window",
+							value: "reopenRecordingWindow",
+						},
+					]}
+				/>
+				<ToggleSettingItem
+					label="Delete instant mode recordings after upload"
+					description="After finishing an instant recording, should Cap will delete it from your device?"
+					value={settings.deleteInstantRecordingsAfterUpload ?? false}
+					onChange={(v) =>
+						handleChange("deleteInstantRecordingsAfterUpload", v)
+					}
+				/>
+				<ToggleSettingItem
+					label="Crash-recoverable recording"
+					description="Records in fragmented segments that can be recovered if the app crashes or your system loses power. May have slightly higher storage usage during recording."
+					value={settings.crashRecoveryRecording ?? true}
+					onChange={(value) => handleChange("crashRecoveryRecording", value)}
+				/>
+				<div class="flex flex-col gap-1">
 					<SelectSettingItem
-						label="Instant mode max resolution"
-						description="Choose the maximum resolution for Instant Mode recordings."
-						value={settings.instantModeMaxResolution ?? 1920}
-						onChange={(value) =>
-							handleChange("instantModeMaxResolution", value)
-						}
-						options={INSTANT_MODE_RESOLUTION_OPTIONS.map((option) => ({
+						label="Max capture framerate"
+						description="Maximum framerate for screen capture. Higher values may cause instability on some systems."
+						value={settings.maxFps ?? 60}
+						onChange={(value) => handleChange("maxFps", value)}
+						options={MAX_FPS_OPTIONS.map((option) => ({
 							text: option.label,
 							value: option.value,
 						}))}
 					/>
-					<SelectSettingItem
-						label="Recording countdown"
-						description="Countdown before recording starts"
-						value={settings.recordingCountdown ?? 0}
-						onChange={(value) => handleChange("recordingCountdown", value)}
-						options={[
-							{ text: "Off", value: 0 },
-							{ text: "3 seconds", value: 3 },
-							{ text: "5 seconds", value: 5 },
-							{ text: "10 seconds", value: 10 },
-						]}
-					/>
-					<SelectSettingItem
-						label="Main window recording start behaviour"
-						description="The main window recording start behaviour"
-						value={settings.mainWindowRecordingStartBehaviour ?? "close"}
-						onChange={(value) =>
-							handleChange("mainWindowRecordingStartBehaviour", value)
-						}
-						options={[
-							{ text: "Close", value: "close" },
-							{ text: "Minimise", value: "minimise" },
-						]}
-					/>
-					<SelectSettingItem
-						label="Studio recording finish behaviour"
-						description="The studio recording finish behaviour"
-						value={settings.postStudioRecordingBehaviour ?? "openEditor"}
-						onChange={(value) =>
-							handleChange("postStudioRecordingBehaviour", value)
-						}
-						options={[
-							{ text: "Open editor", value: "openEditor" },
-							{
-								text: "Show in overlay",
-								value: "showOverlay",
-							},
-						]}
-					/>
-					<SelectSettingItem
-						label="After deleting recording behaviour"
-						description="Should Cap reopen after deleting an in progress recording?"
-						value={settings.postDeletionBehaviour ?? "doNothing"}
-						onChange={(value) => handleChange("postDeletionBehaviour", value)}
-						options={[
-							{ text: "Do Nothing", value: "doNothing" },
-							{
-								text: "Reopen Recording Window",
-								value: "reopenRecordingWindow",
-							},
-						]}
-					/>
-					<ToggleSettingItem
-						label="Delete instant mode recordings after upload"
-						description="After finishing an instant recording, should Cap will delete it from your device?"
-						value={settings.deleteInstantRecordingsAfterUpload ?? false}
-						onChange={(v) =>
-							handleChange("deleteInstantRecordingsAfterUpload", v)
-						}
-					/>
-					<ToggleSettingItem
-						label="Crash-recoverable recording"
-						description="Records in fragmented segments that can be recovered if the app crashes or your system loses power. May have slightly higher storage usage during recording."
-						value={settings.crashRecoveryRecording ?? true}
-						onChange={(value) => handleChange("crashRecoveryRecording", value)}
-					/>
-					<div class="flex flex-col gap-1">
-						<SelectSettingItem
-							label="Max capture framerate"
-							description="Maximum framerate for screen capture. Higher values may cause instability on some systems."
-							value={settings.maxFps ?? 60}
-							onChange={(value) => handleChange("maxFps", value)}
-							options={MAX_FPS_OPTIONS.map((option) => ({
-								text: option.label,
-								value: option.value,
-							}))}
-						/>
-						{(settings.maxFps ?? 60) > 60 && (
-							<p class="text-xs text-amber-500 px-1 pb-2">
-								⚠️ Higher framerates may cause frame drops or increased CPU usage
-								on some systems.
-							</p>
-						)}
-					</div>
-				</SettingGroup>
+					{(settings.maxFps ?? 60) > 60 && (
+						<p class="text-xs text-amber-500 px-1 pb-2">
+							⚠️ Higher framerates may cause frame drops or increased CPU usage
+							on some systems.
+						</p>
+					)}
+				</div>
+			</SettingGroup>
 
-				<SettingGroup
-					title="Cap Pro Settings"
-					titleStyling="bg-blue-500 py-1.5 mb-4 text-white text-xs px-2 rounded-lg"
-				>
-					<ToggleSettingItem
-						label="Automatically open shareable links"
-						description="Whether Cap should automatically open instant recordings in your browser"
-						value={!settings.disableAutoOpenLinks}
-						onChange={(v) => handleChange("disableAutoOpenLinks", !v)}
-					/>
-				</SettingGroup>
-
-				<DefaultProjectNameCard
-					onChange={(value) =>
-						handleChange("defaultProjectNameTemplate", value)
-					}
-					value={settings.defaultProjectNameTemplate ?? null}
+			<SettingGroup
+				title="Cap Pro Settings"
+				titleStyling="bg-blue-500 py-1.5 mb-4 text-white text-xs px-2 rounded-lg"
+			>
+				<ToggleSettingItem
+					label="Automatically open shareable links"
+					description="Whether Cap should automatically open instant recordings in your browser"
+					value={!settings.disableAutoOpenLinks}
+					onChange={(v) => handleChange("disableAutoOpenLinks", !v)}
 				/>
+			</SettingGroup>
 
-				<ExcludedWindowsCard
-					excludedWindows={excludedWindows()}
-					availableWindows={availableWindows()}
-					onRequestAvailableWindows={refreshAvailableWindows}
-					onRemove={handleRemoveExclusion}
-					onAdd={handleAddWindow}
-					onReset={handleResetExclusions}
-					isLoading={windows.loading}
-					isWindows={ostype === "windows"}
-				/>
+			<DefaultProjectNameCard
+				onChange={(value) => handleChange("defaultProjectNameTemplate", value)}
+				value={settings.defaultProjectNameTemplate ?? null}
+			/>
 
-				<ServerURLSetting
-					value={settings.serverUrl ?? "https://cap.so"}
-					onChange={async (v) => {
-						const url = new URL(v);
-						const origin = url.origin;
+			<ExcludedWindowsCard
+				excludedWindows={excludedWindows()}
+				availableWindows={availableWindows()}
+				onRequestAvailableWindows={refreshAvailableWindows}
+				onRemove={handleRemoveExclusion}
+				onAdd={handleAddWindow}
+				onReset={handleResetExclusions}
+				isLoading={windows.loading}
+				isWindows={ostype === "windows"}
+			/>
 
-						if (
-							!(await confirm(
-								`Are you sure you want to change the server URL to '${origin}'? You will need to sign in again.`,
-							))
-						)
-							return;
+			<ServerURLSetting
+				value={settings.serverUrl ?? "https://cap.so"}
+				onChange={async (v) => {
+					const url = new URL(v);
+					const origin = url.origin;
 
-						await authStore.set(undefined);
-						await commands.setServerUrl(origin);
-						handleChange("serverUrl", origin);
-					}}
-				/>
-			</div>
+					if (
+						!(await confirm(
+							`Are you sure you want to change the server URL to '${origin}'? You will need to sign in again.`,
+						))
+					)
+						return;
+
+					await authStore.set(undefined);
+					await commands.setServerUrl(origin);
+					handleChange("serverUrl", origin);
+				}}
+			/>
 		</div>
 	);
 }
@@ -617,8 +608,10 @@ function SettingGroup(
 			<h3 class={cx("mb-3 text-sm text-gray-12 w-fit", props.titleStyling)}>
 				{props.title}
 			</h3>
-			<div class="px-3 rounded-xl divide-y divide-gray-3 border-gray-3 bg-gray-2">
+			<div class="px-3 rounded-2xl divide-y divide-gray-3 bg-gray-2 apple-glass-subdued border-none">
+				{/* <SmoothRect class="divide-y divide-gray-3" options={{}}> */}
 				{props.children}
+				{/* </SmoothRect> */}
 			</div>
 		</div>
 	);
@@ -737,7 +730,7 @@ function DefaultProjectNameCard(props: {
 	}
 
 	return (
-		<div class="flex flex-col gap-3 px-4 py-3 mt-6 rounded-xl border border-gray-3 bg-gray-2">
+		<div class="flex flex-col gap-3 px-4 py-3 mt-6 rounded-2xl bg-gray-2 apple-glass-subdued">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="flex flex-col gap-1">
 					<p class="text-sm text-gray-12">Default Project Name</p>

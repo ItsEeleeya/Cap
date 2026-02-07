@@ -15,6 +15,14 @@ import {
 import DemoAvatar from "~/assets/avatar.jpeg";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { ProgressiveBlur } from "~/components/ProgressiveMask";
+import VirtualScrollbar, {
+	ScrollAreaContent,
+	ScrollAreaCorner,
+	ScrollAreaRoot,
+	ScrollAreaScrollbar,
+	ScrollAreaViewport,
+	ScrollView,
+} from "~/components/ScrollView";
 import { SignInButton } from "~/components/SignInButton";
 import { authStore } from "~/store";
 import { trackEvent } from "~/utils/analytics";
@@ -52,6 +60,8 @@ export default function Settings(props: RouteSectionProps) {
 		(localStorage.getItem("sidebarStyle") ?? "overlay") as SidebarMode,
 	);
 
+	let contentEl: HTMLElement | undefined;
+
 	return (
 		<div
 			data-tauri-drag-region
@@ -59,11 +69,9 @@ export default function Settings(props: RouteSectionProps) {
 		>
 			<div
 				data-tauri-drag-region
-				class="fixed top-0 bottom-0 left-0 w-48 flex items-center justify-center overscroll-none"
+				class="fixed top-0 bottom-0 left-0 w-48 flex items-center justify-center overscroll-none z-30"
 				classList={{
 					"p-[7px]": sidebarStyle() === "overlay",
-					"apple-glass": focused() && sidebarStyle() === "flat",
-					"apple-glass-subdued": !focused() && sidebarStyle() === "flat",
 				}}
 			>
 				<div
@@ -96,7 +104,13 @@ export default function Settings(props: RouteSectionProps) {
 						</div>
 					</div>
 
-					<div class="absolute inset-0 pt-20 scrollbar-none overflow-y-auto overscroll-y-contain fade-mask fade-top-28 fade-bottom-28 fade-intensity-100">
+					<div
+						class="absolute inset-0 scrollbar-none overflow-y-auto overscroll-y-contain fade-mask fade-bottom-28 fade-intensity-100"
+						classList={{
+							"mt-14 fade-top-10 pt-8": sidebarStyle() === "flat",
+							"fade-top-28 pt-20 fade-top-16": sidebarStyle() === "overlay",
+						}}
+					>
 						<div class="mx-2 my-1 p-2 flex gap-2 items-center rounded-xl hover:bg-gray-5/50">
 							<img class="size-8 rounded-full" src={DemoAvatar} />
 							<div class="flex flex-col">
@@ -229,7 +243,7 @@ export default function Settings(props: RouteSectionProps) {
 				</div>
 			</div>
 			<div
-				class="apple-glass left-48 bg-gray-2/40 absolute h-9 w-fit mt-2 rounded-full flex items-center justify-between z-50"
+				class="apple-glass left-48 bg-gray-2/20 absolute h-9.5 w-fit mt-2 rounded-full flex items-center justify-between z-50"
 				classList={{
 					"ml-2": sidebarStyle() === "flat",
 				}}
@@ -243,15 +257,31 @@ export default function Settings(props: RouteSectionProps) {
 				</button>
 			</div>
 
-			<div class="overflow-y-hidden flex-1 animate-in pl-48 fade-mask fade-top-20 fade-intensity-100">
+			<Show when={contentEl}>
+				{(ref) => (
+					<VirtualScrollbar
+						target={ref()}
+						class="fixed z-50 right-1 top-12 bottom-9 data-[dragging=true]:w-2 hover:w-2 transition-all duration-500 border w-20 h-40"
+					/>
+				)}
+			</Show>
+
+			<div class="overflow-y-hidden flex-1 animate-in pl-48 fade-mask fade-top-14 fade-intensity-100 flex items-center justify-center">
 				<ProgressiveBlur
 					position="top"
-					height="50px"
-					blur="md"
+					height="70px"
+					blur="sm"
 					class="-top-3 absolute"
 				/>
 				<CapErrorBoundary>
-					<Suspense>{props.children}</Suspense>
+					<Suspense>
+						<div
+							ref={contentEl}
+							class="size-full overflow-y-scroll pt-10 max-w-[800px] scrollbar-none"
+						>
+							{props.children}
+						</div>
+					</Suspense>
 				</CapErrorBoundary>
 			</div>
 		</div>
