@@ -1,5 +1,14 @@
 import { cx } from "cva";
-import { createMemo, For, type JSX, Match, Show, Switch } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	For,
+	type JSX,
+	Match,
+	onMount,
+	Show,
+	Switch,
+} from "solid-js";
 import { Transition } from "solid-transition-group";
 import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/components/Material";
 import type {
@@ -111,6 +120,15 @@ export default function TargetMenuGrid(props: TargetMenuGridProps) {
 	const isEmpty = createMemo(
 		() => !props.isLoading && items().length === 0 && !props.errorMessage,
 	);
+
+	const hasPeriodicRefresh =
+		props.variant === "recording" || props.variant === "screenshot";
+	const [hasInitiallyRendered, setHasInitiallyRendered] = createSignal(false);
+	onMount(() => {
+		if (hasPeriodicRefresh) {
+			setTimeout(() => setHasInitiallyRendered(true), 600);
+		}
+	});
 
 	let containerRef: HTMLDivElement | undefined;
 
@@ -344,20 +362,33 @@ export default function TargetMenuGrid(props: TargetMenuGridProps) {
 														false
 													);
 												};
+												const showAppearAnimation = !hasInitiallyRendered();
 												return (
 													<Transition
-														appear
-														enterActiveClass="transition duration-200"
-														enterClass="scale-95 opacity-0"
-														enterToClass="scale-100 opacity-100"
+														appear={showAppearAnimation}
+														enterActiveClass={
+															showAppearAnimation
+																? "transition duration-200"
+																: ""
+														}
+														enterClass={
+															showAppearAnimation ? "scale-95 opacity-0" : ""
+														}
+														enterToClass={
+															showAppearAnimation ? "scale-100 opacity-100" : ""
+														}
 														exitActiveClass="transition duration-200"
 														exitClass="scale-100"
 														exitToClass="scale-95"
 													>
 														<div
-															style={{
-																"transition-delay": `${index() * 100}ms`,
-															}}
+															style={
+																showAppearAnimation
+																	? {
+																			"transition-delay": `${index() * 100}ms`,
+																		}
+																	: undefined
+															}
 														>
 															<TargetCard
 																variant="recording"
@@ -396,32 +427,49 @@ export default function TargetMenuGrid(props: TargetMenuGridProps) {
 								return (
 									<>
 										<For each={items() as ScreenshotWithPath[]}>
-											{(item, index) => (
-												<Transition
-													appear
-													enterActiveClass="transition duration-200"
-													enterClass="scale-95 opacity-0"
-													enterToClass="scale-100 opacity-100"
-													exitActiveClass="transition duration-200"
-													exitClass="scale-100"
-													exitToClass="scale-95"
-												>
-													<div
-														style={{ "transition-delay": `${index() * 100}ms` }}
+											{(item, index) => {
+												const showAppearAnimation = !hasInitiallyRendered();
+												return (
+													<Transition
+														appear={showAppearAnimation}
+														enterActiveClass={
+															showAppearAnimation
+																? "transition duration-200"
+																: ""
+														}
+														enterClass={
+															showAppearAnimation ? "scale-95 opacity-0" : ""
+														}
+														enterToClass={
+															showAppearAnimation ? "scale-100 opacity-100" : ""
+														}
+														exitActiveClass="transition duration-200"
+														exitClass="scale-100"
+														exitToClass="scale-95"
 													>
-														<TargetCard
-															variant="screenshot"
-															target={item}
-															onClick={() => screenshotProps.onSelect?.(item)}
-															disabled={screenshotProps.disabled}
-															onKeyDown={handleKeyDown}
-															class="w-full"
-															data-target-menu-card="true"
-															highlightQuery={screenshotProps.highlightQuery}
-														/>
-													</div>
-												</Transition>
-											)}
+														<div
+															style={
+																showAppearAnimation
+																	? {
+																			"transition-delay": `${index() * 100}ms`,
+																		}
+																	: undefined
+															}
+														>
+															<TargetCard
+																variant="screenshot"
+																target={item}
+																onClick={() => screenshotProps.onSelect?.(item)}
+																disabled={screenshotProps.disabled}
+																onKeyDown={handleKeyDown}
+																class="w-full"
+																data-target-menu-card="true"
+																highlightQuery={screenshotProps.highlightQuery}
+															/>
+														</div>
+													</Transition>
+												);
+											}}
 										</For>
 										<Show when={screenshotProps.onViewAll}>
 											{(onViewAll) => (

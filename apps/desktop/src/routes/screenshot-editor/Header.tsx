@@ -46,29 +46,6 @@ export function Header() {
 
 	const { exportImage, isExporting } = useScreenshotExport();
 
-	const showStylingControls = createMemo(() => {
-		const source = project.background.source;
-		const sourceType = source.type;
-
-		if (sourceType === "wallpaper") {
-			return source.path !== null && source.path !== "";
-		}
-		if (sourceType === "image") {
-			return source.path !== null && source.path !== "";
-		}
-		if (sourceType === "gradient") {
-			return true;
-		}
-		if (sourceType === "color") {
-			const alpha = source.alpha ?? 255;
-			if (alpha === 0) return false;
-			const value = source.value;
-			const isWhite = value[0] === 255 && value[1] === 255 && value[2] === 255;
-			return !(isWhite && alpha === 255);
-		}
-		return false;
-	});
-
 	createEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			const target = e.target as HTMLElement | null;
@@ -135,12 +112,10 @@ export function Header() {
 				<div class="apple-glass rounded-full p-1 px-1.5">
 					<BackgroundSettingsPopover />
 				</div>
-				<Show when={showStylingControls()}>
-					<PaddingPopover />
-					<RoundingPopover />
-					<ShadowPopover />
-					<BorderPopover />
-				</Show>
+				<PaddingPopover />
+				<RoundingPopover />
+				<ShadowPopover />
+				<BorderPopover />
 			</div>
 
 			<div
