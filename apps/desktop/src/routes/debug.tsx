@@ -13,6 +13,7 @@ import * as dialog from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { createSignal, createUniqueId, For, onMount } from "solid-js";
 import { commands } from "~/utils/tauri";
+import { openDebugLibrary } from "./debug-library";
 
 export default function Debug() {
 	const navigate = useNavigate();
@@ -125,6 +126,12 @@ export default function Debug() {
 					}}
 				>
 					Show Solarium Main
+				</button>
+				<button
+					class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+					onClick={openDebugLibrary}
+				>
+					Show Solarium Library
 				</button>
 			</div>
 

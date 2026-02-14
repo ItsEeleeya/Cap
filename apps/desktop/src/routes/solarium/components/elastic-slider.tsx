@@ -255,7 +255,7 @@ export const ElasticSlider: Component<ElasticSliderProps> = (props) => {
 					onPointerDown={handlePointerDown}
 					class="relative flex grow items-center h-[16px] py-[3px]" // Padding Y adds hit area
 				>
-					<Slider.Track class="relative h-[10px] w-full cursor-pointer touch-none">
+					<Slider.Track class="relative h-[8px] w-full cursor-pointer touch-none">
 						{/*
                            LAYER 1: MASKED VISUALS
                            This div clips the fill so we don't have ugly corners at small widths.
@@ -272,9 +272,9 @@ export const ElasticSlider: Component<ElasticSliderProps> = (props) => {
 							onPointerDown={handlePointerDown}
 							ref={setThumbEl}
 							class={cx(
-								"block h-5 w-8 -top-[5px] rounded-full focus:outline-none cursor-grab active:cursor-grabbing border-white/20",
+								"block h-4 w-6 -top-[4px] rounded-full focus:outline-none cursor-grab active:cursor-grabbing border-white/20",
 								isDragging()
-									? "bg-white/5 scale-110 shadow-md shadow-white/10 border border-white/20 backdrop-brightness-150"
+									? "bg-white/5 scale-110 opacity-80 apple-glass-clear"
 									: "shadow-sm border bg-white border-gray-2",
 							)}
 							// Style Logic for "Stay Inside" + "Apple Glass"

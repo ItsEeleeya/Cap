@@ -308,8 +308,9 @@ function Inner() {
 									<Show when={display.physical_size}>
 										{(size) => (
 											<span class="mb-2 text-xs">
-												{`${size().width}x${size().height} · ${display.refresh_rate
-													}FPS`}
+												{`${size().width}x${size().height} · ${
+													display.refresh_rate
+												}FPS`}
 											</span>
 										)}
 									</Show>

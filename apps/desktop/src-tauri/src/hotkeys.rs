@@ -212,7 +212,7 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
 
             match recording::take_screenshot(app.clone(), target).await {
                 Ok(path) => {
-                    let _ = ShowCapWindow::ScreenshotEditor { path }.show(&app).await;
+                    let _ = CapWindow::ScreenshotEditor { path }.show(&app).await;
                     Ok(())
                 }
                 Err(e) => Err(format!("Failed to take screenshot: {e}")),
@@ -229,7 +229,7 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
 
             match recording::take_screenshot(app.clone(), target).await {
                 Ok(path) => {
-                    let _ = ShowCapWindow::ScreenshotEditor { path }.show(&app).await;
+                    let _ = CapWindow::ScreenshotEditor { path }.show(&app).await;
                     Ok(())
                 }
                 Err(e) => Err(format!("Failed to take screenshot: {e}")),

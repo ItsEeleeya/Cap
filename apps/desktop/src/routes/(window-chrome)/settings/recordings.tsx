@@ -261,8 +261,8 @@ export default function Recordings() {
 									}
 									uploadProgress={
 										recording.meta.upload &&
-											(recording.meta.upload.state === "MultipartUpload" ||
-												recording.meta.upload.state === "SinglePartUpload")
+										(recording.meta.upload.state === "MultipartUpload" ||
+											recording.meta.upload.state === "SinglePartUpload")
 											? uploadProgress[recording.meta.upload.video_id]
 											: undefined
 									}
@@ -436,7 +436,7 @@ function RecordingItem(props: {
 								commands.uploadExportedVideo(
 									props.recording.path,
 									"Reupload",
-									new Channel<UploadProgress>((_progress) => { }),
+									new Channel<UploadProgress>((_progress) => {}),
 									null,
 								),
 						}));

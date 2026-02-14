@@ -108,7 +108,7 @@ import {
 	useRecordingOptions,
 } from "../(window-chrome)/OptionsContext";
 import { createWindowFocus } from "../debug-library";
-import Mode from "./solarium-recording-mode";
+import Mode from "./components/solarium-recording-mode";
 
 const WINDOW_SIZE = { width: 300, height: 495 } as const;
 
@@ -162,45 +162,45 @@ const createDisplaySignature = (
 
 type TargetMenuPanelProps =
 	| {
-			variant: "display";
-			targets?: CaptureDisplayWithThumbnail[];
-			onSelect: (target: CaptureDisplayWithThumbnail) => void;
-	  }
+		variant: "display";
+		targets?: CaptureDisplayWithThumbnail[];
+		onSelect: (target: CaptureDisplayWithThumbnail) => void;
+	}
 	| {
-			variant: "window";
-			targets?: CaptureWindowWithThumbnail[];
-			onSelect: (target: CaptureWindowWithThumbnail) => void;
-	  }
+		variant: "window";
+		targets?: CaptureWindowWithThumbnail[];
+		onSelect: (target: CaptureWindowWithThumbnail) => void;
+	}
 	| {
-			variant: "recording";
-			targets?: RecordingWithPath[];
-			onSelect: (target: RecordingWithPath) => void;
-			onViewAll: () => void;
-			uploadProgress?: Record<string, number>;
-			reuploadingPaths?: Set<string>;
-			onReupload?: (path: string) => void;
-			onRefetch?: () => void;
-	  }
+		variant: "recording";
+		targets?: RecordingWithPath[];
+		onSelect: (target: RecordingWithPath) => void;
+		onViewAll: () => void;
+		uploadProgress?: Record<string, number>;
+		reuploadingPaths?: Set<string>;
+		onReupload?: (path: string) => void;
+		onRefetch?: () => void;
+	}
 	| {
-			variant: "screenshot";
-			targets?: ScreenshotWithPath[];
-			onSelect: (target: ScreenshotWithPath) => void;
-			onViewAll: () => void;
-	  }
+		variant: "screenshot";
+		targets?: ScreenshotWithPath[];
+		onSelect: (target: ScreenshotWithPath) => void;
+		onViewAll: () => void;
+	}
 	| {
-			variant: "camera";
-			targets?: CameraWithDetails[];
-			selectedTarget: CameraWithDetails | null;
-			onSelect: (target: CameraWithDetails | null) => void;
-			permissions?: OSPermissionsCheck;
-	  }
+		variant: "camera";
+		targets?: CameraWithDetails[];
+		selectedTarget: CameraWithDetails | null;
+		onSelect: (target: CameraWithDetails | null) => void;
+		permissions?: OSPermissionsCheck;
+	}
 	| {
-			variant: "microphone";
-			targets?: MicrophoneWithDetails[];
-			selectedTarget: MicrophoneWithDetails | null;
-			onSelect: (target: MicrophoneWithDetails | null) => void;
-			permissions?: OSPermissionsCheck;
-	  };
+		variant: "microphone";
+		targets?: MicrophoneWithDetails[];
+		selectedTarget: MicrophoneWithDetails | null;
+		onSelect: (target: MicrophoneWithDetails | null) => void;
+		permissions?: OSPermissionsCheck;
+	};
 
 type SharedTargetMenuProps = {
 	isLoading: boolean;
@@ -211,27 +211,27 @@ type SharedTargetMenuProps = {
 
 type DeviceListPanelProps =
 	| {
-			variant: "camera";
-			targets: CameraWithDetails[];
-			selectedTarget: CameraWithDetails | null;
-			onSelect: (target: CameraWithDetails | null) => void;
-			isLoading?: boolean;
-			errorMessage?: string;
-			disabled?: boolean;
-			emptyMessage?: string;
-			permissions?: OSPermissionsCheck;
-	  }
+		variant: "camera";
+		targets: CameraWithDetails[];
+		selectedTarget: CameraWithDetails | null;
+		onSelect: (target: CameraWithDetails | null) => void;
+		isLoading?: boolean;
+		errorMessage?: string;
+		disabled?: boolean;
+		emptyMessage?: string;
+		permissions?: OSPermissionsCheck;
+	}
 	| {
-			variant: "microphone";
-			targets: MicrophoneWithDetails[];
-			selectedTarget: MicrophoneWithDetails | null;
-			onSelect: (target: MicrophoneWithDetails | null) => void;
-			isLoading?: boolean;
-			errorMessage?: string;
-			disabled?: boolean;
-			emptyMessage?: string;
-			permissions?: OSPermissionsCheck;
-	  };
+		variant: "microphone";
+		targets: MicrophoneWithDetails[];
+		selectedTarget: MicrophoneWithDetails | null;
+		onSelect: (target: MicrophoneWithDetails | null) => void;
+		isLoading?: boolean;
+		errorMessage?: string;
+		disabled?: boolean;
+		emptyMessage?: string;
+		permissions?: OSPermissionsCheck;
+	};
 
 function CameraListItem(props: {
 	camera: CameraWithDetails;
@@ -1044,7 +1044,7 @@ function Page() {
 			await commands.uploadExportedVideo(
 				path,
 				"Reupload",
-				new Channel<UploadProgress>(() => {}),
+				new Channel<UploadProgress>(() => { }),
 				null,
 			);
 		} finally {
@@ -1524,7 +1524,7 @@ function Page() {
 							class={cx(
 								"apple-glass flex flex-1 overflow-hidden rounded-2xl ring-1 ring-transparent transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "display" || displayMenuOpen()) &&
-									"ring-blue-9",
+								"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1565,7 +1565,7 @@ function Page() {
 							class={cx(
 								"apple-glass flex flex-1 overflow-hidden rounded-2xl ring-1 ring-transparent transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "window" || windowMenuOpen()) &&
-									"ring-blue-9",
+								"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1666,7 +1666,7 @@ function Page() {
 			}
 		}
 
-		await signIn.mutateAsync(abort).catch(() => {});
+		await signIn.mutateAsync(abort).catch(() => { });
 
 		for (const win of await getAllWebviewWindows()) {
 			if (win.label.startsWith("target-select-overlay")) {
@@ -1683,10 +1683,10 @@ function Page() {
 		<div
 			data-tauri-drag-region
 			onMouseEnter={handleMouseEnter}
-			class="rounded-[28px] before flex relative flex-col gap-2 h-full min-h-0 text-[--text-primary]"
+			class="rounded-[28px] before flex relative flex-col gap-2 h-full min-h-0 text-[--text-primary] apple-glass"
 			classList={{
-				"apple-glass": focused(),
-				"apple-glass-subdued": !focused(),
+				// "apple-glass": focused(),
+				// "apple-glass-subdued": !focused(),
 			}}
 		>
 			<div

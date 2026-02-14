@@ -26,7 +26,7 @@ export default function Mode(_props: ModeProps) {
 			>
 				<IconCapInfo class="apple-vibrancy-fill invert transition-opacity duration-200 p-1 dark:invert-0 group-hover:opacity-50" />
 			</button>
-			<div class="apple-glass-subdued p-0.5 rounded-full text-xs w-full h-8">
+			<div class="apple-glass-subdued p-0.5 rounded-full text-xs w-full h-8 flex">
 				<SolariumTabs
 					onSnap={() => commands.performHapticFeedback("alignment", "now")}
 					value={rawOptions.mode}
