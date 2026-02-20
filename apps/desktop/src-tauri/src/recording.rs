@@ -1584,7 +1584,7 @@ async fn handle_recording_end(
         let _ = window.hide();
     }
 
-    if let Some(camera) = CapWindowId::Camera.get(&handle) {
+    if let Some(camera) = CapWindowDef::Camera.get(&handle) {
         let _ = camera.hide();
     }
 
