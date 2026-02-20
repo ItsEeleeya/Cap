@@ -16,7 +16,6 @@
 		"@cap/utils": "workspace:*",
 		"@cap/web-api-contract": "workspace:*",
 		"@corvu/tooltip": "^0.2.1",
-		"@intercom/messenger-js-sdk": "^0.0.14",
 		"@kobalte/core": "^0.13.11",
 		"@motionone/dom": "^10.18.0",
 		"@msviderok/base-ui-solid": "1.0.0-beta.9",

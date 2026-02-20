@@ -2446,7 +2446,6 @@ async fn check_upgraded_and_update(app: AppHandle) -> Result<bool, String> {
     let updated_auth = AuthStore {
         secret: auth.secret,
         user_id: auth.user_id,
-        intercom_hash: auth.intercom_hash,
         plan: Some(Plan {
             upgraded: is_pro,
             manual: auth.plan.map(|p| p.manual).unwrap_or(false),
@@ -3421,16 +3420,45 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 });
                             }
                             CapWindowDef::Main => {
+                                api.prevent_close();
+                                let _ = window.hide();
+
                                 let state = app.state::<ArcLock<App>>();
                                 let is_recording = state
                                     .try_read()
                                     .map(|s| s.is_recording_active_or_pending())
                                     .unwrap_or(true);
 
-                                if !is_recording
-                                    && let Some(camera_window) = CapWindowDef::Camera.get(app)
-                                {
-                                    let _ = camera_window.hide();
+                                if !is_recording {
+                                    if let Some(camera_window) = CapWindowDef::Camera.get(app) {
+                                        let _ = camera_window.hide();
+                                    }
+
+                                    for (id, overlay_window) in app.webview_windows() {
+                                        if let Ok(CapWindowDef::TargetSelectOverlay { .. }) =
+                                            CapWindowDef::from_str(&id)
+                                        {
+                                            let _ = overlay_window.hide();
+                                        }
+                                    }
+
+                                    let app = app.clone();
+                                    tokio::spawn(async move {
+                                        let state = app.state::<ArcLock<App>>();
+                                        let app_state = &mut *state.write().await;
+
+                                        app_state.camera_preview.pause();
+
+                                        let _ =
+                                            app_state.mic_feed.ask(microphone::RemoveInput).await;
+                                        let _ = app_state
+                                            .camera_feed
+                                            .ask(feeds::camera::RemoveInput)
+                                            .await;
+
+                                        app_state.selected_mic_label = None;
+                                        app_state.camera_in_use = false;
+                                    });
                                 }
                             }
                             _ => {}
@@ -3454,7 +3482,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                     }
                                 }
 
-                                if let Some(camera) = CapWindowId::Camera.get(&app) {
+                                if let Some(camera) = CapWindowDef::Camera.get(&app) {
                                     let _ = camera.hide();
                                 }
 
@@ -3689,16 +3717,19 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                 }
             }
             tauri::RunEvent::Exit => {
-                let state = _handle.state::<ArcLock<App>>();
-                let _ = tauri::async_runtime::block_on(async {
-                    tokio::time::timeout(Duration::from_secs(2), async {
-                        let app_state = &mut *state.write().await;
-                        let _ = app_state.mic_feed.ask(microphone::RemoveInput).await;
-                        let _ = app_state.camera_feed.ask(feeds::camera::RemoveInput).await;
-                        app_state.camera_in_use = false;
-                    })
-                    .await
-                });
+                let handle = _handle.clone();
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let state = handle.state::<ArcLock<App>>();
+                    let _ = tauri::async_runtime::block_on(async {
+                        tokio::time::timeout(Duration::from_secs(2), async {
+                            let app_state = &mut *state.write().await;
+                            let _ = app_state.mic_feed.ask(microphone::RemoveInput).await;
+                            let _ = app_state.camera_feed.ask(feeds::camera::RemoveInput).await;
+                            app_state.camera_in_use = false;
+                        })
+                        .await
+                    });
+                }));
             }
             _ => {}
         });
@@ -3882,6 +3913,18 @@ async fn create_editor_instance_impl(
 
     wait_for_recording_ready(&app, &path).await?;
 
+    let shared_device = if let Some(shared) = gpu_context::get_shared_gpu().await {
+        Some(cap_rendering::SharedWgpuDevice {
+            instance: (*shared.instance).clone(),
+            adapter: (*shared.adapter).clone(),
+            device: (*shared.device).clone(),
+            queue: (*shared.queue).clone(),
+            is_software_adapter: shared.is_software_adapter,
+        })
+    } else {
+        None
+    };
+
     let instance = {
         let app = app.clone();
         EditorInstance::new(
@@ -3890,6 +3933,7 @@ async fn create_editor_instance_impl(
                 let _ = EditorStateChanged::new(state).emit(&app);
             },
             frame_cb,
+            shared_device,
         )
         .await?
     };
