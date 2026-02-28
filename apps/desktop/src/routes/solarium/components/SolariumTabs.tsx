@@ -119,18 +119,6 @@ export function SolariumTabs(props: SolariumTabsProps) {
 		updateTabPointerEvents();
 	});
 
-	// Handle drag motion
-	function handleDrag(_event: any, info: { offset: { x: number } }) {
-		const highlightCenterX = animatedX() + animatedWidth() / 2 + info.offset.x;
-
-		// Detect which tab we're over
-		const tabAtCenter = getTabAtPosition(highlightCenterX);
-		if (tabAtCenter && tabAtCenter !== lastSnapValue()) {
-			setLastSnapValue(tabAtCenter);
-			local.onSnap?.();
-		}
-	}
-
 	// Handle drag end - snap to nearest tab ALWAYS
 	function handleDragEnd(_event: any, info: { offset: { x: number } }) {
 		const finalCenterX = animatedX() + animatedWidth() / 2 + info.offset.x;
@@ -174,10 +162,11 @@ export function SolariumTabs(props: SolariumTabsProps) {
 		>
 			{/* Draggable highlight - z-10 normally, z-50 when dragging to appear on top */}
 			<motion.div
-				class={`absolute top-0 bottom-0 rounded-full cursor-grab ${isDragging()
-					? "cursor-grabbing shadow-xl/25 shadow-white"
-					: "bg-blue-7"
-					}`}
+				class={`absolute top-0 bottom-0 rounded-full cursor-grab ${
+					isDragging()
+						? "cursor-grabbing shadow-xl/25 shadow-white"
+						: "bg-blue-7"
+				}`}
 				style={{ "pointer-events": "auto" }}
 				animate={{
 					x: animatedX(),
@@ -203,7 +192,17 @@ export function SolariumTabs(props: SolariumTabsProps) {
 				onDragStart={() => {
 					setIsDragging(true);
 				}}
-				onDrag={handleDrag}
+				onDrag={(_e, info) => {
+					const highlightCenterX =
+						animatedX() + animatedWidth() / 2 + info.offset.x;
+
+					// Detect which tab we're over
+					const tabAtCenter = getTabAtPosition(highlightCenterX);
+					if (tabAtCenter && tabAtCenter !== lastSnapValue()) {
+						setLastSnapValue(tabAtCenter);
+						local.onSnap?.();
+					}
+				}}
 				onDragEnd={handleDragEnd}
 			>
 				<div class="size-full apple-glass-clear rounded-full" />
