@@ -1022,7 +1022,7 @@ async fn cleanup_app_resources_for_exit(app: &AppHandle) {
     #[cfg(target_os = "macos")]
     {
         app.state::<CameraWindowCloseGate>().set_allow_close(true);
-        if let Some(camera_window) = CapWindowId::Camera.get(app) {
+        if let Some(camera_window) = CapWindowDef::Camera.get(app) {
             let _ = camera_window.close();
         }
     }
