@@ -18,6 +18,7 @@ export function PresetsDropdown() {
 	return (
 		<KDropdownMenu gutter={8} placement="bottom">
 			<EditorButton<typeof KDropdownMenu.Trigger>
+				variant="embedded"
 				as={KDropdownMenu.Trigger}
 				leftIcon={<IconCapPresets />}
 				rightIcon={<IconCapChevronDown />}

@@ -21,6 +21,7 @@ import { useEditorContext } from "./context";
 import PresetsDropdown from "./PresetsDropdown";
 import ShareButton from "./ShareButton";
 import { EditorButton } from "./ui";
+import { SolariumToolbarButtonContainer } from "../solarium/components";
 
 export type ResolutionOption = {
 	label: string;
@@ -69,65 +70,67 @@ export function Header() {
 	return (
 		<div
 			data-tauri-drag-region
-			class="flex relative flex-row items-center w-full h-14"
+			class="flex relative flex-row items-center w-full h-13"
 		>
 			<div
 				data-tauri-drag-region
 				class={cx("flex flex-row flex-1 gap-2 items-center px-4 h-full")}
 			>
-				{ostype() === "macos" && <div class="h-full w-16" />}
-				<EditorButton
-					onClick={async () => {
-						clearTimelineSelection();
+				{ostype() === "macos" && <div class="h-full w-17" />}
+				<SolariumToolbarButtonContainer>
+					<EditorButton
+						onClick={async () => {
+							clearTimelineSelection();
 
-						if (!(await ask("Are you sure you want to delete this recording?")))
-							return;
+							if (!(await ask("Are you sure you want to delete this recording?")))
+								return;
 
-						await commands.editorDeleteProject();
-					}}
-					tooltipText="Delete recording"
-					leftIcon={<IconCapTrash class="w-5" />}
-				/>
-				<EditorButton
-					onClick={() => {
-						clearTimelineSelection();
+							await commands.editorDeleteProject();
+						}}
+						tooltipText="Delete recording"
+						leftIcon={<IconCapTrash class="w-5" />}
+					/>
+					<EditorButton
+						onClick={() => {
+							clearTimelineSelection();
 
-						console.log({ path: `${editorInstance.path}/` });
-						revealItemInDir(`${editorInstance.path}/`);
-					}}
-					tooltipText="Open recording bundle"
-					leftIcon={<IconLucideFolder class="w-5" />}
-				/>
+							console.log({ path: `${editorInstance.path}/` });
+							revealItemInDir(`${editorInstance.path}/`);
+						}}
+						tooltipText="Open recording bundle"
+						leftIcon={<IconLucideFolder class="w-5" />}
+					/>
+				</SolariumToolbarButtonContainer>
 
 				<div class="flex flex-row items-center">
 					<NameEditor name={meta().prettyName} />
 					<span class="text-sm text-gray-11">.cap</span>
 				</div>
 				<div data-tauri-drag-region class="flex-1 h-full" />
-				<EditorButton
-					onClick={() => {
-						if (clearTimelineSelection()) return;
-					}}
-					tooltipText="Captions"
-					leftIcon={<IconCapCaptions class="w-5" />}
-					comingSoon={true}
-				/>
-				<EditorButton
-					onClick={() => {
-						if (clearTimelineSelection()) return;
-					}}
-					tooltipText="Performance"
-					leftIcon={<IconCapGauge class="w-[18px]" />}
-					comingSoon={true}
-				/>
+
+				<SolariumToolbarButtonContainer class="-mr-2">
+					<EditorButton
+						onClick={() => {
+							if (clearTimelineSelection()) return;
+						}}
+						tooltipText="Captions"
+						leftIcon={<IconCapCaptions class="w-5" />}
+						comingSoon={true}
+					/>
+					<EditorButton
+						onClick={() => {
+							if (clearTimelineSelection()) return;
+						}}
+						tooltipText="Performance"
+						leftIcon={<IconCapGauge class="w-[18px]" />}
+						comingSoon={true}
+					/>
+				</SolariumToolbarButtonContainer>
 			</div>
 
-			<div
-				data-tauri-drag-region
-				class="flex flex-col justify-center px-4 border-x border-black-transparent-10"
-			>
+			<SolariumToolbarButtonContainer class="flex flex-col justify-center px-3">
 				<PresetsDropdown />
-			</div>
+			</SolariumToolbarButtonContainer>
 
 			<div
 				data-tauri-drag-region
@@ -136,37 +139,39 @@ export function Header() {
 					ostype() !== "windows" && "pr-2",
 				)}
 			>
-				<EditorButton
-					onClick={() => {
-						clearTimelineSelection();
-						if (!projectHistory.canUndo()) return;
-						projectHistory.undo();
-					}}
-					disabled={
-						!projectHistory.canUndo() && !editorState.timeline.selection
-					}
-					tooltipText="Undo"
-					leftIcon={<IconCapUndo class="w-5" />}
-				/>
-				<EditorButton
-					onClick={() => {
-						clearTimelineSelection();
-						if (!projectHistory.canRedo()) return;
-						projectHistory.redo();
-					}}
-					disabled={
-						!projectHistory.canRedo() && !editorState.timeline.selection
-					}
-					tooltipText="Redo"
-					leftIcon={<IconCapRedo class="w-5" />}
-				/>
+				<SolariumToolbarButtonContainer>
+					<EditorButton
+						onClick={() => {
+							clearTimelineSelection();
+							if (!projectHistory.canUndo()) return;
+							projectHistory.undo();
+						}}
+						disabled={
+							!projectHistory.canUndo() && !editorState.timeline.selection
+						}
+						tooltipText="Undo"
+						leftIcon={<IconCapUndo class="w-5" />}
+					/>
+					<EditorButton
+						onClick={() => {
+							clearTimelineSelection();
+							if (!projectHistory.canRedo()) return;
+							projectHistory.redo();
+						}}
+						disabled={
+							!projectHistory.canRedo() && !editorState.timeline.selection
+						}
+						tooltipText="Redo"
+						leftIcon={<IconCapRedo class="w-5" />}
+					/>
+				</SolariumToolbarButtonContainer>
 				<div data-tauri-drag-region class="flex-1 h-full" />
 				<Show when={customDomain.data}>
 					<ShareButton />
 				</Show>
 				<Button
-					variant="blue"
-					class="flex gap-1.5 justify-center h-[40px] w-full max-w-[100px]"
+					variant="prominantGlass"
+					class="flex gap-1.5 justify-center h-9 w-full max-w-[100px]"
 					onClick={() => {
 						clearTimelineSelection();
 
@@ -215,8 +220,8 @@ const UploadIcon = (props: ComponentProps<"svg">) => {
 				stroke-linejoin="round"
 				class={cx(
 					exportState.type !== "idle" &&
-						exportState.type !== "done" &&
-						"bounce",
+					exportState.type !== "done" &&
+					"bounce",
 				)}
 			/>
 		</svg>
@@ -248,7 +253,7 @@ function NameEditor(props: { name: string }) {
 						"absolute inset-0 px-px m-0 opacity-0 overflow-hidden focus:opacity-100 bg-transparent border-b border-transparent focus:border-gray-7 focus:outline-none peer whitespace-pre",
 						truncated() && "truncate",
 						(prettyName().length < 5 || prettyName().length > 100) &&
-							"focus:border-red-500",
+						"focus:border-red-500",
 					)}
 					value={prettyName()}
 					onInput={(e) => setPrettyName(e.currentTarget.value)}

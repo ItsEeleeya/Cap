@@ -1,6 +1,7 @@
 import { Effect, getCurrentWindow } from "@tauri-apps/api/window";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { cx } from "cva";
+import "../solarium/solarium.css";
 import { createEffect, Suspense } from "solid-js";
 import { generalSettingsStore } from "~/store";
 import { commands } from "~/utils/tauri";
@@ -14,17 +15,20 @@ export default function () {
 		const transparent = generalSettings.data?.windowTransparency ?? false;
 		commands.setWindowTransparent(transparent);
 		getCurrentWindow().setEffects({
-			effects: transparent ? [Effect.HudWindow] : [],
+			// effects: transparent ? [Effect.HudWindow] : [],
+			effects: [Effect.HudWindow]
 		});
 	});
+
+	commands.addToolbarShell();
 
 	return (
 		<div
 			class={cx(
-				"flex flex-col w-screen h-screen dark:bg-gray-1 bg-gray-2",
-				!(
-					ostype() === "windows" || !generalSettings.data?.windowTransparency
-				) && "bg-transparent-window",
+				"flex flex-col w-screen h-screen bg-transparent",
+				// !(
+				// ostype() === "windows" || !generalSettings.data?.windowTransparency
+				// ) && "bg-transparent-window",
 			)}
 		>
 			<Suspense fallback={<EditorSkeleton />}>

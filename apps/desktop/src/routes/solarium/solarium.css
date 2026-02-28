@@ -99,3 +99,11 @@
 
 .solarium-slider-track {
 }
+
+.solarium-toolbar-container {
+	display: flex;
+	gap: 2;
+	border-radius: 100%;
+	background: var(--color-gray-2), 70%;
+	-apple-visual-effect: -apple-system-glass-material-media-controls;
+}

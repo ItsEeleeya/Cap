@@ -318,6 +318,7 @@ const editorButtonStyles = cva(
 					"text-gray-12 enabled:hover:ui-not-pressed:bg-gray-3 data-expanded:bg-gray-3 outline-blue-300 focus:bg-transparent",
 				danger:
 					"text-gray-12 enabled:hover:ui-not-pressed:bg-gray-3 data-expanded:bg-red-300 data-pressed:bg-red-300 data-expanded:text-gray-1 data-pressed:text-gray-1 outline-red-300",
+				embedded: "outline-none",
 			},
 		},
 		defaultVariants: { variant: "primary" },
