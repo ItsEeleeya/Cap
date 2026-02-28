@@ -135,7 +135,7 @@ export function Header() {
 			<div
 				data-tauri-drag-region
 				class={cx(
-					"flex-1 h-full flex flex-row items-center gap-2 pl-2",
+					"flex-1 h-full flex flex-row items-center gap-2 pl-2.5 pr-2.5",
 					ostype() !== "windows" && "pr-2",
 				)}
 			>
@@ -166,12 +166,23 @@ export function Header() {
 					/>
 				</SolariumToolbarButtonContainer>
 				<div data-tauri-drag-region class="flex-1 h-full" />
+				<SolariumToolbarButtonContainer>
+					<EditorButton
+						tooltipText="Preview Quality"
+						leftIcon={<IconLucideGauge class="w-5" />}
+					/>
+					<EditorButton
+						tooltipText="Panel"
+						leftIcon={<IconLucidePanelLeftOpen class="w-5" />}
+					/>
+				</SolariumToolbarButtonContainer>
+
 				<Show when={customDomain.data}>
 					<ShareButton />
 				</Show>
 				<Button
 					variant="prominantGlass"
-					class="flex gap-1.5 justify-center h-9 w-full max-w-[100px]"
+					class="flex gap-1.5 justify-center h-8.5 w-full max-w-[100px]"
 					onClick={() => {
 						clearTimelineSelection();
 

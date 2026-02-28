@@ -238,19 +238,7 @@ export function PlayerContent() {
 
 	return (
 		<div class="flex flex-col flex-1 min-h-0">
-			<div class="flex items-center justify-between gap-3 p-3">
-				<div class="flex items-center gap-3">
-					<AspectRatioSelect />
-					<EditorButton
-						tooltipText="Crop Video"
-						onClick={cropDialogHandler}
-						onMouseEnter={preloadCropVideoFull}
-						onFocus={preloadCropVideoFull}
-						leftIcon={<IconCapCrop class="w-5 text-gray-12" />}
-					>
-						Crop
-					</EditorButton>
-				</div>
+			<div class="flex items-center justify-between gap-3 p-3 hidden!">
 				<div class="flex items-center gap-2">
 					<span class="text-xs font-medium text-gray-11">Preview quality</span>
 					<KSelect<{ label: string; value: EditorPreviewQuality }>
@@ -305,18 +293,34 @@ export function PlayerContent() {
 					</KSelect>
 				</div>
 			</div>
+
 			<PreviewCanvas />
-			<div class="flex overflow-hidden z-10 flex-row gap-3 justify-between items-center p-5">
-				<div class="flex-1">
-					<Time
-						class="text-gray-12"
-						seconds={Math.max(
-							editorState.previewTime ?? editorState.playbackTime,
-							0,
-						)}
-					/>
-					<span class="text-gray-11 text-[0.875rem] tabular-nums"> / </span>
-					<Time seconds={totalDuration()} />
+			<div class="flex overflow-hidden z-10 flex-row gap-3 justify-between items-center pt-2.5 p-4.5">
+				<div class="flex-1 flex items-center justify-between">
+					<div class="flex items-center gap-1">
+						<AspectRatioSelect />
+						<EditorButton
+							tooltipText="Crop Video"
+							variant="primary"
+							onClick={cropDialogHandler}
+							onMouseEnter={preloadCropVideoFull}
+							onFocus={preloadCropVideoFull}
+							leftIcon={<IconCapCrop class="h-full text-gray-12" />}
+						>
+						</EditorButton>
+					</div>
+
+					<div class="flex items-center gap-1 justify-center mr-2 p-1 px-2 rounded-xl bg-gray font-mono">
+						<Time
+							class="text-gray-12"
+							seconds={Math.max(
+								editorState.previewTime ?? editorState.playbackTime,
+								0,
+							)}
+						/>
+						<span class="text-gray-11 text-[0.875rem] tabular-nums"> / </span>
+						<Time seconds={totalDuration()} />
+					</div>
 				</div>
 				<div class="flex flex-row items-center justify-center text-gray-11 gap-8 text-[0.875rem]">
 					<button
@@ -334,7 +338,7 @@ export function PlayerContent() {
 						<button
 							type="button"
 							onClick={handlePlayPauseClick}
-							class="flex justify-center items-center rounded-full border border-gray-300 transition-colors bg-gray-3 hover:bg-gray-4 hover:text-black size-9"
+							class="apple-glass flex justify-center items-center rounded-full transition-colors bg-gray-3/50 hover:bg-gray-4 hover:text-black size-9"
 						>
 							{!editorState.playing || isAtEnd() ? (
 								<IconCapPlay class="text-gray-12 size-3" />

@@ -4,5 +4,5 @@ import { children, ParentProps } from "solid-js";
 
 export function SolariumToolbarButtonContainer(props: ParentProps<{ class?: string }>) {
     const resolved = children(() => props.children)
-    return <div data-tauri-drag-region class={cx("apple-glass bg-gray-2/70 flex gap-2 rounded-full px-1 py-0.5", props.class)}>{resolved()}</div>;
+    return <div data-tauri-drag-region class={cx("apple-glass-clear bg-gray-1/50 flex gap-2 rounded-full px-1 py-0.5", props.class)}>{resolved()}</div>;
 }

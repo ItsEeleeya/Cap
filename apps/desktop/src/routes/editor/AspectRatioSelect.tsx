@@ -68,7 +68,7 @@ function AspectRatioSelect() {
 					leftIcon={<IconCapLayout />}
 					rightIcon={
 						<KSelect.Icon>
-							<IconCapChevronDown />
+							<IconCapChevronDown class="rotate-180" />
 						</KSelect.Icon>
 					}
 					rightIconEnd={true}

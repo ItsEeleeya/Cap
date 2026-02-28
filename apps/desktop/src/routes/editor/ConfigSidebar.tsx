@@ -86,6 +86,7 @@ import {
 	Subfield,
 	topSlideAnimateClasses,
 } from "./ui";
+import { ProgressiveBlur } from "~/components/ProgressiveMask";
 
 const BACKGROUND_SOURCES = {
 	wallpaper: "Wallpaper",
@@ -291,11 +292,11 @@ const findCursorPreset = (
 		(option) =>
 			option.preset &&
 			Math.abs(option.preset.tension - values.tension) <=
-				CURSOR_PRESET_TOLERANCE.tension &&
+			CURSOR_PRESET_TOLERANCE.tension &&
 			Math.abs(option.preset.mass - values.mass) <=
-				CURSOR_PRESET_TOLERANCE.mass &&
+			CURSOR_PRESET_TOLERANCE.mass &&
 			Math.abs(option.preset.friction - values.friction) <=
-				CURSOR_PRESET_TOLERANCE.friction,
+			CURSOR_PRESET_TOLERANCE.friction,
 	);
 
 	return preset?.value ?? null;
@@ -377,10 +378,11 @@ export function ConfigSidebar() {
 
 	return (
 		<KTabs
+			orientation="vertical"
 			value={editorState.timeline.selection ? undefined : state.selectedTab}
-			class="flex flex-col min-h-0 shrink-0 flex-1 max-w-104 overflow-hidden rounded-xl z-10 bg-gray-1 dark:bg-gray-2 border border-gray-3"
+			class="flex flex-row-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10 fade-mask fade-bottom-10 fade-intensity-80"
 		>
-			<KTabs.List class="flex overflow-hidden sticky top-0 z-60 flex-row items-center h-16 text-lg border-b border-gray-3 shrink-0 bg-gray-1 dark:bg-gray-2">
+			<KTabs.List class="flex overflow-hidden sticky top-0 right-0 z-60 flex-col items-center text-lg shrink-0 h-fit gap-5 p-1.5 my-auto apple-glass bg-gray-1 rounded-full">
 				<For
 					each={[
 						{ id: TAB_IDS.background, icon: IconCapImage },
@@ -410,7 +412,7 @@ export function ConfigSidebar() {
 						<KTabs.Trigger
 							value={item.id}
 							class={cx(
-								"flex relative z-10 flex-1 justify-center items-center px-4 py-2 transition-colors group disabled:opacity-50 focus:outline-none",
+								"flex relative z-10 flex-1 justify-center items-center transition-colors group disabled:opacity-50 focus:outline-none",
 								editorState.timeline.selection
 									? "text-gray-11"
 									: "text-gray-11 data-selected:text-gray-12",
@@ -429,9 +431,9 @@ export function ConfigSidebar() {
 						>
 							<div
 								class={cx(
-									"flex justify-center relative border-transparent border z-10 items-center rounded-md size-9 transition will-change-transform",
+									"flex justify-center relative border-transparent border z-10 items-center rounded-full size-9 transition will-change-transform",
 									state.selectedTab !== item.id &&
-										"group-hover:border-gray-300 group-disabled:border-none",
+									"group-hover:border-gray-300 group-disabled:border-none",
 								)}
 							>
 								<Dynamic component={item.icon} />
@@ -442,8 +444,8 @@ export function ConfigSidebar() {
 
 				{/** Center the indicator with the icon */}
 				<Show when={!editorState.timeline.selection}>
-					<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-200 ease-in-out pointer-events-none will-change-transform">
-						<div class="absolute top-1/2 left-1/2 rounded-lg transform -translate-x-1/2 -translate-y-1/2 bg-gray-3 will-change-transform size-9" />
+					<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-out transform-gpu pointer-events-none will-change-transform">
+						<div class="absolute top-1/2 left-1/2 rounded-full transform -translate-x-1/2 -translate-y-1/2 bg-blue-7/80 will-change-transform size-9 apple-glass" />
 					</KTabs.Indicator>
 				</Show>
 			</KTabs.List>
@@ -452,11 +454,12 @@ export function ConfigSidebar() {
 				style={{
 					"--margin-top-scroll": "5px",
 				}}
-				class="custom-scroll overflow-x-hidden overflow-y-scroll text-[0.875rem] flex-1 min-h-0"
+				class="custom-scroll overflow-x-hidden overflow-y-scroll text-[0.875rem] flex-1 min-h-0 scrollbar-none pt-13 fade-mask fade-top-20 fade-intensity-100"
 				classList={{
 					hidden: !!editorState.timeline.selection,
 				}}
 			>
+				<ProgressiveBlur position="top" blur="xs" height="80px" class="-mt-4 z-20" />
 				<BackgroundConfig scrollRef={scrollRef} />
 				<CameraConfig scrollRef={scrollRef} />
 				<KTabs.Content
@@ -1545,17 +1548,13 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 								ref={setBackgroundRef}
 								class="flex overflow-x-auto overscroll-contain relative z-10 flex-row gap-2 items-center mb-3 text-xs hide-scroll"
 								style={{
-									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${
-										scrollX() > 0 ? "24px" : "0"
-									}, black calc(100% - ${
-										reachedEndOfScroll() ? "0px" : "24px"
-									}), transparent)`,
+									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
+										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
+										}), transparent)`,
 
-									"mask-image": `linear-gradient(to right, transparent, black ${
-										scrollX() > 0 ? "24px" : "0"
-									}, black calc(100% - ${
-										reachedEndOfScroll() ? "0px" : "24px"
-									}), transparent);`,
+									"mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
+										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
+										}), transparent);`,
 								}}
 							>
 								<For each={Object.entries(BACKGROUND_THEMES)}>
@@ -1582,10 +1581,10 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 							value={
 								project.background.source.type === "wallpaper"
 									? (wallpapers()?.find((w) =>
-											(
-												project.background.source as { path?: string }
-											).path?.includes(w.id),
-										)?.url ?? undefined)
+										(
+											project.background.source as { path?: string }
+										).path?.includes(w.id),
+									)?.url ?? undefined)
 									: undefined
 							}
 							onChange={(photoUrl) => {
@@ -1715,9 +1714,9 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 								if (!file) return;
 
 								/*
-                    this is a Tauri bug in WebKit so we need to validate the file type manually
-                    https://github.com/tauri-apps/tauri/issues/9158
-                    */
+					this is a Tauri bug in WebKit so we need to validate the file type manually
+					https://github.com/tauri-apps/tauri/issues/9158
+					*/
 								const validExtensions = [
 									"jpg",
 									"jpeg",
@@ -1885,7 +1884,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 																const rawNewAngle =
 																	Math.round(
 																		start +
-																			(downEvent.clientY - moveEvent.clientY),
+																		(downEvent.clientY - moveEvent.clientY),
 																	) % max;
 																const newAngle = moveEvent.shiftKey
 																	? rawNewAngle
@@ -1895,7 +1894,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 																	!moveEvent.shiftKey &&
 																	hapticsEnabled &&
 																	project.background.source.type ===
-																		"gradient" &&
+																	"gradient" &&
 																	project.background.source.angle !== newAngle
 																) {
 																	commands.performHapticFeedback(
@@ -2932,8 +2931,7 @@ function ZoomSegmentPreview(props: {
 	createEffect(() => {
 		// TODO: make this not hardcoded
 		const path = convertFileSrc(
-			`${editorInstance.path}/content/segments/segment-${
-				clipSegment()?.recordingSegment ?? 0
+			`${editorInstance.path}/content/segments/segment-${clipSegment()?.recordingSegment ?? 0
 			}/display.mp4`,
 		);
 		video.src = path;
@@ -3141,8 +3139,7 @@ function ZoomSegmentConfig(props: {
 								createEffect(() => {
 									const path = convertFileSrc(
 										// TODO: this shouldn't be so hardcoded
-										`${
-											editorInstance.path
+										`${editorInstance.path
 										}/content/segments/segment-${segmentIndex()}/display.mp4`,
 									);
 									video.src = path;
@@ -3272,7 +3269,7 @@ function ZoomSegmentConfig(props: {
 																x: Math.max(
 																	Math.min(
 																		(moveEvent.clientX - bounds.left) /
-																			bounds.width,
+																		bounds.width,
 																		1,
 																	),
 																	0,
@@ -3280,7 +3277,7 @@ function ZoomSegmentConfig(props: {
 																y: Math.max(
 																	Math.min(
 																		(moveEvent.clientY - bounds.top) /
-																			bounds.height,
+																		bounds.height,
 																		1,
 																	),
 																	0,

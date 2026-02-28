@@ -367,9 +367,11 @@ function Inner() {
 	return (
 		<Show when={!isExportMode()} fallback={<ExportPage />}>
 			<div class="flex flex-col flex-1 min-h-0 animate-in fade-in duration-300">
-				<Header />
+				<div class="fixed top-0 right-0 w-full z-20">
+					<Header />
+				</div>
 				<div
-					class="flex overflow-y-hidden flex-col flex-1 gap-2 pb-4 w-full min-h-0 leading-5"
+					class="flex overflow-y-hidden flex-col flex-1 gap-2 w-full min-h-0 leading-5"
 					data-tauri-drag-region
 				>
 					<div
@@ -382,7 +384,7 @@ function Inner() {
 								"min-height": `${MIN_PLAYER_HEIGHT}px`,
 							}}
 						>
-							<div class="flex flex-col flex-1 rounded-xl border bg-gray-1 dark:bg-gray-2 border-gray-3 overflow-hidden">
+							<div class="flex flex-col flex-1 rounded-xl overflow-hidden pt-13">
 								<PlayerContent />
 								<div
 									role="separator"
@@ -405,7 +407,7 @@ function Inner() {
 							<ConfigSidebar />
 						</div>
 						<div
-							class="flex-none min-h-0 px-2 pb-0.5 overflow-hidden relative"
+							class="flex-none min-h-0 px-2 overflow-hidden relative bg-gray-2/30 border-t border-gray-4"
 							style={{ height: `${timelineHeight()}px` }}
 						>
 							<div class="h-full">

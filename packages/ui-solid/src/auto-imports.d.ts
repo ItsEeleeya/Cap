@@ -98,6 +98,7 @@ declare global {
   const IconLucideMinus: typeof import('~icons/lucide/minus.jsx')['default']
   const IconLucideMonitor: typeof import('~icons/lucide/monitor.jsx')['default']
   const IconLucidePalette: typeof import('~icons/lucide/palette.jsx')['default']
+  const IconLucidePanelLeftOpen: typeof import('~icons/lucide/panel-left-open.jsx')['default']
   const IconLucidePanelRightOpen: typeof import('~icons/lucide/panel-right-open.jsx')['default']
   const IconLucidePlus: typeof import('~icons/lucide/plus.jsx')['default']
   const IconLucideRatio: typeof import('~icons/lucide/ratio.jsx')['default']
