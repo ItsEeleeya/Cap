@@ -1,0 +1,72 @@
+name: Performance Regressions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  performance:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout Cap
+        uses: actions/checkout@v4
+
+      - name: Checkout Fixture Repo
+        uses: actions/checkout@v4
+        with:
+          repository: CapSoftware/cap-performance-fixtures
+          path: performance-fixtures
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: ./.github/actions/setup-rust-cache
+        with:
+          target: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Native dependencies
+        run: node scripts/setup.js
+
+      - name: Add FFmpeg DLLs to PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "${{ github.workspace }}\\target\\ffmpeg\\bin"
+
+      - name: Run performance suite
+        id: performance_suite
+        continue-on-error: true
+        run: cargo run --release -p cap-test -- suite performance --recording-path performance-fixtures/reference-recording.cap --duration 8 --output performance-results.json --gate
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results-${{ matrix.runner }}
+          path: performance-results.json
+
+      - name: Print results
+        if: always()
+        shell: bash
+        run: |
+          if [ -f performance-results.json ]; then
+            cat performance-results.json
+          else
+            echo "performance-results.json not found"
+          fi
+
+      - name: Enforce suite gate
+        if: always() && steps.performance_suite.outcome != 'success'
+        run: exit 1

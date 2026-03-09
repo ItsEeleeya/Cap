@@ -1643,9 +1643,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cap-camera",
+ "cap-editor",
+ "cap-export",
  "cap-media-info",
  "cap-project",
  "cap-recording",
+ "cap-rendering",
  "chrono",
  "cidre",
  "clap",
