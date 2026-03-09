@@ -87,6 +87,8 @@ import {
 	topSlideAnimateClasses,
 } from "./ui";
 import { ProgressiveBlur } from "~/components/ProgressiveMask";
+import Tooltip from "~/components/Tooltip";
+import { SolariumTab, SolariumTabs } from "../solarium/components/SolariumTabs";
 
 const BACKGROUND_SOURCES = {
 	wallpaper: "Wallpaper",
@@ -378,88 +380,174 @@ export function ConfigSidebar() {
 
 	return (
 		<KTabs
-			orientation="vertical"
+			orientation="horizontal"
 			value={editorState.timeline.selection ? undefined : state.selectedTab}
-			class="flex flex-row-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10 fade-mask fade-bottom-10 fade-intensity-80"
+			class="flex flex-col-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10 fade-mask fade-bottom-10 fade-intensity-80"
 		>
-			<KTabs.List class="flex overflow-hidden sticky top-0 right-0 z-60 flex-col items-center text-lg shrink-0 h-fit gap-5 p-1.5 my-auto apple-glass bg-gray-1 rounded-full">
-				<For
-					each={[
-						{ id: TAB_IDS.background, icon: IconCapImage },
-						{
-							id: TAB_IDS.camera,
-							icon: IconCapCamera,
-							disabled: editorInstance.recordings.segments.every(
-								(s) => s.camera === null,
-							),
-						},
-						{ id: TAB_IDS.audio, icon: IconCapAudioOn },
-						{
-							id: TAB_IDS.cursor,
-							icon: IconCapCursor,
-							disabled: !(
-								meta().type === "multiple" && (meta() as any).segments[0].cursor
-							),
-						},
-						{
-							id: "captions" as const,
-							icon: IconCapMessageBubble,
-						},
-						// { id: "hotkeys" as const, icon: IconCapHotkeys },
-					].filter(Boolean)}
-				>
-					{(item) => (
-						<KTabs.Trigger
-							value={item.id}
-							class={cx(
-								"flex relative z-10 flex-1 justify-center items-center transition-colors group disabled:opacity-50 focus:outline-none",
-								editorState.timeline.selection
-									? "text-gray-11"
-									: "text-gray-11 data-selected:text-gray-12",
-							)}
-							onClick={() => {
-								// Clear any active selection first
-								if (editorState.timeline.selection) {
-									setEditorState("timeline", "selection", null);
-								}
-								setState("selectedTab", item.id);
-								scrollRef.scrollTo({
-									top: 0,
-								});
-							}}
-							disabled={item.disabled}
+			<div class="absolute w-104 z-50 top-0 mt-14 flex justify-center">
+				{/* <div class="apple-glass-subdued p-0.5 rounded-full text-xs w-full h-8 flex">
+					<SolariumTabs
+						onSnap={() => commands.performHapticFeedback("alignment", "now")}
+						value={rawOptions.mode}
+						onValueChange={handleValueChange}
+						class="w-full"
+					>
+						<For
+							each={[
+								{ id: TAB_IDS.background, icon: IconCapImage, name: "Background" },
+								{
+									id: TAB_IDS.camera,
+									icon: IconCapCamera,
+									disabled: editorInstance.recordings.segments.every(
+										(s) => s.camera === null,
+									),
+									name: "Camera",
+								},
+								{ id: TAB_IDS.audio, icon: IconCapAudioOn, name: "Audio" },
+								{
+									id: TAB_IDS.cursor,
+									icon: IconCapCursor,
+									disabled: !(
+										meta().type === "multiple" && (meta() as any).segments[0].cursor
+									),
+									name: "Cursor",
+								},
+								{
+									id: "captions" as const,
+									icon: IconCapMessageBubble,
+									name: "Captions"
+								},
+								// { id: "hotkeys" as const, icon: IconCapHotkeys },
+							].filter(Boolean)}
 						>
-							<div
-								class={cx(
-									"flex justify-center relative border-transparent border z-10 items-center rounded-full size-9 transition will-change-transform",
-									state.selectedTab !== item.id &&
-									"group-hover:border-gray-300 group-disabled:border-none",
-								)}
-							>
-								<Dynamic component={item.icon} />
-							</div>
-						</KTabs.Trigger>
-					)}
-				</For>
+							{(item) => (
+								<Tooltip content={item.name} placement="bottom" gutter={10}>
+									<KTabs.Trigger
+										value={item.id}
+										class={cx(
+											"flex relative z-10 flex-1 justify-center items-center transition-colors group disabled:opacity-50 focus:outline-none",
+											editorState.timeline.selection
+												? "text-gray-11"
+												: "apple-vibrancy-fill data-selected:text-gray-12",
+										)}
+										onClick={() => {
+											// Clear any active selection first
+											if (editorState.timeline.selection) {
+												setEditorState("timeline", "selection", null);
+											}
+											setState("selectedTab", item.id);
+											scrollRef.scrollTo({
+												top: 0,
+											});
+										}}
+										disabled={item.disabled}
+									>
+										<div
+											class={cx(
+												"flex justify-center relative border-transparent border z-10 items-center rounded-full w-12 h-8 transition will-change-transform",
+												state.selectedTab !== item.id &&
+												"group-hover:border-gray-300 group-disabled:border-none",
+											)}
+										>
+											<Dynamic component={item.icon} />
+										</div>
+									</KTabs.Trigger>
+								</Tooltip>
+							)}
+						</For>
 
-				{/** Center the indicator with the icon */}
-				<Show when={!editorState.timeline.selection}>
-					<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-out transform-gpu pointer-events-none will-change-transform">
-						<div class="absolute top-1/2 left-1/2 rounded-full transform -translate-x-1/2 -translate-y-1/2 bg-blue-7/80 will-change-transform size-9 apple-glass" />
-					</KTabs.Indicator>
-				</Show>
-			</KTabs.List>
+						<SolariumTab
+							value="studio"
+							class="flex-1 flex justify-center items-center"
+						>
+							<IconCapFilmCut class="size-3.5 invert dark:invert-0" />
+						</SolariumTab>
+					</SolariumTabs>
+				</div> */}
+
+				<KTabs.List class="flex overflow-hidden mb-auto right-auto z-100 flex-row items-center text-lg shrink-0 h-fit gap-4 p-1.5 apple-glass-adaptive bg-gray-1/0 rounded-full">
+					<For
+						each={[
+							{ id: TAB_IDS.background, icon: IconCapImage, name: "Background" },
+							{
+								id: TAB_IDS.camera,
+								icon: IconCapCamera,
+								disabled: editorInstance.recordings.segments.every(
+									(s) => s.camera === null,
+								),
+								name: "Camera",
+							},
+							{ id: TAB_IDS.audio, icon: IconCapAudioOn, name: "Audio" },
+							{
+								id: TAB_IDS.cursor,
+								icon: IconCapCursor,
+								disabled: !(
+									meta().type === "multiple" && (meta() as any).segments[0].cursor
+								),
+								name: "Cursor",
+							},
+							{
+								id: "captions" as const,
+								icon: IconCapMessageBubble,
+								name: "Captions"
+							},
+							// { id: "hotkeys" as const, icon: IconCapHotkeys },
+						].filter(Boolean)}
+					>
+						{(item) => (
+							<Tooltip content={item.name} placement="bottom" gutter={10}>
+								<KTabs.Trigger
+									value={item.id}
+									class={cx(
+										"flex relative z-10 flex-1 justify-center items-center transition-colors group disabled:opacity-50 focus:outline-none",
+										editorState.timeline.selection
+											? "text-gray-11"
+											: "apple-vibrancy-fill data-selected:text-gray-12",
+									)}
+									onClick={() => {
+										// Clear any active selection first
+										if (editorState.timeline.selection) {
+											setEditorState("timeline", "selection", null);
+										}
+										setState("selectedTab", item.id);
+										scrollRef.scrollTo({
+											top: 0,
+										});
+									}}
+									disabled={item.disabled}
+								>
+									<div
+										class={cx(
+											"flex justify-center relative border-transparent border z-10 items-center rounded-full w-12 h-8 transition will-change-transform",
+											state.selectedTab !== item.id &&
+											"group-hover:border-gray-300 group-disabled:border-none",
+										)}
+									>
+										<Dynamic component={item.icon} />
+									</div>
+								</KTabs.Trigger>
+							</Tooltip>
+						)}
+					</For>
+
+					{/** Center the indicator with the icon */}
+					<Show when={!editorState.timeline.selection}>
+						<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-out transform-gpu pointer-events-none will-change-transform">
+							<div class="absolute top-1/2 left-1/2 rounded-full transform -translate-x-1/2 -translate-y-1/2 bg-blue-7/70 will-change-transform w-12 h-8 backdrop-brightness-200 opacity-100" />
+						</KTabs.Indicator>
+					</Show>
+				</KTabs.List>
+
+			</div>
 			<div
 				ref={scrollRef}
-				style={{
-					"--margin-top-scroll": "5px",
-				}}
-				class="custom-scroll overflow-x-hidden overflow-y-scroll text-[0.875rem] flex-1 min-h-0 scrollbar-none pt-13 fade-mask fade-top-20 fade-intensity-100"
+				class="custom-scroll overflow-x-hidden overscroll-contain overflow-y-scroll text-[0.875rem] flex-1 min-h-0 scrollbar-none pt-26 fade-mask fade-top-36 fade-intensity-75"
 				classList={{
 					hidden: !!editorState.timeline.selection,
 				}}
 			>
-				<ProgressiveBlur position="top" blur="xs" height="80px" class="-mt-4 z-20" />
+				<ProgressiveBlur position="top" blur="sm" height="150px" class="-mt-10 z-20" />
+
 				<BackgroundConfig scrollRef={scrollRef} />
 				<CameraConfig scrollRef={scrollRef} />
 				<KTabs.Content
@@ -1427,7 +1515,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 							{(item) => {
 								const el = (props?: object) => (
 									<KTabs.Trigger
-										class="z-10 flex-1 py-2.5 px-2 text-xs text-gray-11  data-selected:border-gray-3 data-selected:bg-gray-3 ui-not-selected:hover:border-gray-7 rounded-[10px] transition-colors duration-200 outline-none border data-selected:text-gray-12 peer"
+										class="z-10 flex-1 py-2.5 px-2 text-xs text-gray-11 data-selected:border-gray-3 bg-gray-2/80 data-selected:bg-gray-3 ui-not-selected:hover:border-gray-7 rounded-2xl transition-colors duration-200 outline-none data-selected:text-gray-12 peer"
 										value={item}
 										{...props}
 									>
@@ -1540,7 +1628,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 						</For>
 					</KTabs.List>
 					{/** Dashed divider */}
-					<div class="my-5 w-full border-t border-dashed border-gray-5" />
+					<div class="my-5 w-full border-t border-gray-5" />
 					<KTabs.Content value="wallpaper">
 						{/** Background Tabs */}
 						<KTabs class="overflow-hidden relative" value={backgroundTab()}>
@@ -1567,7 +1655,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 													)
 												}
 												value={key}
-												class="flex relative z-10 flex-1 justify-center items-center px-4 py-2 bg-transparent rounded-lg border transition-colors duration-200 text-gray-11 ui-not-selected:hover:border-gray-7 data-selected:bg-gray-3 data-selected:border-gray-3 group data-selected:text-gray-12 disabled:opacity-50 focus:outline-none"
+												class="flex relative z-10 flex-1 justify-center items-center px-4 py-2 bg-transparent rounded-xl border transition-colors duration-200 text-gray-11 ui-not-selected:hover:border-gray-7 data-selected:bg-gray-3 data-selected:border-gray-3 group data-selected:text-gray-12 disabled:opacity-50 focus:outline-none"
 											>
 												{value}
 											</KTabs.Trigger>
@@ -1970,7 +2058,7 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 				/>
 			</Field>
 			{/** Dashed divider */}
-			<div class="w-full border-t border-gray-300 border-dashed" />
+			<div class="w-full border-t border-gray-300" />
 			<Field name="Padding" icon={<IconCapPadding class="size-4" />}>
 				<Slider
 					value={[project.background.padding]}
@@ -2313,7 +2401,7 @@ function CameraConfig(props: { scrollRef: HTMLDivElement }) {
 				</div>
 			</Field>
 			{/** Dashed divider */}
-			<div class="w-full border-t border-dashed border-gray-5" />
+			<div class="w-full border-t border-gray-5" />
 			<Field name="Size" icon={<IconCapEnlarge class="size-4" />}>
 				<Slider
 					value={[project.camera.size]}

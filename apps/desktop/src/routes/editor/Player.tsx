@@ -238,7 +238,8 @@ export function PlayerContent() {
 
 	return (
 		<div class="flex flex-col flex-1 min-h-0">
-			<div class="flex items-center justify-between gap-3 p-3 hidden!">
+			{/* TODO: move this */}
+			<div class="flex items-center justify-between gap-3 p-3 hidden">
 				<div class="flex items-center gap-2">
 					<span class="text-xs font-medium text-gray-11">Preview quality</span>
 					<KSelect<{ label: string; value: EditorPreviewQuality }>

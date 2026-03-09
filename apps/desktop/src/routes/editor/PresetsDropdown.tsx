@@ -140,7 +140,7 @@ export function PresetsDropdown() {
 						</MenuItemList>
 						<MenuItemList<typeof KDropdownMenu.Group>
 							as={KDropdownMenu.Group}
-							class="border-t shrink-0"
+							class="border-t border-t-gray-2/40 shrink-0"
 						>
 							<DropdownItem
 								onSelect={() => setDialog({ type: "createPreset", open: true })}

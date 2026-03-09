@@ -400,7 +400,7 @@
 }
 
 @layer utilities {
-	.platform-windows .overflow-y-auto {
+	[platform=windows] .overflow-y-auto {
 		@apply scrollbar-thin scrollbar-track-transparent scrollbar-thumb-black-transparent-40;
 	}
 }

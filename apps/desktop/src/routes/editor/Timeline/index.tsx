@@ -384,17 +384,15 @@ export function Timeline() {
 		// 0px to LEFT_OFFSET: Always black (icons area)
 		// LEFT_OFFSET: Starts fading. If strength is 0 (start), it's black. If strength is 1, it's transparent.
 		// LEFT_OFFSET + FADE_WIDTH: Always black (content fully visible)
-		const leftStops = `black 0px, black ${LEFT_OFFSET}px, ${leftStartColor} ${LEFT_OFFSET}px, black ${
-			LEFT_OFFSET + FADE_WIDTH
-		}px`;
+		const leftStops = `black 0px, black ${LEFT_OFFSET}px, ${leftStartColor} ${LEFT_OFFSET}px, black ${LEFT_OFFSET + FADE_WIDTH
+			}px`;
 
 		// Right stops:
 		// calc(100% - (RIGHT_PADDING + FADE_WIDTH)): Always black (content fully visible)
 		// calc(100% - RIGHT_PADDING): Ends fading. If strength is 0 (end), it's black. If strength is 1, it's transparent.
 		// 100%: Transparent
-		const rightStops = `black calc(100% - ${
-			RIGHT_PADDING + FADE_WIDTH
-		}px), ${rightEndColor} calc(100% - ${RIGHT_PADDING}px), transparent 100%`;
+		const rightStops = `black calc(100% - ${RIGHT_PADDING + FADE_WIDTH
+			}px), ${rightEndColor} calc(100% - ${RIGHT_PADDING}px), transparent 100%`;
 
 		return `linear-gradient(to right, ${leftStops}, ${rightStops})`;
 	};
@@ -406,12 +404,12 @@ export function Timeline() {
 			timelineBounds={timelineBounds}
 		>
 			<div
-				class="pt-8 relative overflow-hidden flex flex-col gap-2 h-full"
+				class="pt-8 relative overflow-hidden flex flex-col gap-2 h-full fade-mask fade-right-5 fade-intensity-50"
 				style={{
-					"padding-left": `${TIMELINE_PADDING}px`,
-					"padding-right": `${TIMELINE_PADDING}px`,
-					"mask-image": maskImage(),
-					"-webkit-mask-image": maskImage(),
+					// "padding-left": `${TIMELINE_PADDING}px`,
+					// "padding-right": `${TIMELINE_PADDING}px`,
+					// "mask-image": maskImage(),
+					// "-webkit-mask-image": maskImage(),
 					"--track-height": trackHeight(),
 				}}
 				onMouseDown={(e) => {
@@ -488,9 +486,8 @@ export function Timeline() {
 								)}
 								style={{
 									left: `${TRACK_GUTTER}px`,
-									transform: `translateX(${
-										(time() - transform().position) / secsPerPixel() - 0.5
-									}px)`,
+									transform: `translateX(${(time() - transform().position) / secsPerPixel() - 0.5
+										}px)`,
 									top: "0px",
 								}}
 							>
@@ -512,7 +509,7 @@ export function Timeline() {
 							left: `${TRACK_GUTTER}px`,
 							transform: `translateX(${Math.min(
 								(editorState.playbackTime - transform().position) /
-									secsPerPixel(),
+								secsPerPixel(),
 								timelineBounds.width ?? 0,
 							)}px)`,
 							top: "0px",
@@ -521,7 +518,7 @@ export function Timeline() {
 						<div class="size-3 bg-[rgb(226,64,64)] rounded-full -mt-2 -ml-[calc(0.37rem-0.5px)]" />
 					</div>
 					<div
-						class="absolute inset-0 overflow-y-auto overflow-x-hidden pr-1"
+						class="absolute inset-0 overflow-y-auto overflow-x-hidden"
 						onWheel={(e) => {
 							if (!e.ctrlKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
 								e.stopPropagation();

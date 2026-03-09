@@ -446,7 +446,7 @@ export function CaptionsTab() {
 					<div class="space-y-4">
 						<div class="space-y-2">
 							<label class="text-xs text-gray-11">Transcription Model</label>
-							<div class="grid grid-cols-2 gap-3">
+							<div class="grid grid-cols-2 gap-3 pt-2">
 								<For each={MODEL_OPTIONS}>
 									{(model) => {
 										const isDownloaded = () =>
@@ -456,10 +456,10 @@ export function CaptionsTab() {
 										return (
 											<button
 												class={cx(
-													"flex flex-col text-left p-3 rounded-lg border transition-all relative",
+													"flex flex-col text-left p-3 rounded-2xl transition-all relative apple-glass-clear",
 													isSelected()
-														? "border-blue-8 bg-blue-3/40"
-														: "border-gray-3 hover:border-gray-5 bg-gray-2",
+														? "bg-blue-3/40"
+														: "bg-gray-2",
 												)}
 												onClick={() => {
 													setSelectedModel(model.name);
@@ -512,7 +512,7 @@ export function CaptionsTab() {
 									</MenuItem>
 								)}
 							>
-								<KSelect.Trigger class="flex flex-row items-center h-9 px-3 gap-2 border rounded-lg border-gray-3 bg-gray-2 w-full text-gray-12 text-sm hover:border-gray-4 hover:bg-gray-3 focus:border-blue-9 focus:ring-1 focus:ring-blue-9 transition-colors">
+								<KSelect.Trigger class="flex flex-row items-center h-9 px-3 gap-2 border rounded-2xl border-gray-3 apple-glass-subdued w-full text-gray-12 text-sm hover:border-gray-4 hover:bg-gray-3 focus:border-blue-9 focus:ring-1 focus:ring-blue-9 transition-colors">
 									<KSelect.Value<string> class="flex-1 text-left truncate">
 										{(state) => {
 											const language = LANGUAGE_OPTIONS.find(
@@ -548,6 +548,7 @@ export function CaptionsTab() {
 									<div class="space-y-2">
 										<Button
 											class="w-full flex items-center justify-center gap-2"
+											variant="prominantGlass"
 											onClick={downloadModel}
 											disabled={isDownloading()}
 										>

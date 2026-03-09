@@ -407,12 +407,10 @@ function Inner() {
 							<ConfigSidebar />
 						</div>
 						<div
-							class="flex-none min-h-0 px-2 overflow-hidden relative bg-gray-2/30 border-t border-gray-4"
+							class="flex-none min-h-0 overflow-hidden relative bg-gray-2/40 border-t border-gray-4"
 							style={{ height: `${timelineHeight()}px` }}
 						>
-							<div class="h-full">
-								<Timeline />
-							</div>
+							<Timeline />
 						</div>
 					</div>
 					<Dialogs />

@@ -7,9 +7,9 @@ const toggleControlStyles = cva(
 	{
 		variants: {
 			size: {
-				sm: "w-9 h-5 p-0.5",
-				md: "w-11 h-6 p-0.5",
-				lg: "w-14 h-7 p-0.75",
+				sm: "w-10 h-5 p-0.5",
+				md: "w-12 h-6 p-0.5",
+				lg: "w-15 h-7 p-0.75",
 			},
 		},
 		defaultVariants: {
@@ -19,13 +19,13 @@ const toggleControlStyles = cva(
 );
 
 const toggleThumbStyles = cva(
-	"bg-white rounded-full transition-transform data-checked:translate-x-[calc(100%)]",
+	"bg-white rounded-full transition-transform data-checked:translate-x-[calc(55%)]",
 	{
 		variants: {
 			size: {
-				sm: "size-4",
-				md: "size-5",
-				lg: "size-6",
+				sm: "size-4 w-6",
+				md: "size-5 w-7",
+				lg: "size-6 w-8",
 			},
 		},
 		defaultVariants: {

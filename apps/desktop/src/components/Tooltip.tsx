@@ -32,7 +32,7 @@ export default function Tooltip(props: Props) {
 				<KTooltip.Content
 					class={
 						APPLE_SUPPORTS_HOSTED_MATERIALS
-							? "apple-glass animte-in z-50 px-1.5 flex items-center py-1 text-xs duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center rounded-full"
+							? "apple-glass-adaptive animte-in z-50 px-1.5 flex items-center py-1 text-xs duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center rounded-full"
 							: "z-50 px-1.5 flex items-center py-1 text-xs border border-gray-3 bg-gray-12 text-gray-1 rounded-md shadow-lg duration-100 animate-in fade-in slide-in-from-top-1 min-w-6 gap-1.5 text-center"
 					}
 				>

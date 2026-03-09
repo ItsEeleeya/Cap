@@ -139,7 +139,7 @@ export function Slider(
 							setDragging(false);
 						}}
 						class={cx(
-							"bg-gray-1 dark:bg-gray-12 border border-gray-3 shadow-md rounded-full outline-none h-4 w-5 -top-[6.3px] data-disabled:bg-gray-9 after:content-[''] after:absolute after:inset-0 after:-m-3 after:cursor-pointer",
+							"bg-gray-1 dark:bg-gray-12 border border-gray-3 shadow-md rounded-full outline-none h-4 w-5.5 -top-[6.3px] data-disabled:bg-gray-9 after:content-[''] after:absolute after:inset-0 after:-m-3 after:cursor-pointer",
 						)}
 					/>
 				</Tooltip>
@@ -271,8 +271,9 @@ export function MenuItem<T extends ValidComponent = "button">(
 			{...props}
 			class={cx(
 				props.class,
-				"flex flex-row shrink-0 items-center gap-1.5 px-[0.675rem] py-1.5 rounded-lg outline-none text-nowrap overflow-hidden text-ellipsis w-full max-w-full",
-				"text-[0.875rem] text-gray-10 disabled:text-gray-10 data-highlighted:bg-gray-3 data-highlighted:text-gray-12",
+				"flex flex-row shrink-0 items-center gap-1.5 px-[0.675rem] py-1.5 rounded-2xl outline-none text-nowrap overflow-hidden text-ellipsis w-full max-w-full",
+				"text-[0.875rem] text-gray-10 data-highlighted:bg-gray-3/20 disabled:text-gray-10 data-highlighted:text-gray-12",
+				"data-highlighted:backdrop-brightness-150",
 			)}
 		/>
 	);
@@ -416,7 +417,7 @@ export function EditorButton<T extends ValidComponent = "button">(
 }
 
 export const dropdownContainerClasses =
-	"z-10 flex flex-col rounded-xl border border-gray-3 bg-gray-1 shadow-s overflow-y-hidden outline-none";
+	"z-10 flex flex-col rounded-3xl bg-gray-1/50 p-0.5 apple-glass overflow-y-hidden outline-none";
 
 export const topLeftAnimateClasses =
 	"data-expanded:animate-in data-expanded:fade-in data-expanded:zoom-in-95 ui-closed:animate-out ui-closed:fade-out ui-closed:zoom-out-95 origin-top-left";
