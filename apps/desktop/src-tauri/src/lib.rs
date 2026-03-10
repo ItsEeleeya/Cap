@@ -3593,8 +3593,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 let app = app.clone();
 
                                 for (id, window) in app.webview_windows() {
-                                    if let Ok(CapWindowId::TargetSelectOverlay { .. }) =
-                                        CapWindowId::from_str(&id)
+                                    if let Ok(CapWindowDef::TargetSelectOverlay { .. }) =
+                                        CapWindowDef::from_str(&id)
                                     {
                                         let _ = window.hide();
                                     }
@@ -3892,7 +3892,7 @@ fn close_target_select_overlays(app: &AppHandle) {
     let focus_manager = app.state::<target_select_overlay::WindowFocusManager>();
 
     for (label, window) in app.webview_windows() {
-        if let Ok(CapWindowId::TargetSelectOverlay { display_id }) = CapWindowId::from_str(&label) {
+        if let Ok(CapWindowDef::TargetSelectOverlay { display_id }) = CapWindowDef::from_str(&label) {
             let _ = window.hide();
             focus_manager.destroy(&display_id, app.global_shortcut());
         }

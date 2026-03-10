@@ -106,7 +106,8 @@ function Inner() {
 	const windowFocus = createWindowFocus();
 
 	createEffect(() => {
-		document.documentElement.classList.toggle("window-focus", windowFocus());
+		document.documentElement.setAttribute("window-focus", String(windowFocus()));
+		console.log(`focus: ${windowFocus()}`);
 	});
 
 	onMount(() => {

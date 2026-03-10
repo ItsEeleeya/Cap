@@ -5,6 +5,7 @@ import {
 import {
 	children,
 	createEffect,
+	createRoot,
 	createSignal,
 	type JSX,
 	onCleanup,
@@ -180,11 +181,10 @@ export function ScrollAreaScrollbar(props: ScrollbarProps) {
 				"--scroll-area-thumb-height": `${state.thumbSize}px`,
 				"--scroll-area-thumb-width": `${state.thumbSize}px`,
 			}}
-			class={`absolute ${
-				orientation === "vertical"
+			class={`absolute ${orientation === "vertical"
 					? "right-1 top-1 bottom-1 w-1"
 					: "left-1 right-1 bottom-1 h-1"
-			} ${props.class ?? ""}`}
+				} ${props.class ?? ""}`}
 		>
 			<ScrollAreaThumb
 				orientation={orientation}
@@ -240,7 +240,7 @@ export function ScrollAreaThumb(props: ThumbProps) {
 					props.viewport.scrollLeft = startScrollX + delta * ratio;
 				}
 			},
-			mouseup: () => {},
+			mouseup: () => { },
 		});
 	};
 
@@ -248,21 +248,20 @@ export function ScrollAreaThumb(props: ThumbProps) {
 		<div
 			ref={ref}
 			data-orientation={props.orientation}
-			class={`absolute rounded bg-base-content/40 hover:bg-base-content/70 transition-colors ${
-				props.class ?? ""
-			}`}
+			class={`absolute rounded bg-base-content/40 hover:bg-base-content/70 transition-colors ${props.class ?? ""
+				}`}
 			style={
 				props.orientation === "vertical"
 					? {
-							top: `${props.pos}px`,
-							height: `${props.size}px`,
-							width: "100%",
-						}
+						top: `${props.pos}px`,
+						height: `${props.size}px`,
+						width: "100%",
+					}
 					: {
-							left: `${props.pos}px`,
-							width: `${props.size}px`,
-							height: "100%",
-						}
+						left: `${props.pos}px`,
+						width: `${props.size}px`,
+						height: "100%",
+					}
 			}
 			onMouseDown={onDown}
 		/>
@@ -443,9 +442,8 @@ export default function VirtualScrollbar(props: Props) {
 			ref={containerRef}
 			data-dragging={state.dragging}
 			data-visible={state.isVisible}
-			class={`fixed pointer-events-auto transition-opacity duration-300 hover:opacity-100 data-[visible=true]:opacity-100 opacity-0 ${
-				props.class || ""
-			}`}
+			class={`fixed pointer-events-auto transition-opacity duration-300 hover:opacity-100 data-[visible=true]:opacity-100 opacity-0 ${props.class || ""
+				}`}
 			onMouseEnter={handleMouseEnter}
 			aria-hidden="true"
 		>

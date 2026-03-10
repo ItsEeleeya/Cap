@@ -311,7 +311,7 @@ export function PlayerContent() {
 						</EditorButton>
 					</div>
 
-					<div class="flex items-center gap-1 justify-center mr-2 p-1 px-2 rounded-xl bg-gray font-mono">
+					<div class="flex items-center gap-1 justify-center mr-2 p-1 px-2 rounded-xl bg-gray tabular-nums">
 						<Time
 							class="text-gray-12"
 							seconds={Math.max(
