@@ -80,6 +80,7 @@ interface Props {
 	isCaptionLoading?: boolean;
 	hasCaptions?: boolean;
 	canRetryProcessing?: boolean;
+	duration?: number | null;
 }
 
 export function HLSVideoPlayer({
@@ -100,6 +101,7 @@ export function HLSVideoPlayer({
 	isCaptionLoading = false,
 	hasCaptions = false,
 	canRetryProcessing = false,
+	duration: fallbackDuration,
 }: Props) {
 	const hlsInstance = useRef<Hls | null>(null);
 	const [currentCue, setCurrentCue] = useState<string>("");
@@ -110,6 +112,7 @@ export function HLSVideoPlayer({
 	const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
 	const [isRetryingProcessing, setIsRetryingProcessing] = useState(false);
 	const [sourceVersion, setSourceVersion] = useState(0);
+	const [playerDuration, setPlayerDuration] = useState(fallbackDuration ?? 0);
 	const queryClient = useQueryClient();
 	const playbackSrc =
 		sourceVersion === 0
@@ -121,6 +124,10 @@ export function HLSVideoPlayer({
 		setVideoLoaded(false);
 		setSourceVersion((current) => current + 1);
 	}, []);
+
+	useEffect(() => {
+		setPlayerDuration(fallbackDuration ?? 0);
+	}, [fallbackDuration]);
 
 	useEffect(() => {
 		const video = videoRef.current;
@@ -152,6 +159,12 @@ export function HLSVideoPlayer({
 			setHasPlayedOnce(true);
 		};
 
+		const handleLoadedMetadata = () => {
+			if (Number.isFinite(video.duration) && video.duration > 0) {
+				setPlayerDuration(video.duration);
+			}
+		};
+
 		const handleError = (e: Event) => {
 			const error = (e.target as HTMLVideoElement).error;
 			console.error("HLSVideoPlayer: Video error detected:", {
@@ -163,10 +176,15 @@ export function HLSVideoPlayer({
 		};
 
 		video.addEventListener("loadeddata", handleLoadedData);
+		video.addEventListener("loadedmetadata", handleLoadedMetadata);
 		video.addEventListener("canplay", handleCanPlay);
 		video.addEventListener("load", handleLoad);
 		video.addEventListener("play", handlePlay);
 		video.addEventListener("error", handleError);
+
+		if (Number.isFinite(video.duration) && video.duration > 0) {
+			setPlayerDuration(video.duration);
+		}
 
 		if (video.readyState >= 2) {
 			setVideoLoaded(true);
@@ -177,6 +195,7 @@ export function HLSVideoPlayer({
 
 		return () => {
 			video.removeEventListener("loadeddata", handleLoadedData);
+			video.removeEventListener("loadedmetadata", handleLoadedMetadata);
 			video.removeEventListener("canplay", handleCanPlay);
 			video.removeEventListener("load", handleLoad);
 			video.removeEventListener("play", handlePlay);
@@ -552,7 +571,7 @@ export function HLSVideoPlayer({
 				isUploadingOrFailed={hasActiveProgress || hasFailedOrError}
 			>
 				<MediaPlayerControlsOverlay />
-				<MediaPlayerSeek />
+				<MediaPlayerSeek fallbackDuration={playerDuration} />
 				<div className="flex gap-2 items-center w-full">
 					<div className="flex flex-1 gap-2 items-center">
 						<MediaPlayerPlay />
@@ -564,7 +583,7 @@ export function HLSVideoPlayer({
 							// enhancedAudioMuted={enhancedAudioMuted}
 							// setEnhancedAudioMuted={setEnhancedAudioMuted}
 						/>
-						<MediaPlayerTime />
+						<MediaPlayerTime fallbackDuration={playerDuration} />
 					</div>
 					<div className="flex gap-2 items-center">
 						{!disableCaptions && (

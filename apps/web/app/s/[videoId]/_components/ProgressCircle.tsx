@@ -27,6 +27,7 @@ type UploadProgress =
 			status: "error";
 			lastUpdated: Date;
 			errorMessage: string | null;
+			hasRawFallback: boolean;
 	  }
 	| {
 			status: "failed";
@@ -38,9 +39,7 @@ export function shouldDeferPlaybackSource(
 ): boolean {
 	return (
 		uploadProgress?.status === "fetching" ||
-		uploadProgress?.status === "uploading" ||
-		uploadProgress?.status === "processing" ||
-		uploadProgress?.status === "generating_thumbnail"
+		uploadProgress?.status === "uploading"
 	);
 }
 
@@ -159,6 +158,7 @@ export function useUploadProgress(
 			status: "error",
 			lastUpdated,
 			errorMessage: Option.getOrNull(query.data.processingError),
+			hasRawFallback: query.data.hasRawFallback,
 		};
 	}
 
@@ -167,6 +167,7 @@ export function useUploadProgress(
 			status: "error",
 			lastUpdated,
 			errorMessage: stalledProcessingMessage,
+			hasRawFallback: query.data.hasRawFallback,
 		};
 	}
 

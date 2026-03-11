@@ -43,6 +43,7 @@ export const ShareVideo = forwardRef<
 		areReactionStampsDisabled?: boolean;
 		aiGenerationStatus?: AiGenerationStatus | null;
 		canRetryProcessing?: boolean;
+		showPlaybackStatusBadge?: boolean;
 	}
 >(
 	(
@@ -55,6 +56,7 @@ export const ShareVideo = forwardRef<
 			areCommentStampsDisabled,
 			areReactionStampsDisabled,
 			canRetryProcessing,
+			showPlaybackStatusBadge = false,
 		},
 		ref,
 	) => {
@@ -176,6 +178,10 @@ export const ShareVideo = forwardRef<
 		const isMp4Source =
 			data.source.type === "desktopMP4" || data.source.type === "webMP4";
 		let videoSrc: string;
+		const rawFallbackSrc =
+			data.source.type === "webMP4"
+				? `/api/playlist?userId=${data.owner.id}&videoId=${data.id}&videoType=raw-preview`
+				: undefined;
 		let enableCrossOrigin = false;
 
 		if (isMp4Source) {
@@ -211,6 +217,9 @@ export const ShareVideo = forwardRef<
 							videoId={data.id}
 							mediaPlayerClassName="w-full h-full max-w-full max-h-full rounded-xl overflow-visible"
 							videoSrc={videoSrc}
+							rawFallbackSrc={rawFallbackSrc}
+							duration={data.duration}
+							showPlaybackStatusBadge={showPlaybackStatusBadge}
 							disableCaptions={areCaptionsDisabled ?? false}
 							disableCommentStamps={areCommentStampsDisabled ?? false}
 							disableReactionStamps={areReactionStampsDisabled ?? false}
@@ -242,6 +251,7 @@ export const ShareVideo = forwardRef<
 							videoId={data.id}
 							mediaPlayerClassName="w-full h-full max-w-full max-h-full rounded-xl"
 							videoSrc={videoSrc}
+							duration={data.duration}
 							disableCaptions={areCaptionsDisabled ?? false}
 							chaptersSrc={areChaptersDisabled ? "" : chaptersUrl || ""}
 							captionsSrc={areCaptionsDisabled ? "" : subtitleUrl || ""}

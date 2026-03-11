@@ -6,6 +6,8 @@ import {
 	generateThumbnail,
 	normalizeVideoInputExtension,
 	processVideo,
+	uploadToS3,
+	withTimeout,
 } from "../../lib/ffmpeg-video";
 import { probeVideo } from "../../lib/ffprobe";
 
@@ -87,6 +89,66 @@ describe("generateThumbnail integration tests", () => {
 });
 
 describe("processVideo integration tests", () => {
+	test("retries transient S3 upload failures", async () => {
+		const originalFetch = globalThis.fetch;
+		let attempts = 0;
+
+		globalThis.fetch = (async () => {
+			attempts++;
+			if (attempts === 1) {
+				const error = new Error(
+					"The socket connection was closed unexpectedly.",
+				);
+				Object.assign(error, { code: "ECONNRESET" });
+				throw error;
+			}
+
+			return new Response(null, {
+				status: 200,
+				statusText: "OK",
+			});
+		}) as typeof fetch;
+
+		try {
+			await uploadToS3(
+				new Uint8Array([1, 2, 3, 4]),
+				"https://uploads.example/result.mp4",
+				"video/mp4",
+			);
+			expect(attempts).toBe(2);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("waits for async cleanup before rejecting timed out work", async () => {
+		let resolveCleanup: (() => void) | undefined;
+		let settled = false;
+		const cleanupFinished = new Promise<void>((resolve) => {
+			resolveCleanup = resolve;
+		});
+
+		const timedOutWork = withTimeout(
+			new Promise<never>(() => {}),
+			1,
+			async () => {
+				await cleanupFinished;
+			},
+		);
+
+		void timedOutWork.catch(() => {
+			settled = true;
+		});
+
+		await Bun.sleep(25);
+		expect(settled).toBe(false);
+
+		resolveCleanup?.();
+
+		await expect(timedOutWork).rejects.toThrow("Operation timed out after 1ms");
+		expect(settled).toBe(true);
+	});
+
 	test("normalizes input extensions", () => {
 		expect(normalizeVideoInputExtension(undefined)).toBe(".mp4");
 		expect(normalizeVideoInputExtension("webm")).toBe(".webm");
@@ -103,7 +165,7 @@ describe("processVideo integration tests", () => {
 			TEST_VIDEO_WITH_AUDIO,
 			metadata,
 			{ maxWidth: 640, maxHeight: 360 },
-			(progress, message) => {
+			(progress, _message) => {
 				expect(progress).toBeGreaterThanOrEqual(lastProgress);
 				progressUpdates.push(progress);
 				lastProgress = progress;

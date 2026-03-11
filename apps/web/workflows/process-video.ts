@@ -56,8 +56,9 @@ export async function processVideoWorkflow(
 			metadata: result.metadata,
 		};
 	} catch (error) {
-		await setProcessingError(videoId, error);
-		throw error;
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		await setProcessingError(videoId, errorMessage);
+		throw new FatalError(errorMessage);
 	}
 }
 
@@ -108,6 +109,9 @@ interface MediaServerProcessResult {
 	};
 }
 
+const MEDIA_SERVER_START_MAX_ATTEMPTS = 6;
+const MEDIA_SERVER_START_RETRY_BASE_MS = 2000;
+
 function getInputExtension(rawFileKey: string): string {
 	const parts = rawFileKey.split(".");
 	const extension = parts.at(-1)?.toLowerCase();
@@ -117,6 +121,83 @@ function getInputExtension(rawFileKey: string): string {
 	}
 
 	return `.${extension}`;
+}
+
+async function waitForRetry(delayMs: number): Promise<void> {
+	await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function startMediaServerProcessJob(
+	mediaServerUrl: string,
+	body: {
+		videoId: string;
+		userId: string;
+		videoUrl: string;
+		outputPresignedUrl: string;
+		thumbnailPresignedUrl: string;
+		webhookUrl: string;
+		inputExtension: string;
+	},
+): Promise<string> {
+	for (let attempt = 0; attempt < MEDIA_SERVER_START_MAX_ATTEMPTS; attempt++) {
+		const response = await fetch(`${mediaServerUrl}/video/process`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+		if (response.ok) {
+			const { jobId } = (await response.json()) as { jobId: string };
+			return jobId;
+		}
+
+		const errorData = (await response.json().catch(() => ({}))) as {
+			error?: string;
+			code?: string;
+			details?: string;
+			instanceId?: string;
+			pid?: number;
+			activeVideoProcesses?: number;
+			maxConcurrentVideoProcesses?: number;
+			jobCount?: number;
+		};
+		const baseErrorMessage =
+			errorData.error ||
+			errorData.details ||
+			"Video processing failed to start";
+		const busyDiagnostics =
+			errorData.code === "SERVER_BUSY"
+				? [
+						errorData.instanceId ? `instance=${errorData.instanceId}` : null,
+						typeof errorData.pid === "number" ? `pid=${errorData.pid}` : null,
+						typeof errorData.activeVideoProcesses === "number" &&
+						typeof errorData.maxConcurrentVideoProcesses === "number"
+							? `active=${errorData.activeVideoProcesses}/${errorData.maxConcurrentVideoProcesses}`
+							: null,
+						typeof errorData.jobCount === "number"
+							? `jobCount=${errorData.jobCount}`
+							: null,
+					]
+						.filter(Boolean)
+						.join(", ")
+				: "";
+		const errorMessage = busyDiagnostics
+			? `${baseErrorMessage} (${busyDiagnostics})`
+			: baseErrorMessage;
+		const shouldRetry =
+			response.status === 503 &&
+			(errorData.code === "SERVER_BUSY" ||
+				errorMessage.includes("Server is busy"));
+
+		if (shouldRetry && attempt < MEDIA_SERVER_START_MAX_ATTEMPTS - 1) {
+			await waitForRetry(MEDIA_SERVER_START_RETRY_BASE_MS * 2 ** attempt);
+			continue;
+		}
+
+		throw new Error(errorMessage);
+	}
+
+	throw new Error("Video processing failed to start");
 }
 
 async function processVideoOnMediaServer(
@@ -159,29 +240,15 @@ async function processVideoOnMediaServer(
 
 	const webhookUrl = `${webhookBaseUrl}/api/webhooks/media-server/progress`;
 
-	const response = await fetch(`${mediaServerUrl}/video/process`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			videoId,
-			userId,
-			videoUrl: rawVideoUrl,
-			outputPresignedUrl,
-			thumbnailPresignedUrl,
-			webhookUrl,
-			inputExtension: getInputExtension(rawFileKey),
-		}),
+	const jobId = await startMediaServerProcessJob(mediaServerUrl, {
+		videoId,
+		userId,
+		videoUrl: rawVideoUrl,
+		outputPresignedUrl,
+		thumbnailPresignedUrl,
+		webhookUrl,
+		inputExtension: getInputExtension(rawFileKey),
 	});
-
-	if (!response.ok) {
-		const errorData = await response.json().catch(() => ({}));
-		throw new Error(
-			(errorData as { error?: string }).error ||
-				"Video processing failed to start",
-		);
-	}
-
-	const { jobId } = (await response.json()) as { jobId: string };
 
 	const result = await pollForCompletion(mediaServerUrl, jobId);
 
@@ -286,11 +353,9 @@ async function cleanupRawUpload(
 
 async function setProcessingError(
 	videoId: string,
-	error: unknown,
+	errorMessage: string,
 ): Promise<void> {
 	"use step";
-
-	const message = error instanceof Error ? error.message : String(error);
 
 	await db()
 		.update(videoUploads)
@@ -298,7 +363,7 @@ async function setProcessingError(
 			phase: "error",
 			processingProgress: 0,
 			processingMessage: "Video processing failed",
-			processingError: message,
+			processingError: errorMessage,
 			updatedAt: new Date(),
 		})
 		.where(eq(videoUploads.videoId, videoId as Video.VideoId));

@@ -81,6 +81,11 @@ const postJson = async <TResponse>(
 	return (await response.json()) as TResponse;
 };
 
+const normalizeMultipartContentType = (mimeType: string) => {
+	const normalized = mimeType.split(";")[0]?.trim();
+	return normalized || "application/octet-stream";
+};
+
 export const initiateMultipartUpload = async ({
 	videoId,
 	contentType,
@@ -92,7 +97,11 @@ export const initiateMultipartUpload = async ({
 }) => {
 	const result = await postJson<{ uploadId: string }>(
 		"/api/upload/multipart/initiate",
-		{ videoId, contentType, subpath },
+		{
+			videoId,
+			contentType: normalizeMultipartContentType(contentType),
+			subpath,
+		},
 	);
 
 	if (!result.uploadId) {
@@ -125,7 +134,7 @@ const completeMultipartUpload = async (
 	uploadId: string,
 	parts: UploadedPartPayload[],
 	meta: MultipartCompletePayload,
-) => {
+): Promise<{ processingStarted: boolean }> => {
 	try {
 		const response = await postJson<{
 			success: boolean;
@@ -141,14 +150,10 @@ const completeMultipartUpload = async (
 			fps: meta.fps,
 		});
 
-		if (response.processingStarted === false) {
-			throw new ProcessingStartError();
-		}
+		return {
+			processingStarted: response.processingStarted !== false,
+		};
 	} catch (error) {
-		if (error instanceof ProcessingStartError) {
-			throw error;
-		}
-
 		if (error instanceof HttpRequestError && error.status < 500) {
 			throw error;
 		}
@@ -205,6 +210,7 @@ export class InstantRecordingUploader {
 		(error: CancelledUploadError) => void
 	>();
 	private readonly stallTimeouts = new Set<number>();
+	private processingStarted = true;
 
 	constructor(options: {
 		videoId: VideoId;
@@ -573,9 +579,6 @@ export class InstantRecordingUploader {
 			xhr.open("PUT", url);
 			xhr.responseType = "text";
 			xhr.timeout = PART_UPLOAD_REQUEST_TIMEOUT_MS;
-			if (this.mimeType) {
-				xhr.setRequestHeader("Content-Type", this.mimeType);
-			}
 			this.activeRequests.set(partNumber, xhr);
 
 			this.updateChunkState(partNumber, {
@@ -700,7 +703,7 @@ export class InstantRecordingUploader {
 			throw new Error("No uploaded parts available for completion");
 		}
 
-		await completeMultipartUpload(
+		const completionResult = await completeMultipartUpload(
 			this.videoId,
 			this.uploadId,
 			[...this.parts].sort((left, right) => left.partNumber - right.partNumber),
@@ -712,6 +715,7 @@ export class InstantRecordingUploader {
 				subpath: options.subpath,
 			},
 		);
+		this.processingStarted = completionResult.processingStarted;
 
 		this.finished = true;
 		this.uploadedBytes = this.finalTotalBytes ?? this.uploadedBytes;
@@ -722,6 +726,10 @@ export class InstantRecordingUploader {
 			thumbnailUrl: undefined,
 		});
 		await this.sendProgressUpdate(this.uploadedBytes, this.uploadedBytes);
+	}
+
+	getProcessingStarted() {
+		return this.processingStarted;
 	}
 
 	async cancel() {
