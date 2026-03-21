@@ -22,6 +22,7 @@ import IconCapChevronDown from "~icons/cap/chevron-down";
 import IconCapCircleCheck from "~icons/cap/circle-check";
 import IconLucideCheck from "~icons/lucide/check";
 import IconLucideDownload from "~icons/lucide/download";
+import { getColorPreviewBorderColor } from "./color-utils";
 import { useEditorContext } from "./context";
 import { TextInput } from "./TextInput";
 import {
@@ -131,6 +132,7 @@ function RgbInput(props: { value: string; onChange: (value: string) => void }) {
 				class="size-12 rounded-lg"
 				style={{
 					"background-color": text(),
+					"box-shadow": `inset 0 0 0 1px ${getColorPreviewBorderColor(text())}`,
 				}}
 				onClick={() => colorInput.click()}
 			/>

@@ -3,6 +3,7 @@ import { ToggleButton as KToggleButton } from "@kobalte/core/toggle-button";
 import { createElementBounds } from "@solid-primitives/bounds";
 import { debounce } from "@solid-primitives/scheduled";
 import { Menu } from "@tauri-apps/api/menu";
+import { type as ostype } from "@tauri-apps/plugin-os";
 import { cx } from "cva";
 import { createEffect, createSignal, onMount, Show } from "solid-js";
 
@@ -51,6 +52,11 @@ export function PlayerContent() {
 		{ label: "Half", value: "half" as EditorPreviewQuality },
 		{ label: "Quarter", value: "quarter" as EditorPreviewQuality },
 	];
+
+	const zoomHint = () =>
+		ostype() === "windows"
+			? "Hold Ctrl and scroll, or press Ctrl +/- to zoom"
+			: "Pinch, or press Cmd +/- to zoom";
 
 	// Load captions on mount
 	onMount(async () => {
@@ -430,6 +436,9 @@ export function PlayerContent() {
 							)} seconds visible`
 						}
 					/>
+				</div>
+				<div class="absolute right-2 bottom-1 text-[11px] leading-none text-right text-gray-9 pointer-events-none whitespace-nowrap">
+					{zoomHint()}
 				</div>
 			</div>
 		</div>
