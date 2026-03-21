@@ -13,7 +13,9 @@ import "unfonts.css";
 import "./styles/theme.css";
 
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
-import SolariumDebugLibrary, { createWindowFocus } from "./routes/debug-library";
+import SolariumDebugLibrary, {
+	createWindowFocus,
+} from "./routes/debug-library";
 import SolariumCapMain from "./routes/solarium/cap-main";
 import SolariumRecordingControls from "./routes/solarium/recording-controls";
 import { generalSettingsStore } from "./store";
@@ -106,7 +108,10 @@ function Inner() {
 	const windowFocus = createWindowFocus();
 
 	createEffect(() => {
-		document.documentElement.setAttribute("window-focus", String(windowFocus()));
+		document.documentElement.setAttribute(
+			"window-focus",
+			String(windowFocus()),
+		);
 		console.log(`focus: ${windowFocus()}`);
 	});
 
@@ -245,7 +250,7 @@ function createThemeListener(currentWindow: WebviewWindow) {
 			} else {
 				localStorage.setItem("cap-theme", appTheme);
 			}
-		} catch { }
+		} catch {}
 
 		commands.setTheme(appTheme).then(() => {
 			document.documentElement.classList.toggle("dark", isDark);

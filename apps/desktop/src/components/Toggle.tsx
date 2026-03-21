@@ -52,13 +52,19 @@ export function _Toggle(
 export function Toggle(
 	props: ComponentProps<typeof KSwitch> & { size?: "sm" | "md" | "lg" },
 ) {
-	const [local, others] = splitProps(props, ["size", "checked", "onChange", "class"]);
+	const [local, others] = splitProps(props, [
+		"size",
+		"checked",
+		"onChange",
+		"class",
+	]);
 
 	const [checked, setChecked] = createSignal(local.checked ?? false);
 
 	// travel = track_width - thumb_width - ms-0.5 offset
 	// sm: 32 - 16.5 - 2 ≈ 12px  md: 40 - 22 - 2 = 16px  lg: 48 - 27.5 - 2 ≈ 14px
-	const travel = () => local.size === "sm" ? 12 : local.size === "lg" ? 14 : 16;
+	const travel = () =>
+		local.size === "sm" ? 12 : local.size === "lg" ? 14 : 16;
 
 	return (
 		<KSwitch
@@ -76,8 +82,10 @@ export function Toggle(
 					"relative flex shrink-0 items-center overflow-hidden rounded-full cursor-pointer",
 					"transition-colors duration-[250ms] ease-out",
 					"bg-gray-5 data-[checked]:bg-blue-9",
-					local.size === "sm" ? "h-4 w-8"
-						: local.size === "lg" ? "h-6 w-12"
+					local.size === "sm"
+						? "h-4 w-8"
+						: local.size === "lg"
+							? "h-6 w-12"
 							: "h-5 w-10",
 				)}
 			>
@@ -86,12 +94,19 @@ export function Toggle(
 						// ms-0.5 = 2px starting offset, pill shape matching HeroUI thumb ratio
 						"ms-0.5 shrink-0 rounded-full bg-white shadow-sm will-change-transform",
 						"transition-[background-color] duration-200",
-						local.size === "sm" ? "h-3 w-[0.9375rem]"    // ~10.5px × 15px
-							: local.size === "lg" ? "h-5 w-[1.5625rem]"  // ~20px × 25px
-								: "h-4 w-[1.25rem]",                          // 16px × 20px
+						local.size === "sm"
+							? "h-3 w-[0.9375rem]" // ~10.5px × 15px
+							: local.size === "lg"
+								? "h-5 w-[1.5625rem]" // ~20px × 25px
+								: "h-4 w-[1.25rem]", // 16px × 20px
 					)}
 					animate={{ x: checked() ? travel() : 0 }}
-					transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.7 }}
+					transition={{
+						type: "spring",
+						stiffness: 500,
+						damping: 35,
+						mass: 0.7,
+					}}
 				/>
 			</KSwitch.Control>
 		</KSwitch>

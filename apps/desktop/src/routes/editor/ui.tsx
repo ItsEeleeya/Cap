@@ -450,7 +450,6 @@ export function ComingSoonTooltip(
 	);
 }
 
-
 type SliderFieldProps = {
 	label: string;
 	value: number[];
@@ -478,17 +477,23 @@ export function SliderField(
 	const isDefault = () =>
 		props.value?.every((v, i) => v === props.defaultValue?.[i]);
 
-	const [local, others] = splitProps(
-		props,
-		[
-			"name", "icon", "class", "disabled", "history", "formatTooltip", "children", "as"
-		],
-	);
+	const [local, others] = splitProps(props, [
+		"name",
+		"icon",
+		"class",
+		"disabled",
+		"history",
+		"formatTooltip",
+		"children",
+		"as",
+	]);
 
 	return (
 		<div class="flex flex-col gap-1.5">
 			<div class="flex items-center gap-2">
-				<span class="text-sm font-medium text-gray-12 shrink-0">{props.label}</span>
+				<span class="text-sm font-medium text-gray-12 shrink-0">
+					{props.label}
+				</span>
 				<div class="flex-1" />
 				<KNumberField
 					// changeOnWheel

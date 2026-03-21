@@ -475,9 +475,7 @@ export function CaptionsTab() {
 											<button
 												class={cx(
 													"flex flex-col text-left p-3 rounded-2xl transition-all relative apple-glass-clear",
-													isSelected()
-														? "bg-blue-3/40"
-														: "bg-gray-2",
+													isSelected() ? "bg-blue-3/40" : "bg-gray-2",
 												)}
 												onClick={() => {
 													setSelectedModel(model.name);

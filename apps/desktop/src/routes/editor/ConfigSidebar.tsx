@@ -97,6 +97,7 @@ import { ProgressiveBlur } from "~/components/ProgressiveMask";
 import Tooltip from "~/components/Tooltip";
 import { AnimatePresence, MotionConfig, motion } from "motion-solid";
 import VirtualScrollbar from "~/components/ScrollView";
+import { GlassEffectContainer } from "../solarium/components/Material";
 
 const BACKGROUND_SOURCES = {
 	wallpaper: "Wallpaper",
@@ -281,11 +282,11 @@ const findCursorPreset = (
 		(option) =>
 			option.preset &&
 			Math.abs(option.preset.tension - values.tension) <=
-			CURSOR_PRESET_TOLERANCE.tension &&
+				CURSOR_PRESET_TOLERANCE.tension &&
 			Math.abs(option.preset.mass - values.mass) <=
-			CURSOR_PRESET_TOLERANCE.mass &&
+				CURSOR_PRESET_TOLERANCE.mass &&
 			Math.abs(option.preset.friction - values.friction) <=
-			CURSOR_PRESET_TOLERANCE.friction,
+				CURSOR_PRESET_TOLERANCE.friction,
 	);
 
 	return preset?.value ?? null;
@@ -373,10 +374,16 @@ export function ConfigSidebar() {
 			class="flex flex-col-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10"
 		>
 			<div class="absolute w-104 z-50 top-0 mt-14 flex justify-center">
+				<GlassEffectContainer class="rounded-full flex overflow-hidden mb-auto right-auto z-100 flex-row items-center text-lg shrink-0 h-10 gap-4 p-1.5 w-10 hover:bg-white/5"></GlassEffectContainer>
+
 				<KTabs.List class="flex overflow-hidden mb-auto right-auto z-100 flex-row items-center text-lg shrink-0 h-fit gap-4 p-1.5 apple-glass-adaptive-stateful rounded-full ">
 					<For
 						each={[
-							{ id: TAB_IDS.background, icon: IconCapImage, name: "Background" },
+							{
+								id: TAB_IDS.background,
+								icon: IconCapImage,
+								name: "Background",
+							},
 							{
 								id: TAB_IDS.camera,
 								icon: IconCapCamera,
@@ -390,14 +397,15 @@ export function ConfigSidebar() {
 								id: TAB_IDS.cursor,
 								icon: IconCapCursor,
 								disabled: !(
-									meta().type === "multiple" && (meta() as any).segments[0].cursor
+									meta().type === "multiple" &&
+									(meta() as any).segments[0].cursor
 								),
 								name: "Cursor",
 							},
 							{
 								id: "captions" as const,
 								icon: IconCapMessageBubble,
-								name: "Captions"
+								name: "Captions",
 							},
 							// { id: "hotkeys" as const, icon: IconCapHotkeys },
 						].filter(Boolean)}
@@ -428,7 +436,7 @@ export function ConfigSidebar() {
 										class={cx(
 											"flex justify-center relative border-transparent border z-10 items-center rounded-full w-12 h-8 transition will-change-transform",
 											state.selectedTab !== item.id &&
-											"group-hover:border-gray-300 group-disabled:border-none",
+												"group-hover:border-gray-300 group-disabled:border-none",
 										)}
 									>
 										<Dynamic component={item.icon} />
@@ -445,7 +453,6 @@ export function ConfigSidebar() {
 						</KTabs.Indicator>
 					</Show>
 				</KTabs.List>
-
 			</div>
 			<div class="relative flex-1 min-h-0">
 				<div
@@ -455,7 +462,12 @@ export function ConfigSidebar() {
 						hidden: !!editorState.timeline.selection,
 					}}
 				>
-					<ProgressiveBlur position="top" blur="xs" height="180px" class="-mt-10 z-10" />
+					<ProgressiveBlur
+						position="top"
+						blur="xs"
+						height="180px"
+						class="-mt-10 z-10"
+					/>
 
 					<BackgroundConfig scrollRef={scrollRef} />
 					<CameraConfig scrollRef={scrollRef} />
@@ -653,7 +665,11 @@ export function ConfigSidebar() {
 											value={[cursorIdleDelay()]}
 											onChange={(v) => {
 												const rounded = clampIdleDelay(v[0]);
-												setProject("cursor", "hideWhenIdleDelay" as any, rounded);
+												setProject(
+													"cursor",
+													"hideWhenIdleDelay" as any,
+													rounded,
+												);
 											}}
 											minValue={0.5}
 											maxValue={5}
@@ -821,7 +837,11 @@ export function ConfigSidebar() {
 					</KTabs.Content>
 				</div>
 
-				<VirtualScrollbar target={scrollRef} hideDelay={1200} class="absolute top-28 bottom-2 right-0 w-1 hover:w-2 z-11" />
+				<VirtualScrollbar
+					target={scrollRef}
+					hideDelay={1200}
+					class="absolute top-28 bottom-2 right-0 w-1 hover:w-2 z-11"
+				/>
 			</div>
 
 			<div
@@ -1547,13 +1567,17 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 								ref={setBackgroundRef}
 								class="flex overflow-x-auto overscroll-contain relative z-10 flex-row gap-2 items-center mb-3 text-xs hide-scroll"
 								style={{
-									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
-										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
-										}), transparent)`,
+									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${
+										scrollX() > 0 ? "24px" : "0"
+									}, black calc(100% - ${
+										reachedEndOfScroll() ? "0px" : "24px"
+									}), transparent)`,
 
-									"mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
-										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
-										}), transparent);`,
+									"mask-image": `linear-gradient(to right, transparent, black ${
+										scrollX() > 0 ? "24px" : "0"
+									}, black calc(100% - ${
+										reachedEndOfScroll() ? "0px" : "24px"
+									}), transparent);`,
 								}}
 							>
 								<For each={Object.entries(BACKGROUND_THEMES)}>
@@ -1580,10 +1604,10 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 							value={
 								project.background.source.type === "wallpaper"
 									? (wallpapers()?.find((w) =>
-										(
-											project.background.source as { path?: string }
-										).path?.includes(w.id),
-									)?.url ?? undefined)
+											(
+												project.background.source as { path?: string }
+											).path?.includes(w.id),
+										)?.url ?? undefined)
 									: undefined
 							}
 							onChange={(photoUrl) => {
@@ -2816,7 +2840,8 @@ function ZoomSegmentPreview(props: {
 	createEffect(() => {
 		// TODO: make this not hardcoded
 		const path = convertFileSrc(
-			`${editorInstance.path}/content/segments/segment-${clipSegment()?.recordingSegment ?? 0
+			`${editorInstance.path}/content/segments/segment-${
+				clipSegment()?.recordingSegment ?? 0
 			}/display.mp4`,
 		);
 		video.src = path;
@@ -3024,7 +3049,8 @@ function ZoomSegmentConfig(props: {
 								createEffect(() => {
 									const path = convertFileSrc(
 										// TODO: this shouldn't be so hardcoded
-										`${editorInstance.path
+										`${
+											editorInstance.path
 										}/content/segments/segment-${segmentIndex()}/display.mp4`,
 									);
 									video.src = path;
@@ -3154,7 +3180,7 @@ function ZoomSegmentConfig(props: {
 																x: Math.max(
 																	Math.min(
 																		(moveEvent.clientX - bounds.left) /
-																		bounds.width,
+																			bounds.width,
 																		1,
 																	),
 																	0,
@@ -3162,7 +3188,7 @@ function ZoomSegmentConfig(props: {
 																y: Math.max(
 																	Math.min(
 																		(moveEvent.clientY - bounds.top) /
-																		bounds.height,
+																			bounds.height,
 																		1,
 																	),
 																	0,

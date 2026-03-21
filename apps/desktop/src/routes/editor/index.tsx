@@ -16,7 +16,7 @@ export default function () {
 		commands.setWindowTransparent(transparent);
 		getCurrentWindow().setEffects({
 			// effects: transparent ? [Effect.HudWindow] : [],
-			effects: [Effect.HudWindow]
+			effects: [Effect.HudWindow],
 		});
 	});
 

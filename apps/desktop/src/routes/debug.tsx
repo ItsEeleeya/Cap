@@ -22,7 +22,9 @@ export default function Debug() {
 	const [version, setVersion] = createSignal<string>("");
 	const [updateStatus, setUpdateStatus] = createSignal<string>("");
 	const [isChecking, setIsChecking] = createSignal(false);
-	const [visualPlatform, setVisualPlatform] = createSignal(document.documentElement.getAttribute("platform")! as VisualPlatform);
+	const [visualPlatform, setVisualPlatform] = createSignal(
+		document.documentElement.getAttribute("platform")! as VisualPlatform,
+	);
 
 	onMount(async () => {
 		const v = await getVersion();
@@ -141,16 +143,18 @@ export default function Debug() {
 			<h2 class="text-2xl font-bold">Visual Platform</h2>
 			<div class="flex gap-2 pt-2">
 				<For each={["macos", "windows", "linux"]}>
-					{(v) => <button
-						class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
-						onClick={() => {
-							setVisualPlatform(v as VisualPlatform);
-							document.documentElement.setAttribute("platform", v);
-						}}
-						classList={{ "outline": visualPlatform() === v }}
-					>
-						{v}
-					</button>}
+					{(v) => (
+						<button
+							class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+							onClick={() => {
+								setVisualPlatform(v as VisualPlatform);
+								document.documentElement.setAttribute("platform", v);
+							}}
+							classList={{ outline: visualPlatform() === v }}
+						>
+							{v}
+						</button>
+					)}
 				</For>
 			</div>
 

@@ -313,8 +313,7 @@ export function PlayerContent() {
 							onMouseEnter={preloadCropVideoFull}
 							onFocus={preloadCropVideoFull}
 							leftIcon={<IconCapCrop class="h-full text-gray-12" />}
-						>
-						</EditorButton>
+						></EditorButton>
 					</div>
 
 					<div class="flex items-center gap-1 justify-center mr-2 p-1 px-2 rounded-xl bg-gray tabular-nums">

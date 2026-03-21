@@ -22,11 +22,11 @@
 	-apple-visual-effect: -apple-system-glass-material;
 }
 
-[window-focus=true] .apple-glass-adaptive-stateful {
+[window-focus="true"] .apple-glass-adaptive-stateful {
 	-apple-visual-effect: -apple-system-glass-material;
 }
 
-[window-focus=false] .apple-glass-adaptive-stateful {
+[window-focus="false"] .apple-glass-adaptive-stateful {
 	-apple-visual-effect: -apple-system-glass-material-subdued;
 }
 

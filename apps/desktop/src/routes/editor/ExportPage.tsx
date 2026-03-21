@@ -43,18 +43,18 @@ import { Dialog, EditorButton, Field } from "./ui";
 import { SolariumToolbarButtonContainer } from "../solarium/components";
 import { Toggle } from "~/components/Toggle";
 
-class SilentError extends Error { }
+class SilentError extends Error {}
 
 export const COMPRESSION_OPTIONS: Array<{
 	label: string;
 	value: ExportCompression;
 	bpp: number;
 }> = [
-		{ label: "Maximum", value: "Maximum", bpp: 0.3 },
-		{ label: "Social Media", value: "Social", bpp: 0.15 },
-		{ label: "Web", value: "Web", bpp: 0.08 },
-		{ label: "Potato", value: "Potato", bpp: 0.04 },
-	];
+	{ label: "Maximum", value: "Maximum", bpp: 0.3 },
+	{ label: "Social Media", value: "Social", bpp: 0.15 },
+	{ label: "Web", value: "Web", bpp: 0.08 },
+	{ label: "Potato", value: "Potato", bpp: 0.04 },
+];
 
 const COMPRESSION_TO_BPP: Record<ExportCompression, number> = {
 	Maximum: 0.3,
@@ -364,25 +364,25 @@ export function ExportPage() {
 			projectPath,
 			settings.format === "Mp4"
 				? {
-					format: "Mp4",
-					fps: settings.fps,
-					resolution_base: {
-						x: settings.resolution.width,
-						y: settings.resolution.height,
-					},
-					compression: settings.compression,
-					custom_bpp: customBpp,
-					force_ffmpeg_decoder: forceFfmpegDecoder(),
-				}
+						format: "Mp4",
+						fps: settings.fps,
+						resolution_base: {
+							x: settings.resolution.width,
+							y: settings.resolution.height,
+						},
+						compression: settings.compression,
+						custom_bpp: customBpp,
+						force_ffmpeg_decoder: forceFfmpegDecoder(),
+					}
 				: {
-					format: "Gif",
-					fps: settings.fps,
-					resolution_base: {
-						x: settings.resolution.width,
-						y: settings.resolution.height,
+						format: "Gif",
+						fps: settings.fps,
+						resolution_base: {
+							x: settings.resolution.width,
+							y: settings.resolution.height,
+						},
+						quality: null,
 					},
-					quality: null,
-				},
 			onProgress,
 		);
 		cancelCurrentExport = cancel;
@@ -446,7 +446,8 @@ export function ExportPage() {
 		onSuccess() {
 			setExportState({ type: "done" });
 			toast.success(
-				`${settings.format === "Gif" ? "GIF" : "Recording"
+				`${
+					settings.format === "Gif" ? "GIF" : "Recording"
 				} exported to clipboard`,
 			);
 		},
@@ -566,17 +567,17 @@ export function ExportPage() {
 
 			const result = meta().sharing
 				? await commands.uploadExportedVideo(
-					projectPath,
-					"Reupload",
-					uploadChannel,
-					settings.organizationId ?? null,
-				)
+						projectPath,
+						"Reupload",
+						uploadChannel,
+						settings.organizationId ?? null,
+					)
 				: await commands.uploadExportedVideo(
-					projectPath,
-					{ Initial: { pre_created_video: null } },
-					uploadChannel,
-					settings.organizationId ?? null,
-				);
+						projectPath,
+						{ Initial: { pre_created_video: null } },
+						uploadChannel,
+						settings.organizationId ?? null,
+					);
 
 			if (result === "NotAuthenticated")
 				throw new Error("You need to sign in to share recordings");
@@ -616,7 +617,10 @@ export function ExportPage() {
 	};
 
 	return (
-		<div data-tauri-drag-region class="flex flex-col h-full bg-gray-1 overflow-hidden">
+		<div
+			data-tauri-drag-region
+			class="flex flex-col h-full bg-gray-1 overflow-hidden"
+		>
 			<div
 				data-tauri-drag-region
 				class="absolute top-0 right-0 flex flex-row items-start w-full h-13 shrink-0 z-50"
@@ -935,10 +939,10 @@ export function ExportPage() {
 										settings.format === "Gif"
 											? [RESOLUTION_OPTIONS._720p, RESOLUTION_OPTIONS._1080p]
 											: [
-												RESOLUTION_OPTIONS._720p,
-												RESOLUTION_OPTIONS._1080p,
-												RESOLUTION_OPTIONS._4k,
-											]
+													RESOLUTION_OPTIONS._720p,
+													RESOLUTION_OPTIONS._1080p,
+													RESOLUTION_OPTIONS._4k,
+												]
 									}
 								>
 									{(option) => (
@@ -1029,9 +1033,7 @@ export function ExportPage() {
 									<span>Larger file</span>
 								</div>
 
-								<div
-									class="flex items-center gap-2 mt-3 text-xs text-gray-11"
-								>
+								<div class="flex items-center gap-2 mt-3 text-xs text-gray-11">
 									<Toggle
 										size="sm"
 										checked={advancedMode()}
@@ -1506,7 +1508,8 @@ export function ExportPage() {
 														}, 2000);
 														await commands.copyVideoToClipboard(path);
 														toast.success(
-															`${settings.format === "Gif" ? "GIF" : "Video"
+															`${
+																settings.format === "Gif" ? "GIF" : "Video"
 															} copied to clipboard`,
 														);
 													}
@@ -1550,14 +1553,15 @@ function RenderProgress(props: { state: RenderState; format?: ExportFormat }) {
 			amount={
 				props.state.type === "rendering"
 					? (props.state.progress.renderedCount /
-						props.state.progress.totalFrames) *
-					100
+							props.state.progress.totalFrames) *
+						100
 					: 0
 			}
 			label={
 				props.state.type === "rendering"
-					? `Rendering ${props.format === "Gif" ? "GIF" : "video"} (${props.state.progress.renderedCount
-					}/${props.state.progress.totalFrames} frames)`
+					? `Rendering ${props.format === "Gif" ? "GIF" : "video"} (${
+							props.state.progress.renderedCount
+						}/${props.state.progress.totalFrames} frames)`
 					: "Preparing to render..."
 			}
 		/>
