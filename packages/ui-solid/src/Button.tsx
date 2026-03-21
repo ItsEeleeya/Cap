@@ -27,6 +27,8 @@ const styles = cva(
 				radialblue:
 					"text-gray-50 border button-gradient-border shadow-[0_0_0_1px] shadow-blue-400 disabled:bg-gray-1 border-0 [background:radial-gradient(90%_100%_at_15%_12%,#9BC4FF_0%,#3588FF_100%)] border-transparent hover:opacity-80",
 				prominantGlass: "bg-gray-12/90 text-gray-1 disabled:bg-gray-6 disabled:text-gray-9 outline-none apple-glass",
+				secondaryGlass: "bg-gray-5/90 text-gray-12 disabled:bg-gray-6 disabled:text-gray-9 outline-none apple-glass",
+				blueGlass: "bg-blue-600/90 text-gray-12 disabled:bg-gray-6 disabled:text-gray-9 outline-none apple-glass",
 			},
 			size: {
 				xs: "text-[0.75rem] px-2 h-5",

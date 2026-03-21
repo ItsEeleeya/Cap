@@ -34,7 +34,7 @@ export const APPLE_SUPPORTS_HOSTED_MATERIALS_EXTRA = CSS.supports(
 	"-apple-system-glass-material-clear",
 );
 
-type MaterialKind = "glass" | "blur";
+type MaterialKind = "primary" | "secondary" | "blur";
 
 export default function Material(
 	props: ParentProps<{

@@ -182,8 +182,8 @@ export function ScrollAreaScrollbar(props: ScrollbarProps) {
 				"--scroll-area-thumb-width": `${state.thumbSize}px`,
 			}}
 			class={`absolute ${orientation === "vertical"
-					? "right-1 top-1 bottom-1 w-1"
-					: "left-1 right-1 bottom-1 h-1"
+				? "right-1 top-1 bottom-1 w-1"
+				: "left-1 right-1 bottom-1 h-1"
 				} ${props.class ?? ""}`}
 		>
 			<ScrollAreaThumb
@@ -305,7 +305,9 @@ export default function VirtualScrollbar(props: Props) {
 	onMount(() => {
 		setTarget(props.target);
 		const targetElement = target();
+		console.log(targetElement);
 		if (!targetElement) return;
+
 
 		updateThumb();
 
@@ -442,7 +444,7 @@ export default function VirtualScrollbar(props: Props) {
 			ref={containerRef}
 			data-dragging={state.dragging}
 			data-visible={state.isVisible}
-			class={`fixed pointer-events-auto transition-opacity duration-300 hover:opacity-100 data-[visible=true]:opacity-100 opacity-0 ${props.class || ""
+			class={`pointer-events-auto transition-opacity duration-300 hover:opacity-100 data-[visible=true]:opacity-100 opacity-0 ${props.class || ""
 				}`}
 			onMouseEnter={handleMouseEnter}
 			aria-hidden="true"
@@ -456,7 +458,7 @@ export default function VirtualScrollbar(props: Props) {
 				<div
 					ref={trackRef}
 					data-dragging={state.dragging}
-					class="absolute inset-0 w-full bg-transparent rounded-full hover:bg-base-content/10 data-[dragging=true]:bg-base-content/10 transition-all duration-300 "
+					class="absolute inset-0 w-full bg-transparent rounded-full hover:bg-gray-10/10 data-[dragging=true]:bg-base-10/20 transition-all duration-300 "
 					onClick={handleTrackClick}
 				>
 					{/* Thumb */}
@@ -466,7 +468,7 @@ export default function VirtualScrollbar(props: Props) {
 					<div
 						ref={thumbRef}
 						data-dragging={state.dragging}
-						class="absolute w-full rounded-full bg-base-content/30 hover:bg-base-content/70 data-[dragging=true]:bg-base-content/70 apple-blur transition-colors duration-300"
+						class="absolute w-full rounded-full bg-gray-11/30 hover:gray-11/70 data-[dragging=true]:bg-gray-11/70 transition-colors duration-300"
 						style={{
 							top: `${state.thumbTop}px`,
 							height: `${state.thumbHeight}px`,

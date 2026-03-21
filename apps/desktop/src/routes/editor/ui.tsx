@@ -21,6 +21,7 @@ import {
 import Tooltip from "~/components/Tooltip";
 import { useEditorContext } from "./context";
 import { TextInput } from "./TextInput";
+import { NumberField as KNumberField } from "@kobalte/core/number-field";
 
 export function Field(
 	props: ParentProps<{
@@ -446,5 +447,89 @@ export function ComingSoonTooltip(
 				</KTooltip.Content>
 			</KTooltip.Portal>
 		</KTooltip>
+	);
+}
+
+
+type SliderFieldProps = {
+	label: string;
+	value: number[];
+	defaultValue: number[];
+	min: number;
+	max: number;
+	step?: number;
+	onChange: (v: number[]) => void;
+	onChangeEnd?: (v: number[]) => void;
+	formatValue?: (v: number) => string;
+	formatTooltip?: string | ((v: number) => string);
+	history?: { pause: () => () => void };
+};
+
+export function SliderField(
+	props: ComponentProps<typeof KSlider> & {
+		name: string;
+		icon?: JSX.Element;
+		class?: string;
+		disabled?: boolean;
+		history?: { pause: () => () => void };
+		formatTooltip?: string | ((v: number) => string);
+	},
+) {
+	const isDefault = () =>
+		props.value?.every((v, i) => v === props.defaultValue?.[i]);
+
+	const [local, others] = splitProps(
+		props,
+		[
+			"name", "icon", "class", "disabled", "history", "formatTooltip", "children", "as"
+		],
+	);
+
+	return (
+		<div class="flex flex-col gap-1.5">
+			<div class="flex items-center gap-2">
+				<span class="text-sm font-medium text-gray-12 shrink-0">{props.label}</span>
+				<div class="flex-1" />
+				<KNumberField
+					// changeOnWheel
+					// class="w-14"
+					{...local}
+				>
+					<KNumberField.Input
+						class={cx(
+							"w-full text-right rounded-md h-6 px-1.5 text-xs font-mono",
+							"bg-gray-3 text-gray-12 outline-none",
+							"hover:bg-gray-4 focus:bg-gray-4 focus:ring-1 focus:ring-gray-7",
+							"transition-colors duration-150",
+						)}
+						onKeyDown={(e: KeyboardEvent) => e.stopPropagation()}
+					/>
+				</KNumberField>
+				<button
+					type="button"
+					onClick={() => props.onChange(props.defaultValue)}
+					class={cx(
+						"h-6 px-1.5 rounded-md text-xs font-medium transition-all duration-150",
+						isDefault()
+							? "text-gray-9 cursor-default"
+							: "text-gray-11 hover:text-gray-12 hover:bg-gray-4",
+					)}
+					disabled={isDefault()}
+					title="Reset to default"
+				>
+					↺
+				</button>
+			</div>
+			<Slider
+				value={props.value}
+				minValue={props.min}
+				maxValue={props.max}
+				step={props.step}
+				onChange={props.onChange}
+				onChangeEnd={props.onChangeEnd}
+				formatTooltip={props.formatTooltip}
+				history={props.history}
+			/>
+		</div>
 	);
 }

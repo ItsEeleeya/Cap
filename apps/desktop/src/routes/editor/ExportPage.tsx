@@ -39,20 +39,22 @@ import {
 } from "~/utils/tauri";
 import { type RenderState, useEditorContext } from "./context";
 import { RESOLUTION_OPTIONS } from "./Header";
-import { Dialog, Field } from "./ui";
+import { Dialog, EditorButton, Field } from "./ui";
+import { SolariumToolbarButtonContainer } from "../solarium/components";
+import { Toggle } from "~/components/Toggle";
 
-class SilentError extends Error {}
+class SilentError extends Error { }
 
 export const COMPRESSION_OPTIONS: Array<{
 	label: string;
 	value: ExportCompression;
 	bpp: number;
 }> = [
-	{ label: "Maximum", value: "Maximum", bpp: 0.3 },
-	{ label: "Social Media", value: "Social", bpp: 0.15 },
-	{ label: "Web", value: "Web", bpp: 0.08 },
-	{ label: "Potato", value: "Potato", bpp: 0.04 },
-];
+		{ label: "Maximum", value: "Maximum", bpp: 0.3 },
+		{ label: "Social Media", value: "Social", bpp: 0.15 },
+		{ label: "Web", value: "Web", bpp: 0.08 },
+		{ label: "Potato", value: "Potato", bpp: 0.04 },
+	];
 
 const COMPRESSION_TO_BPP: Record<ExportCompression, number> = {
 	Maximum: 0.3,
@@ -362,25 +364,25 @@ export function ExportPage() {
 			projectPath,
 			settings.format === "Mp4"
 				? {
-						format: "Mp4",
-						fps: settings.fps,
-						resolution_base: {
-							x: settings.resolution.width,
-							y: settings.resolution.height,
-						},
-						compression: settings.compression,
-						custom_bpp: customBpp,
-						force_ffmpeg_decoder: forceFfmpegDecoder(),
-					}
-				: {
-						format: "Gif",
-						fps: settings.fps,
-						resolution_base: {
-							x: settings.resolution.width,
-							y: settings.resolution.height,
-						},
-						quality: null,
+					format: "Mp4",
+					fps: settings.fps,
+					resolution_base: {
+						x: settings.resolution.width,
+						y: settings.resolution.height,
 					},
+					compression: settings.compression,
+					custom_bpp: customBpp,
+					force_ffmpeg_decoder: forceFfmpegDecoder(),
+				}
+				: {
+					format: "Gif",
+					fps: settings.fps,
+					resolution_base: {
+						x: settings.resolution.width,
+						y: settings.resolution.height,
+					},
+					quality: null,
+				},
 			onProgress,
 		);
 		cancelCurrentExport = cancel;
@@ -444,8 +446,7 @@ export function ExportPage() {
 		onSuccess() {
 			setExportState({ type: "done" });
 			toast.success(
-				`${
-					settings.format === "Gif" ? "GIF" : "Recording"
+				`${settings.format === "Gif" ? "GIF" : "Recording"
 				} exported to clipboard`,
 			);
 		},
@@ -565,17 +566,17 @@ export function ExportPage() {
 
 			const result = meta().sharing
 				? await commands.uploadExportedVideo(
-						projectPath,
-						"Reupload",
-						uploadChannel,
-						settings.organizationId ?? null,
-					)
+					projectPath,
+					"Reupload",
+					uploadChannel,
+					settings.organizationId ?? null,
+				)
 				: await commands.uploadExportedVideo(
-						projectPath,
-						{ Initial: { pre_created_video: null } },
-						uploadChannel,
-						settings.organizationId ?? null,
-					);
+					projectPath,
+					{ Initial: { pre_created_video: null } },
+					uploadChannel,
+					settings.organizationId ?? null,
+				);
 
 			if (result === "NotAuthenticated")
 				throw new Error("You need to sign in to share recordings");
@@ -615,10 +616,10 @@ export function ExportPage() {
 	};
 
 	return (
-		<div class="flex flex-col h-full bg-gray-1 overflow-hidden">
+		<div data-tauri-drag-region class="flex flex-col h-full bg-gray-1 overflow-hidden">
 			<div
 				data-tauri-drag-region
-				class="flex relative flex-row items-center w-full h-14 border-b border-gray-3 shrink-0"
+				class="absolute top-0 right-0 flex flex-row items-start w-full h-13 shrink-0 z-50"
 			>
 				<h1 class="absolute inset-0 flex items-center justify-center text-sm font-medium text-gray-12 pointer-events-none">
 					Export
@@ -630,29 +631,30 @@ export function ExportPage() {
 						ostype() !== "windows" && "pr-2",
 					)}
 				>
-					{ostype() === "macos" && <div class="h-full w-[4rem]" />}
+					{ostype() === "macos" && <div class="h-full w-17" />}
 					<Button
-						variant="gray"
+						variant="secondaryGlass"
 						onClick={handleBack}
 						class="flex items-center gap-1.5"
 					>
 						<IconLucideArrowLeft class="size-4" />
-						<span>Back to Editor</span>
+						<span>Editor</span>
 					</Button>
+
 					<div data-tauri-drag-region class="flex-1 h-full" />
 					{ostype() === "windows" && <CaptionControlsWindows11 />}
 				</div>
 			</div>
 
 			<div class="flex-1 min-h-0 flex relative">
-				<div class="flex-1 min-h-0 p-5 flex flex-col">
+				<div class="flex-1 min-h-0 p-5 flex flex-col pt-13">
 					<div class="flex items-center gap-1.5 mb-2">
 						<span class="text-sm font-medium text-gray-11">Preview</span>
 						<Tooltip content="This is a rendered frame from your video. Adjust the settings below to see the quality of the final exported video.">
 							<IconLucideInfo class="size-3.5 text-gray-9 hover:text-gray-11 cursor-help transition-colors" />
 						</Tooltip>
 					</div>
-					<div class="relative flex-1 min-h-0 rounded-xl overflow-hidden bg-gray-2 border border-gray-3 flex items-center justify-center group">
+					<div class="relative flex-1 min-h-0 rounded-xl overflow-hidden flex items-center justify-center group">
 						<Show
 							when={previewUrl()}
 							fallback={
@@ -764,8 +766,8 @@ export function ExportPage() {
 					</Show>
 				</div>
 
-				<div class="w-[400px] border-l border-gray-3 flex flex-col bg-gray-1 dark:bg-gray-2">
-					<div class="flex-1 overflow-y-auto p-4 space-y-5">
+				<div class="w-[400px] flex flex-col jsutify-between bg-gray-2">
+					<div class="flex-1 overflow-y-auto p-4 space-y-5 pt-4">
 						<Field name="Destination" icon={<IconCapUpload class="size-4" />}>
 							<div class="flex gap-1.5">
 								<For each={EXPORT_TO_OPTIONS}>
@@ -776,10 +778,10 @@ export function ExportPage() {
 											<button
 												type="button"
 												class={cx(
-													"flex-1 flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-lg border transition-colors",
+													"flex-1 flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl transition-colors",
 													isSelected()
-														? "bg-gray-3 border-gray-5 text-gray-12"
-														: "bg-transparent border-transparent text-gray-11 hover:bg-gray-3 hover:border-gray-4",
+														? "text-gray-12 apple-glass"
+														: "text-gray-11 hover:bg-gray-5/20",
 												)}
 												onClick={() => {
 													setSettings(
@@ -817,7 +819,7 @@ export function ExportPage() {
 								>
 									<button
 										type="button"
-										class="w-full flex items-center justify-between px-3 py-2 mt-3 rounded-lg bg-gray-3 hover:bg-gray-4 transition-colors text-sm"
+										class="w-full flex items-center justify-between px-3 py-2 mt-3 rounded-xl bg-gray-3/20 hover:bg-gray-5/20 transition-colors text-sm"
 										onClick={async () => {
 											const menu = await Menu.new({
 												items: await Promise.all(
@@ -870,10 +872,10 @@ export function ExportPage() {
 											<button
 												type="button"
 												class={cx(
-													"flex-1 py-2 text-sm font-medium rounded-lg border transition-colors",
+													"flex-1 py-2 text-sm font-medium rounded-xl transition-colors",
 													settings.format === option.value
-														? "bg-gray-3 border-gray-5 text-gray-12"
-														: "bg-transparent border-transparent text-gray-11 hover:bg-gray-3 hover:border-gray-4",
+														? "text-gray-12 apple-glass"
+														: "text-gray-11 hover:bg-gray-5/20",
 													isDisabled() && "opacity-50 cursor-not-allowed",
 												)}
 												disabled={isDisabled()}
@@ -933,20 +935,20 @@ export function ExportPage() {
 										settings.format === "Gif"
 											? [RESOLUTION_OPTIONS._720p, RESOLUTION_OPTIONS._1080p]
 											: [
-													RESOLUTION_OPTIONS._720p,
-													RESOLUTION_OPTIONS._1080p,
-													RESOLUTION_OPTIONS._4k,
-												]
+												RESOLUTION_OPTIONS._720p,
+												RESOLUTION_OPTIONS._1080p,
+												RESOLUTION_OPTIONS._4k,
+											]
 									}
 								>
 									{(option) => (
 										<button
 											type="button"
 											class={cx(
-												"flex-1 py-2 text-sm font-medium rounded-lg border transition-colors",
+												"flex-1 py-2 text-sm font-medium rounded-xl transition-colors",
 												settings.resolution.value === option.value
-													? "bg-gray-3 border-gray-5 text-gray-12"
-													: "bg-transparent border-transparent text-gray-11 hover:bg-gray-3 hover:border-gray-4",
+													? "text-gray-12 apple-glass"
+													: "text-gray-11 hover:bg-gray-5/20",
 											)}
 											onClick={() => updateSettings("resolution", option)}
 										>
@@ -968,10 +970,10 @@ export function ExportPage() {
 										<button
 											type="button"
 											class={cx(
-												"flex-1 py-2 text-sm font-medium rounded-lg border transition-colors",
+												"flex-1 py-2 text-sm font-medium rounded-xl transition-colors",
 												settings.fps === option.value
-													? "bg-gray-3 border-gray-5 text-gray-12"
-													: "bg-transparent border-transparent text-gray-11 hover:bg-gray-3 hover:border-gray-4",
+													? "text-gray-12 apple-glass"
+													: "text-gray-11 hover:bg-gray-5/20",
 											)}
 											onClick={() => {
 												trackEvent("export_fps_changed", {
@@ -1003,10 +1005,10 @@ export function ExportPage() {
 												<button
 													type="button"
 													class={cx(
-														"px-2 py-2 text-xs font-medium rounded-lg border transition-colors",
+														"flex-1 py-2 text-xs font-medium rounded-xl transition-colors",
 														isSelected()
-															? "bg-gray-3 border-gray-5 text-gray-12"
-															: "bg-transparent border-transparent text-gray-11 hover:bg-gray-3 hover:border-gray-4",
+															? "text-gray-12 apple-glass"
+															: "text-gray-11 hover:bg-gray-5/20",
 													)}
 													onClick={() => {
 														setPreviewLoading(true);
@@ -1027,26 +1029,17 @@ export function ExportPage() {
 									<span>Larger file</span>
 								</div>
 
-								<button
-									type="button"
-									class="flex items-center gap-2 mt-3 text-xs text-gray-11 hover:text-gray-12 transition-colors"
-									onClick={() => setAdvancedMode(!advancedMode())}
+								<div
+									class="flex items-center gap-2 mt-3 text-xs text-gray-11"
 								>
-									<div
-										class={cx(
-											"w-8 h-4 rounded-full transition-colors relative",
-											advancedMode() ? "bg-blue-9" : "bg-gray-5",
-										)}
-									>
-										<div
-											class={cx(
-												"absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform",
-												advancedMode() ? "translate-x-4" : "translate-x-0.5",
-											)}
-										/>
-									</div>
+									<Toggle
+										size="sm"
+										checked={advancedMode()}
+										onChange={(enabled) => setAdvancedMode(enabled)}
+									/>
+
 									<span>Advanced</span>
-								</button>
+								</div>
 
 								<Show when={advancedMode()}>
 									<div class="mt-3 space-y-2">
@@ -1136,7 +1129,7 @@ export function ExportPage() {
 						) : (
 							<Button
 								class="w-full gap-2 h-12 text-base"
-								variant="blue"
+								variant="blueGlass"
 								size="lg"
 								onClick={() => {
 									if (settings.exportTo === "file") save.mutate();
@@ -1513,8 +1506,7 @@ export function ExportPage() {
 														}, 2000);
 														await commands.copyVideoToClipboard(path);
 														toast.success(
-															`${
-																settings.format === "Gif" ? "GIF" : "Video"
+															`${settings.format === "Gif" ? "GIF" : "Video"
 															} copied to clipboard`,
 														);
 													}
@@ -1558,15 +1550,14 @@ function RenderProgress(props: { state: RenderState; format?: ExportFormat }) {
 			amount={
 				props.state.type === "rendering"
 					? (props.state.progress.renderedCount /
-							props.state.progress.totalFrames) *
-						100
+						props.state.progress.totalFrames) *
+					100
 					: 0
 			}
 			label={
 				props.state.type === "rendering"
-					? `Rendering ${props.format === "Gif" ? "GIF" : "video"} (${
-							props.state.progress.renderedCount
-						}/${props.state.progress.totalFrames} frames)`
+					? `Rendering ${props.format === "Gif" ? "GIF" : "video"} (${props.state.progress.renderedCount
+					}/${props.state.progress.totalFrames} frames)`
 					: "Preparing to render..."
 			}
 		/>

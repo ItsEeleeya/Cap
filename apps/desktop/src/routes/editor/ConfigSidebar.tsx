@@ -95,7 +95,7 @@ import {
 } from "./ui";
 import { ProgressiveBlur } from "~/components/ProgressiveMask";
 import Tooltip from "~/components/Tooltip";
-import { SolariumTab, SolariumTabs } from "../solarium/components/SolariumTabs";
+import { AnimatePresence, MotionConfig, motion } from "motion-solid";
 import VirtualScrollbar from "~/components/ScrollView";
 
 const BACKGROUND_SOURCES = {
@@ -364,12 +364,13 @@ export function ConfigSidebar() {
 	});
 
 	let scrollRef!: HTMLDivElement;
+	const [scrollEl, setScrollEl] = createSignal<HTMLDivElement | null>(null);
 
 	return (
 		<KTabs
 			orientation="horizontal"
 			value={editorState.timeline.selection ? undefined : state.selectedTab}
-			class="flex flex-col-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10 fade-mask fade-bottom-10 fade-intensity-80"
+			class="flex flex-col-reverse min-h-0 shrink-0 w-104 overflow-hidden rounded-xl z-10"
 		>
 			<div class="absolute w-104 z-50 top-0 mt-14 flex justify-center">
 				<KTabs.List class="flex overflow-hidden mb-auto right-auto z-100 flex-row items-center text-lg shrink-0 h-fit gap-4 p-1.5 apple-glass-adaptive-stateful rounded-full ">
@@ -439,327 +440,325 @@ export function ConfigSidebar() {
 
 					{/** Center the indicator with the icon */}
 					<Show when={!editorState.timeline.selection}>
-						<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out transform-gpu pointer-events-none will-change-transform">
-							<div class="absolute top-1/2 left-1/2 rounded-full transform -translate-x-1/2 -translate-y-1/2 bg-blue-7/50 will-change-transform w-12 h-8 apple-glass-clear backdrop-brightness-200 opacity-100" />
+						<KTabs.Indicator class="absolute top-0 left-0 w-full h-full transition-transform duration-300 transform-gpu pointer-events-none will-change-transform ease-out">
+							<div class="absolute top-1/2 left-1/2 rounded-full transform -translate-x-1/2 -translate-y-1/2 bg-blue-7/50 will-change-transform w-12 h-8 apple-glass-subdued backdrop-brightness-200 opacity-100" />
 						</KTabs.Indicator>
 					</Show>
 				</KTabs.List>
 
 			</div>
-			<div
-				ref={scrollRef}
-				class="custom-scroll overflow-x-hidden overscroll-contain overflow-y-scroll text-[0.875rem] flex-1 min-h-0 scrollbar-none pt-26 pb-5 fade-mask fade-top-44 fade-intensity-80"
-				classList={{
-					hidden: !!editorState.timeline.selection,
-				}}
-			>
-				<ProgressiveBlur position="top" blur="xs" height="180px" class="-mt-10 z-20" />
-				{/* <VirtualScrollbar target={scrollRef} class="fixed z-50 right-1 top-20 data-[dragging=true]:w-2 hover:w-2 transition-all duration-500 border w-1 h-full" /> */}
-
-				{/* <div id="hello" class="fixed z-100 right-1 top-23 border border-white w-5 h-full bg-red-100" /> */}
-
-				<BackgroundConfig scrollRef={scrollRef} />
-				<CameraConfig scrollRef={scrollRef} />
-				<KTabs.Content
-					value="audio"
-					class="flex flex-col flex-1 gap-6 p-4 min-h-0"
+			<div class="relative flex-1 min-h-0">
+				<div
+					ref={scrollRef}
+					class="custom-scroll overflow-x-hidden overscroll-contain overflow-y-scroll text-[0.875rem] h-full flex-1 min-h-0 scrollbar-none pt-26 pb-5 fade-mask fade-top-36 fade-bottom-10 fade-intensity-80"
+					classList={{
+						hidden: !!editorState.timeline.selection,
+					}}
 				>
-					<Field
-						name="Audio Controls"
-						icon={<IconLucideVolume2 class="size-4" />}
-					>
-						<Subfield name="Mute Audio">
-							<Toggle
-								checked={project.audio.mute}
-								onChange={(v) => setProject("audio", "mute", v)}
-							/>
-						</Subfield>
-						{editorInstance.recordings.segments[0].mic?.channels === 2 && (
-							<Subfield name="Microphone Stereo Mode">
-								<KSelect<{ name: string; value: StereoMode }>
-									options={STEREO_MODES}
-									optionValue="value"
-									optionTextValue="name"
-									value={STEREO_MODES.find(
-										(v) => v.value === project.audio.micStereoMode,
-									)}
-									onChange={(v) => {
-										if (v) setProject("audio", "micStereoMode", v.value);
-									}}
-									disallowEmptySelection
-									itemComponent={(props) => (
-										<MenuItem<typeof KSelect.Item>
-											as={KSelect.Item}
-											item={props.item}
-										>
-											<KSelect.ItemLabel class="flex-1">
-												{props.item.rawValue.name}
-											</KSelect.ItemLabel>
-										</MenuItem>
-									)}
-								>
-									<KSelect.Trigger class="flex flex-row gap-2 items-center px-2 w-full h-8 rounded-lg transition-colors bg-gray-3 disabled:text-gray-11">
-										<KSelect.Value<{
-											name: string;
-											value: StereoMode;
-										}> class="flex-1 text-sm text-left truncate text-(--gray-500) font-normal">
-											{(state) => <span>{state.selectedOption().name}</span>}
-										</KSelect.Value>
-										<KSelect.Icon<ValidComponent>
-											as={(props) => (
-												<IconCapChevronDown
-													{...props}
-													class="size-4 shrink-0 transform transition-transform data-expanded:rotate-180 text-(--gray-500)"
-												/>
-											)}
-										/>
-									</KSelect.Trigger>
-									<KSelect.Portal>
-										<PopperContent<typeof KSelect.Content>
-											as={KSelect.Content}
-											class={cx(topSlideAnimateClasses, "z-50")}
-										>
-											<MenuItemList<typeof KSelect.Listbox>
-												class="overflow-y-auto max-h-32"
-												as={KSelect.Listbox}
-											/>
-										</PopperContent>
-									</KSelect.Portal>
-								</KSelect>
-							</Subfield>
-						)}
+					<ProgressiveBlur position="top" blur="xs" height="180px" class="-mt-10 z-10" />
 
-						{/* <Subfield name="Mute Audio">
+					<BackgroundConfig scrollRef={scrollRef} />
+					<CameraConfig scrollRef={scrollRef} />
+					<KTabs.Content
+						value="audio"
+						class="flex flex-col flex-1 gap-6 p-4 min-h-0"
+					>
+						<Field
+							name="Audio Controls"
+							icon={<IconLucideVolume2 class="size-4" />}
+						>
+							<Subfield name="Mute Audio">
+								<Toggle
+									checked={project.audio.mute}
+									onChange={(v) => setProject("audio", "mute", v)}
+								/>
+							</Subfield>
+							{editorInstance.recordings.segments[0].mic?.channels === 2 && (
+								<Subfield name="Microphone Stereo Mode">
+									<KSelect<{ name: string; value: StereoMode }>
+										options={STEREO_MODES}
+										optionValue="value"
+										optionTextValue="name"
+										value={STEREO_MODES.find(
+											(v) => v.value === project.audio.micStereoMode,
+										)}
+										onChange={(v) => {
+											if (v) setProject("audio", "micStereoMode", v.value);
+										}}
+										disallowEmptySelection
+										itemComponent={(props) => (
+											<MenuItem<typeof KSelect.Item>
+												as={KSelect.Item}
+												item={props.item}
+											>
+												<KSelect.ItemLabel class="flex-1">
+													{props.item.rawValue.name}
+												</KSelect.ItemLabel>
+											</MenuItem>
+										)}
+									>
+										<KSelect.Trigger class="flex flex-row gap-2 items-center px-2 w-full h-8 rounded-lg transition-colors bg-gray-3 disabled:text-gray-11">
+											<KSelect.Value<{
+												name: string;
+												value: StereoMode;
+											}> class="flex-1 text-sm text-left truncate text-(--gray-500) font-normal">
+												{(state) => <span>{state.selectedOption().name}</span>}
+											</KSelect.Value>
+											<KSelect.Icon<ValidComponent>
+												as={(props) => (
+													<IconCapChevronDown
+														{...props}
+														class="size-4 shrink-0 transform transition-transform data-expanded:rotate-180 text-(--gray-500)"
+													/>
+												)}
+											/>
+										</KSelect.Trigger>
+										<KSelect.Portal>
+											<PopperContent<typeof KSelect.Content>
+												as={KSelect.Content}
+												class={cx(topSlideAnimateClasses, "z-50")}
+											>
+												<MenuItemList<typeof KSelect.Listbox>
+													class="overflow-y-auto max-h-32"
+													as={KSelect.Listbox}
+												/>
+											</PopperContent>
+										</KSelect.Portal>
+									</KSelect>
+								</Subfield>
+							)}
+
+							{/* <Subfield name="Mute Audio">
                 <Toggle
                   checked={project.audio.mute}
                   onChange={(v) => setProject("audio", "mute", v)}
                 />
               </Subfield> */}
 
-						{/* <ComingSoonTooltip>
+							{/* <ComingSoonTooltip>
                 <Subfield name="Improve Mic Quality">
                   <Toggle disabled />
                 </Subfield>
               </ComingSoonTooltip> */}
-					</Field>
-					{meta().hasMicrophone && (
-						<Field
-							name="Microphone Volume"
-							icon={<IconCapMicrophone class="size-4" />}
-						>
-							<Slider
-								disabled={project.audio.mute}
-								value={[project.audio.micVolumeDb ?? 0]}
-								onChange={(v) => setProject("audio", "micVolumeDb", v[0])}
-								minValue={-30}
-								maxValue={10}
-								step={0.1}
-								formatTooltip={(v) =>
-									v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
-								}
-							/>
 						</Field>
-					)}
-					{meta().hasSystemAudio && (
-						<Field
-							name="System Audio Volume"
-							icon={<IconLucideMonitor class="size-4" />}
-						>
-							<Slider
-								disabled={project.audio.mute}
-								value={[project.audio.systemVolumeDb ?? 0]}
-								onChange={(v) => setProject("audio", "systemVolumeDb", v[0])}
-								minValue={-30}
-								maxValue={10}
-								step={0.1}
-								formatTooltip={(v) =>
-									v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
-								}
-							/>
-						</Field>
-					)}
-				</KTabs.Content>
-				<KTabs.Content
-					value="cursor"
-					class="flex flex-col flex-1 gap-6 p-4 min-h-0"
-				>
-					<Field
-						name="Cursor"
-						icon={<IconCapCursor />}
-						value={
-							<Toggle
-								checked={!project.cursor.hide}
-								onChange={(v) => {
-									setProject("cursor", "hide", !v);
-								}}
-							/>
-						}
-					/>
-					<Show when={!project.cursor.hide}>
-						<Field name="Cursor Type" icon={<IconCapCursor />}>
-							<RadioGroup
-								class="flex flex-col gap-2"
-								value={project.cursor.type}
-								onChange={(value) =>
-									setProject("cursor", "type", value as CursorType)
-								}
+						{meta().hasMicrophone && (
+							<Field
+								name="Microphone Volume"
+								icon={<IconCapMicrophone class="size-4" />}
 							>
-								{CURSOR_TYPE_OPTIONS.map((option) => (
-									<RadioGroup.Item
-										value={option.value}
-										class="rounded-lg border border-gray-3 transition-colors ui-checked:border-blue-8 ui-checked:bg-blue-3/40"
-									>
-										<RadioGroup.ItemInput class="sr-only" />
-										<RadioGroup.ItemLabel class="flex cursor-pointer items-start gap-3 p-3">
-											<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 ui-checked:border-blue-9 ui-checked:bg-blue-9" />
-											<div class="flex flex-col text-left">
-												<span class="text-sm font-medium text-gray-12">
-													{option.label}
-												</span>
-												<span class="text-xs text-gray-11">
-													{option.description}
-												</span>
-											</div>
-										</RadioGroup.ItemLabel>
-									</RadioGroup.Item>
-								))}
-							</RadioGroup>
-						</Field>
-						<Field name="Size" icon={<IconCapEnlarge />}>
-							<Slider
-								value={[project.cursor.size]}
-								onChange={(v) => setProject("cursor", "size", v[0])}
-								minValue={20}
-								maxValue={300}
-								step={1}
-							/>
-						</Field>
-						<Field
-							name="Hide When Idle"
-							icon={<IconLucideTimer class="size-4" />}
-							value={
-								<Toggle
-									checked={project.cursor.hideWhenIdle}
-									onChange={(value) =>
-										setProject("cursor", "hideWhenIdle", value)
+								<Slider
+									disabled={project.audio.mute}
+									value={[project.audio.micVolumeDb ?? 0]}
+									onChange={(v) => setProject("audio", "micVolumeDb", v[0])}
+									minValue={-30}
+									maxValue={10}
+									step={0.1}
+									formatTooltip={(v) =>
+										v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
 									}
 								/>
-							}
-						/>
-						<Show when={project.cursor.hideWhenIdle}>
-							<Subfield name="Inactivity Delay" class="gap-4 items-center">
-								<div class="flex flex-1 gap-3 items-center">
-									<Slider
-										class="flex-1"
-										value={[cursorIdleDelay()]}
-										onChange={(v) => {
-											const rounded = clampIdleDelay(v[0]);
-											setProject("cursor", "hideWhenIdleDelay" as any, rounded);
-										}}
-										minValue={0.5}
-										maxValue={5}
-										step={0.1}
-										formatTooltip={(value) => `${value.toFixed(1)}s`}
-									/>
-									<span class="w-12 text-xs text-right text-gray-11">
-										{cursorIdleDelay().toFixed(1)}s
-									</span>
-								</div>
-							</Subfield>
-						</Show>
-						<Field
-							name="Cursor Movement Style"
-							icon={<IconLucideRabbit class="size-4" />}
-						>
-							<RadioGroup
-								class="flex flex-col gap-2"
-								value={project.cursor.animationStyle}
-								onChange={(value) =>
-									applyCursorStylePreset(value as CursorAnimationStyle)
-								}
-							>
-								{CURSOR_ANIMATION_STYLE_OPTIONS.map((option) => (
-									<RadioGroup.Item
-										value={option.value}
-										class="rounded-lg border border-gray-3 transition-colors data-checked:border-blue-8 data-checked:bg-blue-3/40"
-									>
-										<RadioGroup.ItemInput class="sr-only" />
-										<RadioGroup.ItemLabel class="flex cursor-pointer items-start gap-3 p-3">
-											<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 data-checked:border-blue-9 data-checked:bg-blue-9" />
-											<div class="flex flex-col text-left">
-												<span class="text-sm font-medium text-gray-12">
-													{option.label}
-												</span>
-												<span class="text-xs text-gray-11">
-													{option.description}
-												</span>
-											</div>
-										</RadioGroup.ItemLabel>
-									</RadioGroup.Item>
-								))}
-							</RadioGroup>
-						</Field>
-						<KCollapsible open={!project.cursor.raw}>
+							</Field>
+						)}
+						{meta().hasSystemAudio && (
 							<Field
-								name="Smooth Movement"
-								icon={<IconHugeiconsEaseCurveControlPoints />}
-								value={
-									<Toggle
-										checked={!project.cursor.raw}
-										onChange={(value) => {
-											setProject("cursor", "raw", !value);
-										}}
-									/>
-								}
-							/>
-							<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up data-expanded:animate-collapsible-down data-expanded:opacity-100">
-								{/* if Content has padding or margin the animation doesn't look as good */}
-								<div class="flex flex-col gap-4 pt-4 pb-6">
-									<Field name="Tension">
-										<Slider
-											value={[project.cursor.tension]}
-											onChange={(v) => setCursorPhysics("tension", v[0])}
-											minValue={1}
-											maxValue={500}
-											step={1}
-										/>
-									</Field>
-									<Field name="Friction">
-										<Slider
-											value={[project.cursor.friction]}
-											onChange={(v) => setCursorPhysics("friction", v[0])}
-											minValue={0}
-											maxValue={50}
-											step={0.1}
-										/>
-									</Field>
-									<Field name="Mass">
-										<Slider
-											value={[project.cursor.mass]}
-											onChange={(v) => setCursorPhysics("mass", v[0])}
-											minValue={0.1}
-											maxValue={10}
-											step={0.01}
-										/>
-									</Field>
-								</div>
-							</KCollapsible.Content>
-						</KCollapsible>
+								name="System Audio Volume"
+								icon={<IconLucideMonitor class="size-4" />}
+							>
+								<Slider
+									disabled={project.audio.mute}
+									value={[project.audio.systemVolumeDb ?? 0]}
+									onChange={(v) => setProject("audio", "systemVolumeDb", v[0])}
+									minValue={-30}
+									maxValue={10}
+									step={0.1}
+									formatTooltip={(v) =>
+										v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
+									}
+								/>
+							</Field>
+						)}
+					</KTabs.Content>
+					<KTabs.Content
+						value="cursor"
+						class="flex flex-col flex-1 gap-6 p-4 min-h-0"
+					>
 						<Field
-							name="High Quality SVG Cursors"
-							icon={<IconLucideSparkles />}
+							name="Cursor"
+							icon={<IconCapCursor />}
 							value={
 								<Toggle
-									checked={(project.cursor as any).useSvg ?? true}
-									onChange={(value) => {
-										setProject("cursor", "useSvg" as any, value);
+									checked={!project.cursor.hide}
+									onChange={(v) => {
+										setProject("cursor", "hide", !v);
 									}}
 								/>
 							}
 						/>
-					</Show>
+						<Show when={!project.cursor.hide}>
+							<Field name="Cursor Type" icon={<IconCapCursor />}>
+								<RadioGroup
+									class="flex flex-col gap-2"
+									value={project.cursor.type}
+									onChange={(value) =>
+										setProject("cursor", "type", value as CursorType)
+									}
+								>
+									{CURSOR_TYPE_OPTIONS.map((option) => (
+										<RadioGroup.Item
+											value={option.value}
+											class="rounded-lg border border-gray-3 transition-colors ui-checked:border-blue-8 ui-checked:bg-blue-3/40"
+										>
+											<RadioGroup.ItemInput class="sr-only" />
+											<RadioGroup.ItemLabel class="flex cursor-pointer items-start gap-3 p-3">
+												<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 ui-checked:border-blue-9 ui-checked:bg-blue-9" />
+												<div class="flex flex-col text-left">
+													<span class="text-sm font-medium text-gray-12">
+														{option.label}
+													</span>
+													<span class="text-xs text-gray-11">
+														{option.description}
+													</span>
+												</div>
+											</RadioGroup.ItemLabel>
+										</RadioGroup.Item>
+									))}
+								</RadioGroup>
+							</Field>
+							<Field name="Size" icon={<IconCapEnlarge />}>
+								<Slider
+									value={[project.cursor.size]}
+									onChange={(v) => setProject("cursor", "size", v[0])}
+									minValue={20}
+									maxValue={300}
+									step={1}
+								/>
+							</Field>
+							<Field
+								name="Hide When Idle"
+								icon={<IconLucideTimer class="size-4" />}
+								value={
+									<Toggle
+										checked={project.cursor.hideWhenIdle}
+										onChange={(value) =>
+											setProject("cursor", "hideWhenIdle", value)
+										}
+									/>
+								}
+							/>
+							<Show when={project.cursor.hideWhenIdle}>
+								<Subfield name="Inactivity Delay" class="gap-4 items-center">
+									<div class="flex flex-1 gap-3 items-center">
+										<Slider
+											class="flex-1"
+											value={[cursorIdleDelay()]}
+											onChange={(v) => {
+												const rounded = clampIdleDelay(v[0]);
+												setProject("cursor", "hideWhenIdleDelay" as any, rounded);
+											}}
+											minValue={0.5}
+											maxValue={5}
+											step={0.1}
+											formatTooltip={(value) => `${value.toFixed(1)}s`}
+										/>
+										<span class="w-12 text-xs text-right text-gray-11">
+											{cursorIdleDelay().toFixed(1)}s
+										</span>
+									</div>
+								</Subfield>
+							</Show>
+							<Field
+								name="Cursor Movement Style"
+								icon={<IconLucideRabbit class="size-4" />}
+							>
+								<RadioGroup
+									class="flex flex-col gap-2"
+									value={project.cursor.animationStyle}
+									onChange={(value) =>
+										applyCursorStylePreset(value as CursorAnimationStyle)
+									}
+								>
+									{CURSOR_ANIMATION_STYLE_OPTIONS.map((option) => (
+										<RadioGroup.Item
+											value={option.value}
+											class="rounded-lg border border-gray-3 transition-colors data-checked:border-blue-8 data-checked:bg-blue-3/40"
+										>
+											<RadioGroup.ItemInput class="sr-only" />
+											<RadioGroup.ItemLabel class="flex cursor-pointer items-start gap-3 p-3">
+												<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 data-checked:border-blue-9 data-checked:bg-blue-9" />
+												<div class="flex flex-col text-left">
+													<span class="text-sm font-medium text-gray-12">
+														{option.label}
+													</span>
+													<span class="text-xs text-gray-11">
+														{option.description}
+													</span>
+												</div>
+											</RadioGroup.ItemLabel>
+										</RadioGroup.Item>
+									))}
+								</RadioGroup>
+							</Field>
+							<KCollapsible open={!project.cursor.raw}>
+								<Field
+									name="Smooth Movement"
+									icon={<IconHugeiconsEaseCurveControlPoints />}
+									value={
+										<Toggle
+											checked={!project.cursor.raw}
+											onChange={(value) => {
+												setProject("cursor", "raw", !value);
+											}}
+										/>
+									}
+								/>
+								<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up data-expanded:animate-collapsible-down data-expanded:opacity-100">
+									{/* if Content has padding or margin the animation doesn't look as good */}
+									<div class="flex flex-col gap-4 pt-4 pb-6">
+										<Field name="Tension">
+											<Slider
+												value={[project.cursor.tension]}
+												onChange={(v) => setCursorPhysics("tension", v[0])}
+												minValue={1}
+												maxValue={500}
+												step={1}
+											/>
+										</Field>
+										<Field name="Friction">
+											<Slider
+												value={[project.cursor.friction]}
+												onChange={(v) => setCursorPhysics("friction", v[0])}
+												minValue={0}
+												maxValue={50}
+												step={0.1}
+											/>
+										</Field>
+										<Field name="Mass">
+											<Slider
+												value={[project.cursor.mass]}
+												onChange={(v) => setCursorPhysics("mass", v[0])}
+												minValue={0.1}
+												maxValue={10}
+												step={0.01}
+											/>
+										</Field>
+									</div>
+								</KCollapsible.Content>
+							</KCollapsible>
+							<Field
+								name="High Quality SVG Cursors"
+								icon={<IconLucideSparkles />}
+								value={
+									<Toggle
+										checked={(project.cursor as any).useSvg ?? true}
+										onChange={(value) => {
+											setProject("cursor", "useSvg" as any, value);
+										}}
+									/>
+								}
+							/>
+						</Show>
 
-					{/* <Field name="Animation Style" icon={<IconLucideRabbit />}>
+						{/* <Field name="Animation Style" icon={<IconLucideRabbit />}>
             <RadioGroup
               defaultValue="regular"
               value={project.cursor.animationStyle}
@@ -804,23 +803,27 @@ export function ConfigSidebar() {
               ))}
             </RadioGroup>
           </Field> */}
-				</KTabs.Content>
-				<KTabs.Content value="hotkeys" class="flex flex-1 p-4 min-h-0">
-					<Field name="Hotkeys" icon={<IconCapHotkeys />}>
-						<ComingSoonTooltip>
-							<Subfield name="Show hotkeys">
-								<Toggle disabled />
-							</Subfield>
-						</ComingSoonTooltip>
-					</Field>
-				</KTabs.Content>
-				<KTabs.Content
-					value="captions"
-					class="flex flex-col flex-1 gap-6 p-4 min-h-0"
-				>
-					<CaptionsTab />
-				</KTabs.Content>
+					</KTabs.Content>
+					<KTabs.Content value="hotkeys" class="flex flex-1 p-4 min-h-0">
+						<Field name="Hotkeys" icon={<IconCapHotkeys />}>
+							<ComingSoonTooltip>
+								<Subfield name="Show hotkeys">
+									<Toggle disabled />
+								</Subfield>
+							</ComingSoonTooltip>
+						</Field>
+					</KTabs.Content>
+					<KTabs.Content
+						value="captions"
+						class="flex flex-col flex-1 gap-6 p-4 min-h-0"
+					>
+						<CaptionsTab />
+					</KTabs.Content>
+				</div>
+
+				<VirtualScrollbar target={scrollRef} hideDelay={1200} class="absolute top-28 bottom-2 right-0 w-1 hover:w-2 z-11" />
 			</div>
+
 			<div
 				style={{
 					"--margin-top-scroll": "5px",
