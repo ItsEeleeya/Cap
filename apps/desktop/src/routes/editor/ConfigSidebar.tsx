@@ -229,7 +229,7 @@ type CursorPresetValues = {
 	friction: number;
 };
 
-const DEFAULT_CURSOR_MOTION_BLUR = 0.5;
+const DEFAULT_CURSOR_MOTION_BLUR = 1.0;
 
 const CURSOR_TYPE_OPTIONS = [
 	{
@@ -282,11 +282,11 @@ const findCursorPreset = (
 		(option) =>
 			option.preset &&
 			Math.abs(option.preset.tension - values.tension) <=
-				CURSOR_PRESET_TOLERANCE.tension &&
+			CURSOR_PRESET_TOLERANCE.tension &&
 			Math.abs(option.preset.mass - values.mass) <=
-				CURSOR_PRESET_TOLERANCE.mass &&
+			CURSOR_PRESET_TOLERANCE.mass &&
 			Math.abs(option.preset.friction - values.friction) <=
-				CURSOR_PRESET_TOLERANCE.friction,
+			CURSOR_PRESET_TOLERANCE.friction,
 	);
 
 	return preset?.value ?? null;
@@ -436,7 +436,7 @@ export function ConfigSidebar() {
 										class={cx(
 											"flex justify-center relative border-transparent border z-10 items-center rounded-full w-12 h-8 transition will-change-transform",
 											state.selectedTab !== item.id &&
-												"group-hover:border-gray-300 group-disabled:border-none",
+											"group-hover:border-gray-300 group-disabled:border-none",
 										)}
 									>
 										<Dynamic component={item.icon} />
@@ -645,6 +645,16 @@ export function ConfigSidebar() {
 									step={1}
 								/>
 							</Field>
+							<Field name="Tilt" icon={<IconLucideRotate3d class="size-4" />}>
+								<Slider
+									value={[project.cursor.rotationAmount ?? 0.15]}
+									onChange={(v) => setProject("cursor", "rotationAmount", v[0])}
+									minValue={0}
+									maxValue={1}
+									step={0.01}
+									formatTooltip={(value) => `${Math.round(value * 100)}%`}
+								/>
+							</Field>
 							<Field
 								name="Hide When Idle"
 								icon={<IconLucideTimer class="size-4" />}
@@ -665,11 +675,7 @@ export function ConfigSidebar() {
 											value={[cursorIdleDelay()]}
 											onChange={(v) => {
 												const rounded = clampIdleDelay(v[0]);
-												setProject(
-													"cursor",
-													"hideWhenIdleDelay" as any,
-													rounded,
-												);
+												setProject("cursor", "hideWhenIdleDelay" as any, rounded);
 											}}
 											minValue={0.5}
 											maxValue={5}
@@ -696,11 +702,11 @@ export function ConfigSidebar() {
 									{CURSOR_ANIMATION_STYLE_OPTIONS.map((option) => (
 										<RadioGroup.Item
 											value={option.value}
-											class="rounded-lg border border-gray-3 transition-colors data-checked:border-blue-8 data-checked:bg-blue-3/40"
+											class="rounded-lg border border-gray-3 transition-colors ui-checked:border-blue-8 ui-checked:bg-blue-3/40"
 										>
 											<RadioGroup.ItemInput class="sr-only" />
 											<RadioGroup.ItemLabel class="flex cursor-pointer items-start gap-3 p-3">
-												<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 data-checked:border-blue-9 data-checked:bg-blue-9" />
+												<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 ui-checked:border-blue-9 ui-checked:bg-blue-9" />
 												<div class="flex flex-col text-left">
 													<span class="text-sm font-medium text-gray-12">
 														{option.label}
@@ -727,7 +733,7 @@ export function ConfigSidebar() {
 										/>
 									}
 								/>
-								<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up data-expanded:animate-collapsible-down data-expanded:opacity-100">
+								<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up ui-expanded:animate-collapsible-down ui-expanded:opacity-100">
 									{/* if Content has padding or margin the animation doesn't look as good */}
 									<div class="flex flex-col gap-4 pt-4 pb-6">
 										<Field name="Tension">
@@ -1567,17 +1573,13 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 								ref={setBackgroundRef}
 								class="flex overflow-x-auto overscroll-contain relative z-10 flex-row gap-2 items-center mb-3 text-xs hide-scroll"
 								style={{
-									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${
-										scrollX() > 0 ? "24px" : "0"
-									}, black calc(100% - ${
-										reachedEndOfScroll() ? "0px" : "24px"
-									}), transparent)`,
+									"-webkit-mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
+										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
+										}), transparent)`,
 
-									"mask-image": `linear-gradient(to right, transparent, black ${
-										scrollX() > 0 ? "24px" : "0"
-									}, black calc(100% - ${
-										reachedEndOfScroll() ? "0px" : "24px"
-									}), transparent);`,
+									"mask-image": `linear-gradient(to right, transparent, black ${scrollX() > 0 ? "24px" : "0"
+										}, black calc(100% - ${reachedEndOfScroll() ? "0px" : "24px"
+										}), transparent);`,
 								}}
 							>
 								<For each={Object.entries(BACKGROUND_THEMES)}>
@@ -1604,10 +1606,10 @@ function BackgroundConfig(props: { scrollRef: HTMLDivElement }) {
 							value={
 								project.background.source.type === "wallpaper"
 									? (wallpapers()?.find((w) =>
-											(
-												project.background.source as { path?: string }
-											).path?.includes(w.id),
-										)?.url ?? undefined)
+										(
+											project.background.source as { path?: string }
+										).path?.includes(w.id),
+									)?.url ?? undefined)
 									: undefined
 							}
 							onChange={(photoUrl) => {
@@ -2840,8 +2842,7 @@ function ZoomSegmentPreview(props: {
 	createEffect(() => {
 		// TODO: make this not hardcoded
 		const path = convertFileSrc(
-			`${editorInstance.path}/content/segments/segment-${
-				clipSegment()?.recordingSegment ?? 0
+			`${editorInstance.path}/content/segments/segment-${clipSegment()?.recordingSegment ?? 0
 			}/display.mp4`,
 		);
 		video.src = path;
@@ -3049,8 +3050,7 @@ function ZoomSegmentConfig(props: {
 								createEffect(() => {
 									const path = convertFileSrc(
 										// TODO: this shouldn't be so hardcoded
-										`${
-											editorInstance.path
+										`${editorInstance.path
 										}/content/segments/segment-${segmentIndex()}/display.mp4`,
 									);
 									video.src = path;
@@ -3180,7 +3180,7 @@ function ZoomSegmentConfig(props: {
 																x: Math.max(
 																	Math.min(
 																		(moveEvent.clientX - bounds.left) /
-																			bounds.width,
+																		bounds.width,
 																		1,
 																	),
 																	0,
@@ -3188,7 +3188,7 @@ function ZoomSegmentConfig(props: {
 																y: Math.max(
 																	Math.min(
 																		(moveEvent.clientY - bounds.top) /
-																			bounds.height,
+																		bounds.height,
 																		1,
 																	),
 																	0,

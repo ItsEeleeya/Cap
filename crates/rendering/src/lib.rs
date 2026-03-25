@@ -5,9 +5,15 @@ use cap_project::{
 };
 use composite_frame::CompositeVideoFrameUniforms;
 use core::f64;
-use cursor_interpolation::{InterpolatedCursorPosition, interpolate_cursor};
+use cursor_interpolation::{
+    InterpolatedCursorPosition, PrecomputedCursorTimeline, interpolate_cursor,
+    interpolate_cursor_with_click_spring,
+};
 use decoder::{AsyncVideoDecoderHandle, spawn_decoder};
-use frame_pipeline::{RenderSession, finish_encoder, finish_encoder_nv12, flush_pending_readback};
+use frame_pipeline::{
+    NV12BufferPool, RenderSession, finish_encoder, finish_encoder_nv12_pooled,
+    flush_pending_readback,
+};
 use futures::future::OptionFuture;
 use layers::{
     Background, BackgroundLayer, BlurLayer, CameraLayer, CaptionsLayer, CursorLayer, DisplayLayer,
@@ -15,7 +21,10 @@ use layers::{
 };
 use specta::Type;
 use spring_mass_damper::SpringMassDamperSimulationConfig;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use std::{path::PathBuf, time::Instant};
 use tokio::sync::mpsc;
 
@@ -41,7 +50,7 @@ pub mod zoom_focus_interpolation;
 
 pub use coord::*;
 pub use decoder::{DecodedFrame, DecoderStatus, DecoderType, PixelFormat};
-pub use frame_pipeline::{GpuOutputFormat, Nv12RenderedFrame, RenderedFrame};
+pub use frame_pipeline::{GpuOutputFormat, Nv12RenderedFrame, RenderedFrame, SharedNv12Buffer};
 pub use project_recordings::{ProjectRecordingsMeta, SegmentRecordings, Video};
 
 use mask::interpolate_masks;
@@ -49,6 +58,47 @@ use scene::*;
 use text::{PreparedText, prepare_texts};
 use zoom::*;
 pub use zoom_focus_interpolation::ZoomFocusInterpolator;
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Nv12RenderStartupBreakdownMs {
+    pub ffmpeg_init_ms: u64,
+    pub zoom_focus_interpolators_construct_ms: u64,
+    pub frame_renderer_and_layers_setup_ms: u64,
+    pub frame_index_zero_zoom_precompute_ms: Option<u64>,
+    pub frame_index_zero_decode_ms: Option<u64>,
+    pub frame_index_zero_render_nv12_ms: Option<u64>,
+    pub frame_index_zero_prefetch_decode_parallel_ms: Option<u64>,
+    pub frame_index_zero_join_wall_ms: Option<u64>,
+    pub first_queued_zoom_precompute_ms: Option<u64>,
+    pub first_queued_decode_ms: Option<u64>,
+    pub first_queued_render_nv12_ms: Option<u64>,
+    pub first_queued_prefetch_decode_parallel_ms: Option<u64>,
+    pub first_queued_join_wall_ms: Option<u64>,
+}
+
+impl Nv12RenderStartupBreakdownMs {
+    fn new_header(
+        ffmpeg_init_ms: u64,
+        zoom_focus_interpolators_construct_ms: u64,
+        frame_renderer_and_layers_setup_ms: u64,
+    ) -> Self {
+        Self {
+            ffmpeg_init_ms,
+            zoom_focus_interpolators_construct_ms,
+            frame_renderer_and_layers_setup_ms,
+            frame_index_zero_zoom_precompute_ms: None,
+            frame_index_zero_decode_ms: None,
+            frame_index_zero_render_nv12_ms: None,
+            frame_index_zero_prefetch_decode_parallel_ms: None,
+            frame_index_zero_join_wall_ms: None,
+            first_queued_zoom_precompute_ms: None,
+            first_queued_decode_ms: None,
+            first_queued_render_nv12_ms: None,
+            first_queued_prefetch_decode_parallel_ms: None,
+            first_queued_join_wall_ms: None,
+        }
+    }
+}
 
 pub fn is_software_wgpu_adapter(info: &wgpu::AdapterInfo) -> bool {
     matches!(info.device_type, wgpu::DeviceType::Cpu)
@@ -409,17 +459,36 @@ pub async fn render_video_to_channel(
             friction: project.cursor.friction,
         });
 
-    let zoom_focus_interpolators: Vec<ZoomFocusInterpolator> = render_segments
+    let click_spring = project.cursor.click_spring_config();
+
+    let precomputed_cursor_timelines: Vec<Arc<PrecomputedCursorTimeline>> = render_segments
         .iter()
         .map(|segment| {
-            let mut interp = ZoomFocusInterpolator::new(
+            Arc::new(PrecomputedCursorTimeline::new(
                 &segment.cursor,
                 cursor_smoothing,
+                Some(click_spring),
+            ))
+        })
+        .collect();
+
+    let mut zoom_focus_interpolators: Vec<ZoomFocusInterpolator> = render_segments
+        .iter()
+        .zip(precomputed_cursor_timelines.iter())
+        .map(|(segment, precomputed_cursor)| {
+            ZoomFocusInterpolator::new_with_precomputed_cursor(
+                &segment.cursor,
+                cursor_smoothing,
+                click_spring,
                 project.screen_movement_spring,
                 duration,
-            );
-            interp.precompute();
-            interp
+                project
+                    .timeline
+                    .as_ref()
+                    .map(|t| t.zoom_segments.as_slice())
+                    .unwrap_or(&[]),
+                Some(precomputed_cursor.clone()),
+            )
         })
         .collect();
 
@@ -477,6 +546,9 @@ pub async fn render_video_to_channel(
         let is_initial_frame = current_frame_number == 0 || last_successful_frame.is_none();
         let segment_clip_index = segment.recording_clip as usize;
 
+        let zoom_until = (current_frame_number as f32 + 1.0) / fps as f32;
+        zoom_focus_interpolators[segment_clip_index].ensure_precomputed_until(zoom_until);
+
         let segment_frames =
             if let Some((pf_num, _pf_time, pf_clip, pf_result)) = prefetched_decode.take() {
                 if pf_num == current_frame_number && pf_clip == segment_clip_index {
@@ -508,8 +580,9 @@ pub async fn render_video_to_channel(
             consecutive_failures = 0;
 
             let zoom_focus_interp = &zoom_focus_interpolators[segment_clip_index];
+            let precomputed_cursor = &precomputed_cursor_timelines[segment_clip_index];
 
-            let uniforms = ProjectUniforms::new(
+            let uniforms = ProjectUniforms::new_with_precomputed_cursor(
                 constants,
                 project,
                 current_frame_number,
@@ -519,6 +592,7 @@ pub async fn render_video_to_channel(
                 &segment_frames,
                 duration,
                 zoom_focus_interp,
+                precomputed_cursor,
             );
 
             let next_frame_number = frame_number;
@@ -635,7 +709,11 @@ pub async fn render_video_to_channel(
                     frame_number = current_frame_number,
                     segment_time = segment_time,
                     consecutive_failures = consecutive_failures,
-                    max_retries = DECODE_MAX_RETRIES,
+                    max_retries = if is_initial_frame {
+                        DECODE_MAX_RETRIES_INITIAL
+                    } else {
+                        DECODE_MAX_RETRIES_STEADY
+                    },
                     "Frame decode failed after retries - using previous frame"
                 );
                 let mut fallback = last_frame.clone();
@@ -647,7 +725,11 @@ pub async fn render_video_to_channel(
                 tracing::error!(
                     frame_number = current_frame_number,
                     segment_time = segment_time,
-                    max_retries = DECODE_MAX_RETRIES,
+                    max_retries = if is_initial_frame {
+                        DECODE_MAX_RETRIES_INITIAL
+                    } else {
+                        DECODE_MAX_RETRIES_STEADY
+                    },
                     "First frame decode failed after retries - cannot continue"
                 );
                 continue;
@@ -685,8 +767,12 @@ pub async fn render_video_to_channel_nv12(
     fps: u32,
     resolution_base: XY<u32>,
     recordings: &ProjectRecordingsMeta,
+    stop_after_frames_sent: Option<u32>,
+    startup_breakdown_ms: Option<Arc<Mutex<Option<Nv12RenderStartupBreakdownMs>>>>,
 ) -> Result<(), RenderingError> {
+    let ffmpeg_init_start = Instant::now();
     ffmpeg::init().unwrap();
+    let ffmpeg_init_ms = ffmpeg_init_start.elapsed().as_millis() as u64;
 
     let start_time = Instant::now();
 
@@ -701,22 +787,47 @@ pub async fn render_video_to_channel_nv12(
             friction: project.cursor.friction,
         });
 
-    let zoom_focus_interpolators: Vec<ZoomFocusInterpolator> = render_segments
+    let click_spring = project.cursor.click_spring_config();
+
+    let precomputed_cursor_timelines: Vec<Arc<PrecomputedCursorTimeline>> = render_segments
         .iter()
         .map(|segment| {
-            let mut interp = ZoomFocusInterpolator::new(
+            Arc::new(PrecomputedCursorTimeline::new(
                 &segment.cursor,
                 cursor_smoothing,
-                project.screen_movement_spring,
-                duration,
-            );
-            interp.precompute();
-            interp
+                Some(click_spring),
+            ))
         })
         .collect();
 
+    let zoom_build_start = Instant::now();
+    let mut zoom_focus_interpolators: Vec<ZoomFocusInterpolator> = render_segments
+        .iter()
+        .zip(precomputed_cursor_timelines.iter())
+        .map(|(segment, precomputed_cursor)| {
+            ZoomFocusInterpolator::new_with_precomputed_cursor(
+                &segment.cursor,
+                cursor_smoothing,
+                click_spring,
+                project.screen_movement_spring,
+                duration,
+                project
+                    .timeline
+                    .as_ref()
+                    .map(|t| t.zoom_segments.as_slice())
+                    .unwrap_or(&[]),
+                Some(precomputed_cursor.clone()),
+            )
+        })
+        .collect();
+    for interp in &mut zoom_focus_interpolators {
+        interp.ensure_precomputed_until(duration as f32 + 1.0);
+    }
+    let zoom_focus_interpolators_construct_ms = zoom_build_start.elapsed().as_millis() as u64;
+
     let mut frame_number = 0;
 
+    let renderer_setup_start = Instant::now();
     let mut frame_renderer = FrameRenderer::new(constants);
 
     let mut layers = RendererLayers::new_with_options(
@@ -736,6 +847,7 @@ pub async fn render_video_to_channel_nv12(
             camera_dims.map(|(_, h)| h),
         );
     }
+    let frame_renderer_and_layers_setup_ms = renderer_setup_start.elapsed().as_millis() as u64;
 
     let needs_camera = !project.camera.hide;
 
@@ -744,6 +856,11 @@ pub async fn render_video_to_channel_nv12(
     const MAX_CONSECUTIVE_FAILURES: u32 = 200;
 
     let mut prefetched_decode: Option<(u32, f64, usize, Option<DecodedSegmentFrames>)> = None;
+
+    let mut channel_frames_sent = 0u32;
+    let mut stopped_after_frame_limit = false;
+
+    let mut record_first_frame_nv12_phases = startup_breakdown_ms.is_some();
 
     loop {
         if frame_number >= total_frames {
@@ -770,6 +887,12 @@ pub async fn render_video_to_channel_nv12(
         let is_initial_frame = current_frame_number == 0 || last_successful_frame.is_none();
         let segment_clip_index = segment.recording_clip as usize;
 
+        let zoom_pre_start = Instant::now();
+        let zoom_until = (current_frame_number as f32 + 1.0) / fps as f32;
+        zoom_focus_interpolators[segment_clip_index].ensure_precomputed_until(zoom_until);
+        let this_zoom_pre_ms = zoom_pre_start.elapsed().as_millis() as u64;
+
+        let decode_wall_start = Instant::now();
         let segment_frames =
             if let Some((pf_num, _pf_time, pf_clip, pf_result)) = prefetched_decode.take() {
                 if pf_num == current_frame_number && pf_clip == segment_clip_index {
@@ -796,13 +919,15 @@ pub async fn render_video_to_channel_nv12(
                 )
                 .await
             };
+        let this_decode_ms = decode_wall_start.elapsed().as_millis() as u64;
 
         if let Some(segment_frames) = segment_frames {
             consecutive_failures = 0;
 
             let zoom_focus_interp = &zoom_focus_interpolators[segment_clip_index];
+            let precomputed_cursor = &precomputed_cursor_timelines[segment_clip_index];
 
-            let uniforms = ProjectUniforms::new(
+            let uniforms = ProjectUniforms::new_with_precomputed_cursor(
                 constants,
                 project,
                 current_frame_number,
@@ -812,6 +937,7 @@ pub async fn render_video_to_channel_nv12(
                 &segment_frames,
                 duration,
                 zoom_focus_interp,
+                precomputed_cursor,
             );
 
             let next_frame_number = frame_number;
@@ -844,38 +970,131 @@ pub async fn render_video_to_channel_nv12(
                 None
             };
 
-            let render_result = if let Some(prefetch) = prefetch_future {
-                let (render, decoded) = tokio::join!(
-                    frame_renderer.render_nv12(
-                        segment_frames,
-                        uniforms,
-                        &render_segment.cursor,
-                        &mut layers,
-                    ),
-                    prefetch
-                );
+            let (
+                render_result,
+                first_phase_render_ms,
+                first_phase_prefetch_ms,
+                first_phase_join_wall_ms,
+            ) = if let Some(prefetch) = prefetch_future {
+                if record_first_frame_nv12_phases {
+                    let join_wall_start = Instant::now();
+                    let render_fut = async {
+                        let t0 = Instant::now();
+                        let r = frame_renderer
+                            .render_nv12(
+                                segment_frames,
+                                uniforms,
+                                &render_segment.cursor,
+                                &mut layers,
+                            )
+                            .await;
+                        (t0.elapsed(), r)
+                    };
+                    let prefetch_fut = async {
+                        let t0 = Instant::now();
+                        let d = prefetch.await;
+                        (t0.elapsed(), d)
+                    };
+                    let ((render_elapsed, render), (prefetch_elapsed, decoded)) =
+                        tokio::join!(render_fut, prefetch_fut);
+                    if let Some((next_seg_time, next_clip_index)) = next_prefetch_meta {
+                        prefetched_decode =
+                            Some((next_frame_number, next_seg_time, next_clip_index, decoded));
+                    }
+                    (
+                        render,
+                        Some(render_elapsed.as_millis() as u64),
+                        Some(prefetch_elapsed.as_millis() as u64),
+                        Some(join_wall_start.elapsed().as_millis() as u64),
+                    )
+                } else {
+                    let (render, decoded) = tokio::join!(
+                        frame_renderer.render_nv12(
+                            segment_frames,
+                            uniforms,
+                            &render_segment.cursor,
+                            &mut layers,
+                        ),
+                        prefetch
+                    );
 
-                if let Some((next_seg_time, next_clip_index)) = next_prefetch_meta {
-                    prefetched_decode =
-                        Some((next_frame_number, next_seg_time, next_clip_index, decoded));
+                    if let Some((next_seg_time, next_clip_index)) = next_prefetch_meta {
+                        prefetched_decode =
+                            Some((next_frame_number, next_seg_time, next_clip_index, decoded));
+                    }
+
+                    (render, None, None, None)
                 }
-
-                render
-            } else {
-                frame_renderer
+            } else if record_first_frame_nv12_phases {
+                let render_start = Instant::now();
+                let render = frame_renderer
                     .render_nv12(
                         segment_frames,
                         uniforms,
                         &render_segment.cursor,
                         &mut layers,
                     )
-                    .await
+                    .await;
+                (
+                    render,
+                    Some(render_start.elapsed().as_millis() as u64),
+                    None,
+                    None,
+                )
+            } else {
+                let render = frame_renderer
+                    .render_nv12(
+                        segment_frames,
+                        uniforms,
+                        &render_segment.cursor,
+                        &mut layers,
+                    )
+                    .await;
+                (render, None, None, None)
             };
+
+            if current_frame_number == 0
+                && let Some(ref slot) = startup_breakdown_ms
+                && let Ok(mut guard) = slot.lock()
+            {
+                let b = guard.get_or_insert(Nv12RenderStartupBreakdownMs::new_header(
+                    ffmpeg_init_ms,
+                    zoom_focus_interpolators_construct_ms,
+                    frame_renderer_and_layers_setup_ms,
+                ));
+                b.frame_index_zero_zoom_precompute_ms = Some(this_zoom_pre_ms);
+                b.frame_index_zero_decode_ms = Some(this_decode_ms);
+                b.frame_index_zero_render_nv12_ms = first_phase_render_ms;
+                b.frame_index_zero_prefetch_decode_parallel_ms = first_phase_prefetch_ms;
+                b.frame_index_zero_join_wall_ms = first_phase_join_wall_ms;
+            }
 
             match render_result {
                 Ok(Some(frame)) if frame.width > 0 && frame.height > 0 => {
+                    if record_first_frame_nv12_phases {
+                        if let Some(ref slot) = startup_breakdown_ms
+                            && let Ok(mut guard) = slot.lock()
+                        {
+                            let b = guard.get_or_insert(Nv12RenderStartupBreakdownMs::new_header(
+                                ffmpeg_init_ms,
+                                zoom_focus_interpolators_construct_ms,
+                                frame_renderer_and_layers_setup_ms,
+                            ));
+                            b.first_queued_zoom_precompute_ms = Some(this_zoom_pre_ms);
+                            b.first_queued_decode_ms = Some(this_decode_ms);
+                            b.first_queued_render_nv12_ms = first_phase_render_ms;
+                            b.first_queued_prefetch_decode_parallel_ms = first_phase_prefetch_ms;
+                            b.first_queued_join_wall_ms = first_phase_join_wall_ms;
+                        }
+                        record_first_frame_nv12_phases = false;
+                    }
                     last_successful_frame = Some(frame.clone_metadata_with_data());
                     sender.send((frame, current_frame_number)).await?;
+                    channel_frames_sent += 1;
+                    if stop_after_frames_sent.is_some_and(|m| channel_frames_sent >= m) {
+                        stopped_after_frame_limit = true;
+                        break;
+                    }
                 }
                 Ok(Some(_)) => {
                     tracing::warn!(
@@ -888,6 +1107,11 @@ pub async fn render_video_to_channel_nv12(
                         fallback.target_time_ns =
                             (current_frame_number as u64 * 1_000_000_000) / fps as u64;
                         sender.send((fallback, current_frame_number)).await?;
+                        channel_frames_sent += 1;
+                        if stop_after_frames_sent.is_some_and(|m| channel_frames_sent >= m) {
+                            stopped_after_frame_limit = true;
+                            break;
+                        }
                     }
                 }
                 Ok(None) => {}
@@ -903,6 +1127,11 @@ pub async fn render_video_to_channel_nv12(
                         fallback.target_time_ns =
                             (current_frame_number as u64 * 1_000_000_000) / fps as u64;
                         sender.send((fallback, current_frame_number)).await?;
+                        channel_frames_sent += 1;
+                        if stop_after_frames_sent.is_some_and(|m| channel_frames_sent >= m) {
+                            stopped_after_frame_limit = true;
+                            break;
+                        }
                     } else {
                         return Err(e);
                     }
@@ -928,7 +1157,11 @@ pub async fn render_video_to_channel_nv12(
                     frame_number = current_frame_number,
                     segment_time = segment_time,
                     consecutive_failures = consecutive_failures,
-                    max_retries = DECODE_MAX_RETRIES,
+                    max_retries = if is_initial_frame {
+                        DECODE_MAX_RETRIES_INITIAL
+                    } else {
+                        DECODE_MAX_RETRIES_STEADY
+                    },
                     "Frame decode failed after retries - using previous NV12 frame"
                 );
                 let mut fallback = last_frame.clone_metadata_with_data();
@@ -936,11 +1169,20 @@ pub async fn render_video_to_channel_nv12(
                 fallback.target_time_ns =
                     (current_frame_number as u64 * 1_000_000_000) / fps as u64;
                 sender.send((fallback, current_frame_number)).await?;
+                channel_frames_sent += 1;
+                if stop_after_frames_sent.is_some_and(|m| channel_frames_sent >= m) {
+                    stopped_after_frame_limit = true;
+                    break;
+                }
             } else {
                 tracing::error!(
                     frame_number = current_frame_number,
                     segment_time = segment_time,
-                    max_retries = DECODE_MAX_RETRIES,
+                    max_retries = if is_initial_frame {
+                        DECODE_MAX_RETRIES_INITIAL
+                    } else {
+                        DECODE_MAX_RETRIES_STEADY
+                    },
                     "First frame decode failed after retries - cannot continue"
                 );
                 continue;
@@ -948,7 +1190,8 @@ pub async fn render_video_to_channel_nv12(
         }
     }
 
-    if let Some(Ok(final_frame)) = frame_renderer.flush_pipeline_nv12().await
+    if !stopped_after_frame_limit
+        && let Some(Ok(final_frame)) = frame_renderer.flush_pipeline_nv12().await
         && final_frame.width > 0
         && final_frame.height > 0
     {
@@ -967,7 +1210,8 @@ pub async fn render_video_to_channel_nv12(
     Ok(())
 }
 
-const DECODE_MAX_RETRIES: u32 = 5;
+const DECODE_MAX_RETRIES_INITIAL: u32 = 5;
+const DECODE_MAX_RETRIES_STEADY: u32 = 2;
 
 async fn decode_segment_frames_with_retry(
     decoders: &RecordingSegmentDecoders,
@@ -979,13 +1223,18 @@ async fn decode_segment_frames_with_retry(
 ) -> Option<DecodedSegmentFrames> {
     let mut result = None;
     let mut retry_count = 0u32;
+    let max_retries = if is_initial_frame {
+        DECODE_MAX_RETRIES_INITIAL
+    } else {
+        DECODE_MAX_RETRIES_STEADY
+    };
 
-    while result.is_none() && retry_count < DECODE_MAX_RETRIES {
+    while result.is_none() && retry_count < max_retries {
         if retry_count > 0 {
             let delay = if is_initial_frame {
                 500 * (retry_count as u64 + 1)
             } else {
-                50 * retry_count as u64
+                10
             };
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
         }
@@ -1002,7 +1251,7 @@ async fn decode_segment_frames_with_retry(
 
         if result.is_none() {
             retry_count += 1;
-            if retry_count < DECODE_MAX_RETRIES {
+            if retry_count < max_retries {
                 tracing::warn!(
                     frame_number = current_frame_number,
                     segment_time = segment_time,
@@ -1225,6 +1474,7 @@ impl RenderVideoConstants {
 pub struct ProjectUniforms {
     pub output_size: (u32, u32),
     pub cursor_size: f32,
+    pub cursor_x_axis_tilt_radians: f32,
     pub frame_rate: u32,
     pub frame_number: u32,
     display: CompositeVideoFrameUniforms,
@@ -1426,8 +1676,8 @@ fn resolve_motion_descriptor(
 
     let zoom_metric = analysis.zoom_magnitude;
     let move_metric = analysis.movement_magnitude;
-    let zoom_strength = (base_amount * zoom_multiplier).min(2.0);
-    let move_strength = (base_amount * move_multiplier).min(2.0);
+    let zoom_strength = base_amount * zoom_multiplier;
+    let move_strength = base_amount * move_multiplier;
 
     if zoom_metric > move_metric && zoom_metric > MOTION_MIN_THRESHOLD && zoom_strength > 0.0 {
         let zoom_amount = (zoom_metric * zoom_strength).min(MAX_ZOOM_AMOUNT);
@@ -1457,10 +1707,10 @@ const SCREEN_MAX_PADDING: f64 = 0.4;
 
 const MOTION_BLUR_BASELINE_FPS: f32 = 60.0;
 const MOTION_MIN_THRESHOLD: f32 = 0.003;
-const MOTION_VECTOR_CAP: f32 = 0.85;
-const MAX_ZOOM_AMOUNT: f32 = 0.9;
-const DISPLAY_MOVE_MULTIPLIER: f32 = 0.6;
-const DISPLAY_ZOOM_MULTIPLIER: f32 = 0.45;
+const MOTION_VECTOR_CAP: f32 = 2.0;
+const MAX_ZOOM_AMOUNT: f32 = 2.0;
+const DISPLAY_MOVE_MULTIPLIER: f32 = 1.0;
+const DISPLAY_ZOOM_MULTIPLIER: f32 = 1.0;
 const CAMERA_MULTIPLIER: f32 = 1.0;
 const CAMERA_ONLY_MULTIPLIER: f32 = 0.45;
 
@@ -1872,6 +2122,83 @@ impl ProjectUniforms {
         total_duration: f64,
         zoom_focus_interpolator: &ZoomFocusInterpolator,
     ) -> Self {
+        let cursor_smoothing = (!project.cursor.raw).then_some(SpringMassDamperSimulationConfig {
+            tension: project.cursor.tension,
+            mass: project.cursor.mass,
+            friction: project.cursor.friction,
+        });
+        let click_spring_cfg = project.cursor.click_spring_config();
+
+        let cursor_interp_fn = |time: f32| -> Option<InterpolatedCursorPosition> {
+            match cursor_smoothing {
+                Some(cfg) => interpolate_cursor_with_click_spring(
+                    cursor_events,
+                    time,
+                    Some(cfg),
+                    Some(click_spring_cfg),
+                ),
+                None => interpolate_cursor(cursor_events, time, None),
+            }
+        };
+
+        Self::new_inner(
+            constants,
+            project,
+            frame_number,
+            fps,
+            resolution_base,
+            cursor_events,
+            segment_frames,
+            total_duration,
+            zoom_focus_interpolator,
+            &cursor_interp_fn,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_precomputed_cursor(
+        constants: &RenderVideoConstants,
+        project: &ProjectConfiguration,
+        frame_number: u32,
+        fps: u32,
+        resolution_base: XY<u32>,
+        cursor_events: &CursorEvents,
+        segment_frames: &DecodedSegmentFrames,
+        total_duration: f64,
+        zoom_focus_interpolator: &ZoomFocusInterpolator,
+        precomputed_cursor: &PrecomputedCursorTimeline,
+    ) -> Self {
+        let cursor_interp_fn = |time: f32| -> Option<InterpolatedCursorPosition> {
+            precomputed_cursor.interpolate(time)
+        };
+
+        Self::new_inner(
+            constants,
+            project,
+            frame_number,
+            fps,
+            resolution_base,
+            cursor_events,
+            segment_frames,
+            total_duration,
+            zoom_focus_interpolator,
+            &cursor_interp_fn,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_inner(
+        constants: &RenderVideoConstants,
+        project: &ProjectConfiguration,
+        frame_number: u32,
+        fps: u32,
+        resolution_base: XY<u32>,
+        _cursor_events: &CursorEvents,
+        segment_frames: &DecodedSegmentFrames,
+        total_duration: f64,
+        zoom_focus_interpolator: &ZoomFocusInterpolator,
+        cursor_interp_fn: &dyn Fn(f32) -> Option<InterpolatedCursorPosition>,
+    ) -> Self {
         let options = &constants.options;
         let output_size = Self::get_output_size(options, project, resolution_base);
         let fps_f32 = fps as f32;
@@ -1908,17 +2235,21 @@ impl ProjectUniforms {
 
         let crop = Self::get_crop(options, project);
 
-        let cursor_smoothing = (!project.cursor.raw).then_some(SpringMassDamperSimulationConfig {
-            tension: project.cursor.tension,
-            mass: project.cursor.mass,
-            friction: project.cursor.friction,
-        });
+        let interpolated_cursor = cursor_interp_fn(cursor_time_for_interp);
+        let prev_interpolated_cursor = cursor_interp_fn(prev_cursor_time_for_interp);
+        let lookback_t = (cursor_time_for_interp - 0.4).max(0.0);
+        let past_cursor_for_tilt = cursor_interp_fn(lookback_t);
 
-        let interpolated_cursor =
-            interpolate_cursor(cursor_events, cursor_time_for_interp, cursor_smoothing);
-
-        let prev_interpolated_cursor =
-            interpolate_cursor(cursor_events, prev_cursor_time_for_interp, cursor_smoothing);
+        let cursor_x_axis_tilt_radians =
+            if let (Some(cur), Some(past)) = (&interpolated_cursor, past_cursor_for_tilt) {
+                let delta_x_norm = cur.position.coord.x - past.position.coord.x;
+                let delta_x_px = delta_x_norm * resolution_base.x as f64;
+                let deg =
+                    (delta_x_px * 0.03 * project.cursor.rotation_amount as f64).clamp(-20.0, 20.0);
+                deg.to_radians() as f32
+            } else {
+                0.0
+            };
 
         let zoom_segments = project
             .timeline
@@ -1932,9 +2263,22 @@ impl ProjectUniforms {
             .map(|t| t.scene_segments.as_slice())
             .unwrap_or(&[]);
 
-        let zoom_focus = zoom_focus_interpolator.interpolate(current_recording_time);
-
-        let prev_zoom_focus = zoom_focus_interpolator.interpolate(prev_recording_time);
+        let segments_cursor = SegmentsCursor::new(frame_time as f64, zoom_segments);
+        let prev_segments_cursor = SegmentsCursor::new(prev_frame_time as f64, zoom_segments);
+        let recording_time_for_zoom_focus_interpolate = segments_cursor
+            .segment
+            .filter(|s| matches!(s.mode, cap_project::ZoomMode::Auto))
+            .map(|s| current_recording_time.min(s.end as f32))
+            .unwrap_or(current_recording_time);
+        let prev_recording_time_for_zoom_focus_interpolate = prev_segments_cursor
+            .segment
+            .filter(|s| matches!(s.mode, cap_project::ZoomMode::Auto))
+            .map(|s| prev_recording_time.min(s.end as f32))
+            .unwrap_or(prev_recording_time);
+        let zoom_focus =
+            zoom_focus_interpolator.interpolate(recording_time_for_zoom_focus_interpolate);
+        let prev_zoom_focus =
+            zoom_focus_interpolator.interpolate(prev_recording_time_for_zoom_focus_interpolate);
 
         let actual_cursor_coord = interpolated_cursor
             .as_ref()
@@ -1944,16 +2288,60 @@ impl ProjectUniforms {
             .as_ref()
             .map(|c| Coord::<RawDisplayUVSpace>::new(c.position.coord));
 
-        let zoom = InterpolatedZoom::new_with_cursor(
-            SegmentsCursor::new(frame_time as f64, zoom_segments),
+        let segment_end_focus = segments_cursor
+            .prev_segment
+            .filter(|_| segments_cursor.segment.is_none())
+            .map(|prev| {
+                let boundary_recording_time = (current_recording_time as f64
+                    - (frame_time as f64 - prev.end))
+                    .clamp(0.0, prev.end) as f32;
+                zoom_focus_interpolator.interpolate(boundary_recording_time)
+            });
+        let segment_end_cursor = segments_cursor
+            .prev_segment
+            .filter(|_| segments_cursor.segment.is_none())
+            .and_then(|prev| {
+                let boundary_recording_time = (current_recording_time as f64
+                    - (frame_time as f64 - prev.end))
+                    .clamp(0.0, prev.end) as f32;
+                cursor_interp_fn(boundary_recording_time)
+            })
+            .map(|c| Coord::<RawDisplayUVSpace>::new(c.position.coord));
+
+        let zoom = InterpolatedZoom::new_with_cursor_and_end_focus(
+            segments_cursor,
             zoom_focus,
             actual_cursor_coord,
+            segment_end_focus,
+            segment_end_cursor,
         );
 
-        let prev_zoom = InterpolatedZoom::new_with_cursor(
-            SegmentsCursor::new(prev_frame_time as f64, zoom_segments),
+        let prev_segment_end_focus = prev_segments_cursor
+            .prev_segment
+            .filter(|_| prev_segments_cursor.segment.is_none())
+            .map(|prev| {
+                let boundary_recording_time = (prev_recording_time as f64
+                    - (prev_frame_time as f64 - prev.end))
+                    .clamp(0.0, prev.end) as f32;
+                zoom_focus_interpolator.interpolate(boundary_recording_time)
+            });
+        let prev_segment_end_cursor = prev_segments_cursor
+            .prev_segment
+            .filter(|_| prev_segments_cursor.segment.is_none())
+            .and_then(|prev| {
+                let boundary_recording_time = (prev_recording_time as f64
+                    - (prev_frame_time as f64 - prev.end))
+                    .clamp(0.0, prev.end) as f32;
+                cursor_interp_fn(boundary_recording_time)
+            })
+            .map(|c| Coord::<RawDisplayUVSpace>::new(c.position.coord));
+
+        let prev_zoom = InterpolatedZoom::new_with_cursor_and_end_focus(
+            prev_segments_cursor,
             prev_zoom_focus,
             prev_actual_cursor_coord,
+            prev_segment_end_focus,
+            prev_segment_end_cursor,
         );
 
         let scene =
@@ -2333,6 +2721,7 @@ impl ProjectUniforms {
         Self {
             output_size,
             cursor_size: project.cursor.size as f32,
+            cursor_x_axis_tilt_radians,
             resolution_base,
             display,
             camera,
@@ -2364,6 +2753,7 @@ pub struct FrameRenderer<'a> {
     constants: &'a RenderVideoConstants,
     session: Option<RenderSession>,
     nv12_converter: Option<frame_pipeline::RgbaToNv12Converter>,
+    nv12_buffer_pool: NV12BufferPool,
 }
 
 impl<'a> FrameRenderer<'a> {
@@ -2374,6 +2764,7 @@ impl<'a> FrameRenderer<'a> {
             constants,
             session: None,
             nv12_converter: None,
+            nv12_buffer_pool: NV12BufferPool::new(6),
         }
     }
 
@@ -2500,10 +2891,120 @@ impl<'a> FrameRenderer<'a> {
     ) -> Option<Result<frame_pipeline::Nv12RenderedFrame, RenderingError>> {
         let nv12_converter = self.nv12_converter.as_mut()?;
         let pending = nv12_converter.take_pending()?;
-        Some(pending.wait(&self.constants.device).await)
+        Some(
+            pending
+                .wait_with_pool(&self.constants.device, Some(&mut self.nv12_buffer_pool))
+                .await,
+        )
     }
 
     pub async fn render_nv12(
+        &mut self,
+        segment_frames: DecodedSegmentFrames,
+        uniforms: ProjectUniforms,
+        cursor: &CursorEvents,
+        layers: &mut RendererLayers,
+    ) -> Result<Option<frame_pipeline::Nv12RenderedFrame>, RenderingError> {
+        if self.constants.is_software_adapter {
+            return self
+                .render_nv12_software_path(segment_frames, uniforms, cursor, layers)
+                .await;
+        }
+
+        self.render_nv12_gpu_path(segment_frames, uniforms, cursor, layers)
+            .await
+    }
+
+    async fn render_nv12_software_path(
+        &mut self,
+        segment_frames: DecodedSegmentFrames,
+        uniforms: ProjectUniforms,
+        cursor: &CursorEvents,
+        layers: &mut RendererLayers,
+    ) -> Result<Option<frame_pipeline::Nv12RenderedFrame>, RenderingError> {
+        let rgba_frame = self
+            .render(segment_frames, uniforms.clone(), cursor, layers)
+            .await?;
+
+        let Some(rgba_frame) = rgba_frame else {
+            return Ok(None);
+        };
+
+        let width = rgba_frame.width;
+        let height = rgba_frame.height;
+        let padded_bytes_per_row = rgba_frame.padded_bytes_per_row;
+        let frame_number = rgba_frame.frame_number;
+        let target_time_ns = rgba_frame.target_time_ns;
+
+        let nv12_size = (width as usize) * (height as usize) * 3 / 2;
+        let mut nv12_buf = self.nv12_buffer_pool.acquire(nv12_size);
+
+        let y_stride = width as usize;
+        let uv_stride = width as usize;
+        let y_plane_size = y_stride * height as usize;
+        let uv_plane_size = uv_stride * (height as usize / 2);
+        nv12_buf.resize(y_plane_size + uv_plane_size, 0);
+
+        let src_data = &rgba_frame.data;
+        let src_stride = padded_bytes_per_row as usize;
+
+        for row in 0..height as usize {
+            let src_row = &src_data[row * src_stride..row * src_stride + width as usize * 4];
+            let y_row = &mut nv12_buf[row * y_stride..(row + 1) * y_stride];
+            for col in 0..width as usize {
+                let r = src_row[col * 4] as i32;
+                let g = src_row[col * 4 + 1] as i32;
+                let b = src_row[col * 4 + 2] as i32;
+                y_row[col] = ((16 + ((65 * r + 129 * g + 25 * b + 128) >> 8)) as u8).clamp(16, 235);
+            }
+        }
+
+        let uv_offset = y_plane_size;
+        for row in 0..(height as usize / 2) {
+            let src_row0 =
+                &src_data[row * 2 * src_stride..row * 2 * src_stride + width as usize * 4];
+            let src_row1 = &src_data
+                [(row * 2 + 1) * src_stride..(row * 2 + 1) * src_stride + width as usize * 4];
+            let uv_row =
+                &mut nv12_buf[uv_offset + row * uv_stride..uv_offset + (row + 1) * uv_stride];
+            for col in 0..(width as usize / 2) {
+                let r = (src_row0[col * 8] as i32
+                    + src_row0[col * 8 + 4] as i32
+                    + src_row1[col * 8] as i32
+                    + src_row1[col * 8 + 4] as i32
+                    + 2)
+                    / 4;
+                let g = (src_row0[col * 8 + 1] as i32
+                    + src_row0[col * 8 + 5] as i32
+                    + src_row1[col * 8 + 1] as i32
+                    + src_row1[col * 8 + 5] as i32
+                    + 2)
+                    / 4;
+                let b = (src_row0[col * 8 + 2] as i32
+                    + src_row0[col * 8 + 6] as i32
+                    + src_row1[col * 8 + 2] as i32
+                    + src_row1[col * 8 + 6] as i32
+                    + 2)
+                    / 4;
+                uv_row[col * 2] =
+                    ((128 + ((-38 * r - 74 * g + 112 * b + 128) >> 8)) as u8).clamp(16, 240);
+                uv_row[col * 2 + 1] =
+                    ((128 + ((112 * r - 94 * g - 18 * b + 128) >> 8)) as u8).clamp(16, 240);
+            }
+        }
+
+        Ok(Some(frame_pipeline::Nv12RenderedFrame {
+            data: self.nv12_buffer_pool.wrap(nv12_buf),
+            width,
+            height,
+            y_stride: width,
+            frame_number,
+            target_time_ns,
+            format: frame_pipeline::GpuOutputFormat::Nv12,
+        }))
+    }
+
+    async fn render_nv12_gpu_path(
         &mut self,
         segment_frames: DecodedSegmentFrames,
         uniforms: ProjectUniforms,
@@ -2571,13 +3072,14 @@ impl<'a> FrameRenderer<'a> {
                 &uniforms,
             );
 
-            match finish_encoder_nv12(
+            match finish_encoder_nv12_pooled(
                 session,
                 nv12_converter,
                 &self.constants.device,
                 &self.constants.queue,
                 &uniforms,
                 encoder,
+                Some(&mut self.nv12_buffer_pool),
             )
             .await
             {
