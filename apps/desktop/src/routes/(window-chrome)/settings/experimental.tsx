@@ -1,5 +1,5 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type } from "@tauri-apps/plugin-os";
+import { type, version } from "@tauri-apps/plugin-os";
 import { createResource, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 
@@ -82,6 +82,23 @@ function Inner(props: {
 							/>
 						</div>
 					</div>
+					<Show
+						when={type() === "macos" && version().startsWith("26")} // Only on macOS 26+
+					>
+						<div class="space-y-3">
+							<h3 class="text-sm text-gray-12 w-fit">Interface</h3>
+							<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2">
+								<ToggleSettingItem
+									label="Liquid Glass"
+									description="Enables the new solarium experimental re-design. Requires macOS 26+"
+									value={!!settings.experimentalSolarium}
+									onChange={(value) =>
+										handleChange("experimentalSolarium", value)
+									}
+								/>
+							</div>
+						</div>
+					</Show>
 				</Show>
 			</div>
 		</div>

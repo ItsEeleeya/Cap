@@ -2153,6 +2153,27 @@ impl ShowCapWindow {
             } else {
                 builder = builder.decorations(false)
             }
+
+            if objc2::available!(macos = 26.0) {
+                builder = dispatch2::run_on_main(move |mtm| {
+                    use objc2_foundation::{NSObjectNSKeyValueCoding, NSObjectProtocol, ns_string};
+                    use objc2_web_kit::WKPreferences;
+
+                    let preferences = unsafe { WKPreferences::new(mtm) };
+                    let yes = objc2_foundation::NSNumber::numberWithBool(true);
+
+                    if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
+                        builder = builder.with_webview_configuration(unsafe {
+                            preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                            let target_configuration = objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                            target_configuration.setPreferences(&preferences);
+                            target_configuration
+                        });
+                    }
+
+                    builder
+                });
+            }
         }
 
         #[cfg(windows)]

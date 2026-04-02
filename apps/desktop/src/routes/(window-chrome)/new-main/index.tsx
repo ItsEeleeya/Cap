@@ -147,45 +147,45 @@ const createDisplaySignature = (
 
 type TargetMenuPanelProps =
 	| {
-			variant: "display";
-			targets?: CaptureDisplayWithThumbnail[];
-			onSelect: (target: CaptureDisplayWithThumbnail) => void;
-	  }
+		variant: "display";
+		targets?: CaptureDisplayWithThumbnail[];
+		onSelect: (target: CaptureDisplayWithThumbnail) => void;
+	}
 	| {
-			variant: "window";
-			targets?: CaptureWindowWithThumbnail[];
-			onSelect: (target: CaptureWindowWithThumbnail) => void;
-	  }
+		variant: "window";
+		targets?: CaptureWindowWithThumbnail[];
+		onSelect: (target: CaptureWindowWithThumbnail) => void;
+	}
 	| {
-			variant: "recording";
-			targets?: RecordingWithPath[];
-			onSelect: (target: RecordingWithPath) => void;
-			onViewAll: () => void;
-			uploadProgress?: Record<string, number>;
-			reuploadingPaths?: Set<string>;
-			onReupload?: (path: string) => void;
-			onRefetch?: () => void;
-	  }
+		variant: "recording";
+		targets?: RecordingWithPath[];
+		onSelect: (target: RecordingWithPath) => void;
+		onViewAll: () => void;
+		uploadProgress?: Record<string, number>;
+		reuploadingPaths?: Set<string>;
+		onReupload?: (path: string) => void;
+		onRefetch?: () => void;
+	}
 	| {
-			variant: "screenshot";
-			targets?: ScreenshotWithPath[];
-			onSelect: (target: ScreenshotWithPath) => void;
-			onViewAll: () => void;
-	  }
+		variant: "screenshot";
+		targets?: ScreenshotWithPath[];
+		onSelect: (target: ScreenshotWithPath) => void;
+		onViewAll: () => void;
+	}
 	| {
-			variant: "camera";
-			targets?: CameraWithDetails[];
-			selectedTarget: CameraWithDetails | null;
-			onSelect: (target: CameraWithDetails | null) => void;
-			permissions?: OSPermissionsCheck;
-	  }
+		variant: "camera";
+		targets?: CameraWithDetails[];
+		selectedTarget: CameraWithDetails | null;
+		onSelect: (target: CameraWithDetails | null) => void;
+		permissions?: OSPermissionsCheck;
+	}
 	| {
-			variant: "microphone";
-			targets?: MicrophoneWithDetails[];
-			selectedTarget: MicrophoneWithDetails | null;
-			onSelect: (target: MicrophoneWithDetails | null) => void;
-			permissions?: OSPermissionsCheck;
-	  };
+		variant: "microphone";
+		targets?: MicrophoneWithDetails[];
+		selectedTarget: MicrophoneWithDetails | null;
+		onSelect: (target: MicrophoneWithDetails | null) => void;
+		permissions?: OSPermissionsCheck;
+	};
 
 type SharedTargetMenuProps = {
 	isLoading: boolean;
@@ -196,27 +196,27 @@ type SharedTargetMenuProps = {
 
 type DeviceListPanelProps =
 	| {
-			variant: "camera";
-			targets: CameraWithDetails[];
-			selectedTarget: CameraWithDetails | null;
-			onSelect: (target: CameraWithDetails | null) => void;
-			isLoading?: boolean;
-			errorMessage?: string;
-			disabled?: boolean;
-			emptyMessage?: string;
-			permissions?: OSPermissionsCheck;
-	  }
+		variant: "camera";
+		targets: CameraWithDetails[];
+		selectedTarget: CameraWithDetails | null;
+		onSelect: (target: CameraWithDetails | null) => void;
+		isLoading?: boolean;
+		errorMessage?: string;
+		disabled?: boolean;
+		emptyMessage?: string;
+		permissions?: OSPermissionsCheck;
+	}
 	| {
-			variant: "microphone";
-			targets: MicrophoneWithDetails[];
-			selectedTarget: MicrophoneWithDetails | null;
-			onSelect: (target: MicrophoneWithDetails | null) => void;
-			isLoading?: boolean;
-			errorMessage?: string;
-			disabled?: boolean;
-			emptyMessage?: string;
-			permissions?: OSPermissionsCheck;
-	  };
+		variant: "microphone";
+		targets: MicrophoneWithDetails[];
+		selectedTarget: MicrophoneWithDetails | null;
+		onSelect: (target: MicrophoneWithDetails | null) => void;
+		isLoading?: boolean;
+		errorMessage?: string;
+		disabled?: boolean;
+		emptyMessage?: string;
+		permissions?: OSPermissionsCheck;
+	};
 
 function CameraListItem(props: {
 	camera: CameraWithDetails;
@@ -1091,7 +1091,7 @@ function Page() {
 			await commands.uploadExportedVideo(
 				path,
 				"Reupload",
-				new Channel<UploadProgress>(() => {}),
+				new Channel<UploadProgress>(() => { }),
 				null,
 			);
 		} finally {
@@ -1516,8 +1516,7 @@ function Page() {
 				await commands.stopRecording();
 			} catch (error) {
 				await dialog.message(
-					`Failed to stop recording: ${
-						error instanceof Error ? error.message : String(error)
+					`Failed to stop recording: ${error instanceof Error ? error.message : String(error)
 					}`,
 					{ title: "Stop Recording", kind: "error" },
 				);
@@ -1585,7 +1584,7 @@ function Page() {
 							class={cx(
 								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "display" || displayMenuOpen()) &&
-									"ring-blue-9",
+								"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1626,7 +1625,7 @@ function Page() {
 							class={cx(
 								"flex flex-1 overflow-hidden rounded-lg border border-gray-5 bg-gray-3 ring-1 ring-transparent ring-offset-2 ring-offset-gray-1 transition focus-within:ring-blue-9 focus-within:ring-offset-2 focus-within:ring-offset-gray-1",
 								(rawOptions.targetMode === "window" || windowMenuOpen()) &&
-									"ring-blue-9",
+								"ring-blue-9",
 							)}
 						>
 							<TargetTypeButton
@@ -1700,7 +1699,7 @@ function Page() {
 			}
 		}
 
-		await signIn.mutateAsync(abort).catch(() => {});
+		await signIn.mutateAsync(abort).catch(() => { });
 
 		for (const win of await getAllWebviewWindows()) {
 			if (win.label.startsWith("target-select-overlay")) {
