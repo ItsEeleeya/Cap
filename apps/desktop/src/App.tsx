@@ -5,7 +5,7 @@ import {
 	type WebviewWindow,
 } from "@tauri-apps/api/webviewWindow";
 import { message } from "@tauri-apps/plugin-dialog";
-import { createEffect, lazy, onCleanup, onMount, Suspense } from "solid-js";
+import { createEffect, createSignal, lazy, onCleanup, onMount, Suspense } from "solid-js";
 import { Toaster } from "solid-toast";
 
 import "@cap/ui-solid/main.css";
@@ -17,6 +17,9 @@ import { generalSettingsStore } from "./store";
 import { initAnonymousUser } from "./utils/analytics";
 import { type AppTheme, commands } from "./utils/tauri";
 import titlebar from "./utils/titlebar-state";
+import { type as ostype } from "@tauri-apps/plugin-os";
+import { createContextProvider } from "@solid-primitives/context";
+import { SolariumContext } from "./utils/solarium";
 
 const WindowChromeLayout = lazy(() => import("./routes/(window-chrome)"));
 const NewMainPage = lazy(() => import("./routes/(window-chrome)/new-main"));
@@ -95,7 +98,9 @@ export default function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<Suspense>
-				<Inner />
+				<SolariumContext>
+					<Inner />
+				</SolariumContext>
 			</Suspense>
 		</QueryClientProvider>
 	);
@@ -107,7 +112,7 @@ function Inner() {
 
 	onMount(() => {
 		initAnonymousUser();
-	});
+	})
 
 	return (
 		<>
@@ -205,6 +210,14 @@ function Inner() {
 
 function createThemeListener(currentWindow: WebviewWindow) {
 	const generalSettings = generalSettingsStore.createQuery();
+	if (ostype() === "macos") {
+		createEffect(() => {
+			document.documentElement.toggleAttribute(
+				"solarium",
+				!!generalSettings.data?.experimentalSolarium,
+			);
+		});
+	}
 
 	createEffect(() => {
 		update(generalSettings.data?.theme ?? null);
@@ -233,7 +246,7 @@ function createThemeListener(currentWindow: WebviewWindow) {
 			} else {
 				localStorage.setItem("cap-theme", appTheme);
 			}
-		} catch {}
+		} catch { }
 
 		commands.setTheme(appTheme).then(() => {
 			document.documentElement.classList.toggle("dark", isDark);

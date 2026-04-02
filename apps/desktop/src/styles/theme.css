@@ -9,6 +9,7 @@
 @import "@radix-ui/colors/indigo-dark.css";
 @import "@radix-ui/colors/yellow.css";
 @import "@radix-ui/colors/yellow-dark.css";
+@import "./solarium.css";
 
 @tailwind utilities;
 

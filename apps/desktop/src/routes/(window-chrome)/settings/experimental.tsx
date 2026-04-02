@@ -1,5 +1,5 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type, version } from "@tauri-apps/plugin-os";
+import { type } from "@tauri-apps/plugin-os";
 import { createResource, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 
@@ -10,6 +10,7 @@ import {
 } from "~/utils/general-settings";
 import { commands } from "~/utils/tauri";
 import { ToggleSettingItem } from "./Setting";
+import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/components/Material";
 
 export default function ExperimentalSettings() {
 	const [store] = createResource(() => generalSettingsStore.get());
@@ -82,9 +83,7 @@ function Inner(props: {
 							/>
 						</div>
 					</div>
-					<Show
-						when={type() === "macos" && version().startsWith("26")} // Only on macOS 26+
-					>
+					<Show when={APPLE_SUPPORTS_HOSTED_MATERIALS}>
 						<div class="space-y-3">
 							<h3 class="text-sm text-gray-12 w-fit">Interface</h3>
 							<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2">

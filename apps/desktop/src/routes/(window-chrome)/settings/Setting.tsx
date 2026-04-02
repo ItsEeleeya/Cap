@@ -32,7 +32,7 @@ export function ToggleSettingItem(props: {
 	return (
 		<SettingItem {...props}>
 			<Toggle
-				size="sm"
+				size="lg"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
 			/>

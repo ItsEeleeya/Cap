@@ -1,0 +1,101 @@
+html[solarium] .apple-blur-ultra-thin {
+	-apple-visual-effect: -apple-system-blur-material-ultra-thin;
+}
+
+html[solarium] .apple-blur-thin {
+	-apple-visual-effect: -apple-system-blur-material-thin;
+}
+
+html[solarium] .apple-blur {
+	-apple-visual-effect: -apple-system-blur-material;
+}
+
+html[solarium] .apple-blur-thick {
+	-apple-visual-effect: -apple-system-blur-material-thick;
+}
+
+html[solarium] .apple-blur-chrome {
+	-apple-visual-effect: -apple-system-blur-material-chrome;
+}
+
+html[solarium] .apple-glass-adaptive {
+	-apple-visual-effect: -apple-system-glass-material;
+}
+
+html[solarium] .apple-glass-clear {
+	-apple-visual-effect: -apple-system-glass-material-clear;
+}
+
+html[solarium] .apple-glass-adaptive-subdued {
+	-apple-visual-effect: -apple-system-glass-material-subdued;
+}
+
+html[solarium] .apple-glass {
+	-apple-visual-effect: -apple-system-glass-material-media-controls;
+}
+
+html[solarium] .apple-glass-subdued {
+	-apple-visual-effect: -apple-system-glass-material-media-controls-subdued;
+}
+
+html[solarium] .apple-vibrancy-label {
+	-apple-visual-effect: -apple-system-vibrancy-label;
+}
+
+html[solarium] .apple-vibrancy-secondary-label {
+	-apple-visual-effect: -apple-system-vibrancy-secondary-label;
+}
+
+html[solarium] .apple-vibrancy-tertiary-label {
+	-apple-visual-effect: -apple-system-vibrancy-tertiary-label;
+}
+
+html[solarium] .apple-vibrancy-quaternary-label {
+	-apple-visual-effect: -apple-system-vibrancy-quaternary-label;
+}
+
+html[solarium] .apple-vibrancy-fill {
+	-apple-visual-effect: -apple-system-vibrancy-fill;
+}
+
+html[solarium] .apple-vibrancy-secondary-fill {
+	-apple-visual-effect: -apple-system-vibrancy-secondary-fill;
+}
+
+html[solarium] .apple-vibrancy-tertiary-fill {
+	-apple-visual-effect: -apple-system-vibrancy-tertiary-fill;
+}
+
+html[solarium] .apple-vibrancy-separator {
+	-apple-visual-effect: -apple-system-vibrancy-separator;
+}
+
+html[solarium] .apple-vibrancy-overlay {
+	-apple-visual-effect: -apple-system-vibrancy-overlay;
+}
+
+html[solarium] .apple-glass,
+html[solarium] .apple-glass-adaptive,
+html[solarium] .apple-glass-clear,
+html[solarium] .apple-glass-adaptive-subdued,
+html[solarium] .apple-glass-subdued {
+	box-shadow: none !important;
+	outline: none !important;
+	border: none !important;
+}
+
+html[solarium] .apple-glass:active,
+html[solarium] .apple-glass-adaptive:active,
+html[solarium] .apple-glass-clear:active,
+html[solarium] .apple-glass-adaptive-subdued:active,
+html[solarium] .apple-glass-subdued:active {
+	filter: brightness(0.95);
+}
+
+html[solarium] .apple-glass:focus-visible,
+html[solarium] .apple-glass-adaptive:focus-visible,
+html[solarium] .apple-glass-clear:focus-visible,
+html[solarium] .apple-glass-adaptive-subdued:focus-visible,
+html[solarium] .apple-glass-subdued:focus-visible {
+	filter: brightness(1.1);
+}

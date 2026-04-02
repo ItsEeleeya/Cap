@@ -325,10 +325,10 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	// Helper function to render select dropdown for recording behaviors
 	const SelectSettingItem = <
 		T extends
-			| MainWindowRecordingStartBehaviour
-			| PostStudioRecordingBehaviour
-			| PostDeletionBehaviour
-			| number,
+		| MainWindowRecordingStartBehaviour
+		| PostStudioRecordingBehaviour
+		| PostDeletionBehaviour
+		| number,
 	>(props: {
 		label: string;
 		description: string;

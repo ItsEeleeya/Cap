@@ -31,6 +31,7 @@ import {
 	createOptionsQuery,
 } from "~/utils/queries";
 import { handleRecordingResult } from "~/utils/recording";
+import { useSolarium } from "~/utils/solarium";
 import type {
 	CameraInfo,
 	CurrentRecording,
@@ -70,15 +71,20 @@ export default function () {
 
 function InProgressRecordingInner() {
 	console.log("[in-progress-recording] Inner component rendering");
+	const solarium = useSolarium();
+
+	if (solarium) {
+		const webview = getCurrentWindow();
+	}
 
 	const [state, setState] = createSignal<State>(
 		window.COUNTDOWN === 0
 			? { variant: "initializing" }
 			: {
-					variant: "countdown",
-					from: window.COUNTDOWN,
-					current: window.COUNTDOWN,
-				},
+				variant: "countdown",
+				from: window.COUNTDOWN,
+				current: window.COUNTDOWN,
+			},
 	);
 	const [start, setStart] = createSignal(Date.now());
 	const [time, setTime] = createSignal(Date.now());
@@ -162,9 +168,9 @@ function InProgressRecordingInner() {
 	const [pauseResumes, setPauseResumes] = createStore<
 		| []
 		| [
-				...Array<{ pause: number; resume?: number }>,
-				{ pause: number; resume?: number },
-		  ]
+			...Array<{ pause: number; resume?: number }>,
+			{ pause: number; resume?: number },
+		]
 	>([]);
 
 	createEffect(() => {
@@ -615,7 +621,7 @@ function InProgressRecordingInner() {
 		<div class="flex h-full w-full flex-col justify-end px-3 pb-3">
 			<div ref={setInteractiveAreaRef} class="flex w-full flex-col gap-2">
 				<Show when={hasRecordingIssue() && issuePanelVisible()}>
-					<div class="flex w-full flex-row items-start gap-3 rounded-2xl border border-red-8 bg-gray-1 px-4 py-3 text-[12px] leading-snug text-red-11 shadow-lg">
+					<div class="w-full flex-row items-start gap-3 rounded-2xl border border-red-8 bg-gray-1 px-4 py-3 text-[12px] leading-snug text-red-11 shadow-lg">
 						<IconLucideAlertTriangle class="mt-0.5 size-5 text-red-9" />
 						<div class="flex-1 space-y-1">
 							{issueMessages().map((message) => (
@@ -632,8 +638,8 @@ function InProgressRecordingInner() {
 						</button>
 					</div>
 				</Show>
-				<div class="h-10 w-full rounded-2xl">
-					<div class="flex h-full w-full flex-row items-stretch overflow-hidden rounded-2xl bg-gray-1 border border-gray-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)] animate-in fade-in">
+				<div class="h-10 w-full rounded-2xl [[solarium]_&]:overflow-hidden [[solarium]_&]:shadow-md">
+					<div class="flex h-full w-full flex-row items-stretch overflow-hidden rounded-2xl bg-gray-1 border border-gray-5 shadow-[0_1px_3px_rgba(0,0,0,0.1)] animate-in fade-in apple-glass [[solarium]_&]:rounded-full [[solarium]_&]:bg-gray-transparent-50">
 						<div class="flex flex-1 flex-col gap-2 p-[0.25rem]">
 							<div class="flex flex-1 flex-row justify-between">
 								<Show
@@ -727,14 +733,13 @@ function InProgressRecordingInner() {
 												<IconLucideMicOff class="size-5 text-amber-11" />
 											) : (
 												<>
-													<IconCapMicrophone class="size-5 text-gray-12" />
+													<IconCapMicrophone class="size-5 text-gray-12 apple-vibrancy-fill" />
 													<div class="absolute bottom-1 left-1 right-1 h-0.5 overflow-hidden rounded-full bg-gray-10">
 														<div
 															class="absolute inset-0 bg-blue-9 transition-transform duration-100"
 															style={{
-																transform: `translateX(-${
-																	(1 - audioLevel()) * 100
-																}%)`,
+																transform: `translateX(-${(1 - audioLevel()) * 100
+																	}%)`,
 															}}
 														/>
 													</div>
@@ -742,7 +747,7 @@ function InProgressRecordingInner() {
 											)
 										) : (
 											<IconLucideMicOff
-												class="size-5 text-gray-7"
+												class="size-5 text-gray-7 apple-vibrancy-secondary-fill"
 												data-tauri-drag-region
 											/>
 										)}
@@ -752,7 +757,7 @@ function InProgressRecordingInner() {
 											class="flex h-8 w-8 items-center justify-center"
 											title="Camera disconnected - recording continues without camera overlay"
 										>
-											<IconLucideVideoOff class="size-5 text-amber-11" />
+											<IconLucideVideoOff class="size-5 text-amber-11 apple-vibrancy-secondary-fill" />
 										</div>
 									</Show>
 									<Show when={degradedReason()}>
@@ -785,7 +790,7 @@ function InProgressRecordingInner() {
 												class={cx(
 													"text-red-10 hover:bg-red-3/40",
 													issuePanelVisible() &&
-														"bg-red-3/40 ring-1 ring-red-8",
+													"bg-red-3/40 ring-1 ring-red-8",
 												)}
 												onClick={() => toggleIssuePanel()}
 												title={issueMessages().join(", ")}
@@ -812,9 +817,9 @@ function InProgressRecordingInner() {
 												}
 											>
 												{state().variant === "paused" ? (
-													<IconCapPlayCircle />
+													<IconCapPlayCircle class="apple-vibrancy-fill" />
 												) : (
-													<IconCapPauseCircle />
+													<IconCapPauseCircle class="apple-vibrancy-fill" />
 												)}
 											</ActionButton>
 										)}
@@ -825,7 +830,7 @@ function InProgressRecordingInner() {
 											title="Restart recording"
 											aria-label="Restart recording"
 										>
-											<IconCapRestart />
+											<IconCapRestart class="apple-vibrancy-fill" />
 										</ActionButton>
 										<ActionButton
 											disabled={deleteRecording.isPending || isCountdown()}
@@ -833,7 +838,7 @@ function InProgressRecordingInner() {
 											title="Delete recording"
 											aria-label="Delete recording"
 										>
-											<IconCapTrash />
+											<IconCapTrash class="apple-vibrancy-fill" />
 										</ActionButton>
 										<ActionButton
 											ref={(el) => {
@@ -845,7 +850,7 @@ function InProgressRecordingInner() {
 											title="Recording settings"
 											aria-label="Recording settings"
 										>
-											<IconCapSettings class="size-5" />
+											<IconCapSettings class="size-5 apple-vibrancy-fill" />
 										</ActionButton>
 									</Show>
 								</div>
@@ -855,7 +860,7 @@ function InProgressRecordingInner() {
 							class="non-styled-move flex cursor-move items-center justify-center border-l border-gray-5 p-[0.25rem] hover:cursor-move transition-colors duration-100 hover:bg-gray-12/[0.04] dark:hover:bg-white/[0.06]"
 							data-tauri-drag-region
 						>
-							<IconCapMoreVertical class="pointer-events-none text-gray-10" />
+							<IconCapMoreVertical class="pointer-events-none text-gray-10 apple-vibrancy-fill" />
 						</div>
 					</div>
 				</div>
