@@ -6,9 +6,10 @@ export function SettingItem(props: {
 	label: string;
 	description?: string;
 	children: JSX.Element;
+	onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 }) {
 	return (
-		<div class="flex flex-row gap-2 justify-between items-center py-3 text-sm">
+		<div class="flex flex-row gap-2 justify-between items-center py-3 text-sm" onClick={props.onClick}>
 			<div class="flex flex-col justify-between items-start space-y-1">
 				<div class="flex gap-2 items-center">
 					<p class="text-gray-12">{props.label}</p>
@@ -30,11 +31,12 @@ export function ToggleSettingItem(props: {
 	onChange(v: boolean): void;
 }) {
 	return (
-		<SettingItem {...props}>
+		<SettingItem {...props} onClick={() => props.onChange(!props.value)}>
 			<Toggle
-				size="lg"
+				size="md"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
+				onClick={(e: PointerEvent) => e.stopPropagation()}
 			/>
 		</SettingItem>
 	);

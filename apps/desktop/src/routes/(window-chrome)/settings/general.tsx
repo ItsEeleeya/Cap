@@ -593,14 +593,14 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 }
 
 function SettingGroup(
-	props: ParentProps<{ title: string; titleStyling?: string }>,
+	props: ParentProps<{ title?: string; titleStyling?: string }>,
 ) {
 	return (
 		<div>
 			<h3 class={cx("mb-3 text-sm text-gray-12 w-fit", props.titleStyling)}>
 				{props.title}
 			</h3>
-			<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2">
+			<div class="settings_group_container">
 				{props.children}
 			</div>
 		</div>
@@ -614,9 +614,8 @@ function ServerURLSetting(props: {
 	const [value, setValue] = createWritableMemo(() => props.value);
 
 	return (
-		<div class="flex flex-col gap-3">
-			<h3 class="text-sm text-gray-12 w-fit">Self host</h3>
-			<div class="flex flex-col gap-2 px-4 rounded-xl border border-gray-3 bg-gray-2">
+		<SettingGroup title="Self host">
+			<div class="flex flex-col gap-2">
 				<SettingItem
 					label="Cap Server URL"
 					description="This setting should only be changed if you are self hosting your own instance of Cap Web."
@@ -639,7 +638,7 @@ function ServerURLSetting(props: {
 					</div>
 				</SettingItem>
 			</div>
-		</div>
+		</SettingGroup>
 	);
 }
 
@@ -720,7 +719,7 @@ function DefaultProjectNameCard(props: {
 	}
 
 	return (
-		<div class="flex flex-col gap-3 px-4 py-3 mt-6 rounded-xl border border-gray-3 bg-gray-2">
+		<div class="flex flex-col gap-3 py-3 mt-6 settings_group_container">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="flex flex-col gap-1">
 					<p class="text-sm text-gray-12">Default Project Name</p>
@@ -913,7 +912,7 @@ function ExcludedWindowsCard(props: {
 	};
 
 	return (
-		<div class="flex flex-col gap-3 px-4 py-3 mt-6 rounded-xl border border-gray-3 bg-gray-2">
+		<div class="flex flex-col gap-3 px-4 py-3 mt-6 settings_group_container">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 				<div class="flex flex-col gap-1">
 					<p class="text-sm text-gray-12">Excluded Windows</p>
@@ -952,45 +951,47 @@ function ExcludedWindowsCard(props: {
 					</Button>
 				</div>
 			</div>
-			<Show when={!props.isLoading} fallback={<ExcludedWindowsSkeleton />}>
-				<Show
-					when={hasExclusions()}
-					fallback={
-						<p class="text-xs text-gray-10">
-							No windows are currently excluded.
-						</p>
-					}
-				>
-					<div class="flex flex-wrap gap-2">
-						<For each={props.excludedWindows}>
-							{(entry, index) => (
-								<div class="group flex items-center gap-2 rounded-full border border-gray-4 bg-gray-3 px-3 py-1.5">
-									<div class="flex flex-col leading-tight">
-										<span class="text-sm text-gray-12">
-											{getExclusionPrimaryLabel(entry)}
-										</span>
-										<Show when={getExclusionSecondaryLabel(entry)}>
-											{(label) => (
-												<span class="text-[0.65rem] text-gray-9">
-													{label()}
-												</span>
-											)}
-										</Show>
+			<div class="pt-2">
+				<Show when={!props.isLoading} fallback={<ExcludedWindowsSkeleton />}>
+					<Show
+						when={hasExclusions()}
+						fallback={
+							<p class="text-xs text-gray-10">
+								No windows are currently excluded.
+							</p>
+						}
+					>
+						<div class="flex flex-wrap gap-2">
+							<For each={props.excludedWindows}>
+								{(entry, index) => (
+									<div class="group flex items-center gap-2 rounded-full border border-gray-4 bg-gray-3 px-3 py-1.5">
+										<div class="flex flex-col leading-tight">
+											<span class="text-sm text-gray-12">
+												{getExclusionPrimaryLabel(entry)}
+											</span>
+											<Show when={getExclusionSecondaryLabel(entry)}>
+												{(label) => (
+													<span class="text-[0.65rem] text-gray-9">
+														{label()}
+													</span>
+												)}
+											</Show>
+										</div>
+										<button
+											type="button"
+											class="flex items-center justify-center rounded-full bg-gray-4/70 text-gray-11 transition-colors hover:bg-gray-5 hover:text-gray-12 size-6"
+											onClick={() => void props.onRemove(index())}
+											aria-label="Remove excluded window"
+										>
+											<IconLucideX class="size-3" />
+										</button>
 									</div>
-									<button
-										type="button"
-										class="flex items-center justify-center rounded-full bg-gray-4/70 text-gray-11 transition-colors hover:bg-gray-5 hover:text-gray-12 size-6"
-										onClick={() => void props.onRemove(index())}
-										aria-label="Remove excluded window"
-									>
-										<IconLucideX class="size-3" />
-									</button>
-								</div>
-							)}
-						</For>
-					</div>
+								)}
+							</For>
+						</div>
+					</Show>
 				</Show>
-			</Show>
+			</div>
 		</div>
 	);
 }
