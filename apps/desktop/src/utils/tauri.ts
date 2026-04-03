@@ -357,6 +357,15 @@ async recoverRecording(projectPath: string) : Promise<string> {
 },
 async discardIncompleteRecording(projectPath: string) : Promise<null> {
     return await TAURI_INVOKE("discard_incomplete_recording", { projectPath });
+},
+async createOverlay(id: string, rect: JsRect, cornerRadius: number, variant: number) : Promise<null> {
+    return await TAURI_INVOKE("create_overlay", { id, rect, cornerRadius, variant });
+},
+async destroyOverlay(id: string) : Promise<null> {
+    return await TAURI_INVOKE("destroy_overlay", { id });
+},
+async updateOverlay(id: string, rect: JsRect) : Promise<null> {
+    return await TAURI_INVOKE("update_overlay", { id, rect });
 }
 }
 
@@ -504,6 +513,7 @@ export type HotkeysStore = { hotkeys: { [key in HotkeyAction]: Hotkey } }
 export type ImportStage = "Probing" | "Converting" | "Finalizing" | "Complete" | "Failed"
 export type IncompleteRecordingInfo = { projectPath: string; prettyName: string; segmentCount: number; estimatedDurationSecs: number }
 export type InstantRecordingMeta = { recording: boolean } | { error: string } | { fps: number; sample_rate: number | null }
+export type JsRect = { x: number; y: number; width: number; height: number }
 export type JsonValue<T> = [T]
 export type KeyPressDisplay = { key: string; timeOffset: number }
 export type KeyboardData = { settings: KeyboardSettings }
