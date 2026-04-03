@@ -3,6 +3,7 @@ import { createEventListenerMap } from "@solid-primitives/event-listener";
 import { type } from "@tauri-apps/plugin-os";
 import { cva } from "cva";
 import { type ComponentProps, createRoot, createSignal, splitProps } from "solid-js";
+import { GlassEffectVariant, OverlayTracker, useSolarium } from "~/utils/solarium";
 import { commands } from "~/utils/tauri";
 
 const toggleControlStyles = cva("flex shrink-0 items-center rounded-full bg-gray-6 transition-[background-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer group-focus-visible:ring-2 group-focus-visible:ring-blue-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-transparent group-data-[disabled]:bg-gray-3 group-data-[checked]:bg-blue-500 group-data-[pressed]:bg-gray-5", {
@@ -44,13 +45,32 @@ export function Toggle(
 	const [dragChecked, setDragChecked] = createSignal<boolean | undefined>(undefined);
 	const effectiveChecked = () => dragChecked() ?? Boolean(others.checked);
 
+	const solarium = useSolarium();
+
+	let thumbEl!: HTMLDivElement;
+	const [thumbOverride, setThumbOverride] = createSignal<string | undefined>(undefined);
+
 	function onThumbPointerDown(e: PointerEvent) {
-		if (e.button !== 0) return;
+		if (e.button !== 0 || e.target) return;
 		e.preventDefault();
 
 		let refX = e.clientX;
 		let intendedState = Boolean(others.checked);
 		let didDragToggle = false;
+
+		const overlayTracker = !solarium?.() ? new OverlayTracker("toggle", thumbEl, {
+			cornerRadius: 100,
+			variant: GlassEffectVariant.loupe,
+		}) : null;
+
+		if (overlayTracker) {
+			console.log("Tracker created");
+		}
+
+		if (overlayTracker) {
+			setThumbOverride("opacity-0 scale-[2]");
+			overlayTracker.start();
+		}
 
 		createRoot((cleanup) => {
 			createEventListenerMap(window, {
@@ -72,6 +92,11 @@ export function Toggle(
 					}
 				},
 				pointerup: () => {
+					if (overlayTracker) {
+						overlayTracker.stop();
+						setThumbOverride(undefined);
+					}
+
 					if (didDragToggle) {
 						props.onChange?.(intendedState);
 						window.addEventListener("click", (e) => {
@@ -87,12 +112,13 @@ export function Toggle(
 	}
 
 	return (
-
 		<KSwitch class="group relative inline-flex items-center" {...others} checked={effectiveChecked()}>
 			<KSwitch.Input class="peer absolute inset-0 cursor-pointer opacity-0" />
 			<KSwitch.Control class={toggleControlStyles({ size: local.size })}>
 				<KSwitch.Thumb
+					ref={thumbEl}
 					class={toggleThumbStyles({ size: local.size })}
+					classList={{ [thumbOverride() ?? ""]: !!thumbOverride() }}
 					onPointerDown={onThumbPointerDown}
 				/>
 			</KSwitch.Control>

@@ -3503,6 +3503,9 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             recovery::find_incomplete_recordings,
             recovery::recover_recording,
             recovery::discard_incomplete_recording,
+            platform::overlay::create_overlay,
+            platform::overlay::destroy_overlay,
+            platform::overlay::update_overlay,
         ])
         .events(tauri_specta::collect_events![
             RecordingOptionsChanged,
@@ -3543,7 +3546,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
     #[cfg(debug_assertions)]
     specta_builder
         .export(
-            specta_typescript::Typescript::default(),
+            specta_typescript::Typescript::new()
+                .bigint(specta_typescript::BigIntExportBehavior::BigInt),
             "../src/utils/tauri.ts",
         )
         .expect("Failed to export typescript bindings");
@@ -3602,6 +3606,10 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
     #[cfg(target_os = "macos")]
     {
         builder = builder.plugin(tauri_nspanel::init());
+
+        // if objc2::available!(macos = 26.0) {
+        // builder = builder.plugin(platform::overlay::init());
+        // }
     }
 
     builder
@@ -3675,6 +3683,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             app.manage(http_client::RetryableHttpClient::default());
             app.manage(PendingScreenshots::default());
             app.manage(FinalizingRecordings::default());
+
+            app.manage(platform::overlay::OverlayRegistry::default());
 
             gpu_context::prewarm_gpu();
 
