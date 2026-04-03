@@ -308,9 +308,8 @@ function Inner() {
 									<Show when={display.physical_size}>
 										{(size) => (
 											<span class="mb-2 text-xs">
-												{`${size().width}x${size().height} · ${
-													display.refresh_rate
-												}FPS`}
+												{`${size().width}x${size().height} · ${display.refresh_rate
+													}FPS`}
 											</span>
 										)}
 									</Show>
@@ -1343,7 +1342,7 @@ function RecordingControls(props: {
 	return (
 		<>
 			<div class="flex flex-col gap-2.5 items-stretch my-2.5 w-[26rem] max-w-[90vw]">
-				<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
+				<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl apple-glass [[solarium]_&]:bg-transparent">
 					<div class="flex gap-2.5 items-center">
 						<div
 							onClick={() => {
@@ -1460,7 +1459,7 @@ function RecordingControls(props: {
 					</div>
 				</div>
 				<Show when={(rawOptions.mode as string) !== "screenshot"}>
-					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
+					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl apple-glass [[solarium]_&]:bg-transparent">
 						<div class="grid grid-cols-2 gap-2 w-full">
 							<CameraSelectBase
 								disabled={devices.isPending}

@@ -21,6 +21,7 @@ import {
 import { createStore } from "solid-js/store";
 import { Transition } from "solid-transition-group";
 import { createKeyDownSignal } from "~/utils/events";
+import { useSolarium } from "~/utils/solarium";
 
 import { commands } from "~/utils/tauri";
 export interface CropBounds {
@@ -1015,6 +1016,8 @@ export function Cropper(
 
 	const altDown = createKeyDownSignal(window, "Alt");
 
+	const solarium = useSolarium();
+
 	return (
 		<div
 			ref={containerRef}
@@ -1040,7 +1043,7 @@ export function Cropper(
 				<Show when={props.showBounds && labelTransform()}>
 					{(transform) => (
 						<div
-							class="fixed z-50 pointer-events-none bg-gray-2 text-xs px-2 py-0.5 rounded-full shadow-lg border border-gray-5 font-mono scale-50"
+							class="fixed z-50 pointer-events-none bg-gray-2 text-xs px-2 py-0.5 rounded-full shadow-lg border border-gray-5 font-mono scale-50 apple-glass [[solarium]_&]:bg-transparent"
 							style={{
 								transform: `translate(${transform().x}px, ${transform().y}px)`,
 							}}
@@ -1116,7 +1119,7 @@ export function Cropper(
 									style={{
 										cursor:
 											mouseState.drag === "handle" &&
-											mouseState.hoveringHandle?.isCorner
+												mouseState.hoveringHandle?.isCorner
 												? mouseState.hoveringHandle.cursor
 												: (cursorStyle() ?? handle.cursor),
 										...(handle.x === "l"
@@ -1182,35 +1185,35 @@ export function Cropper(
 										cursor: cursorStyle() ?? handle.cursor,
 										...(handle.x === "l"
 											? {
-													left: "-1px",
+												left: "-1px",
+												width: "10px",
+												top: "10px",
+												bottom: "10px",
+												transform: "translateX(-50%)",
+											}
+											: handle.x === "r"
+												? {
+													right: "-1px",
 													width: "10px",
 													top: "10px",
 													bottom: "10px",
-													transform: "translateX(-50%)",
+													transform: "translateX(50%)",
 												}
-											: handle.x === "r"
-												? {
-														right: "-1px",
-														width: "10px",
-														top: "10px",
-														bottom: "10px",
-														transform: "translateX(50%)",
-													}
 												: handle.y === "t"
 													? {
-															top: "-1px",
-															height: "10px",
-															left: "10px",
-															right: "10px",
-															transform: "translateY(-50%)",
-														}
+														top: "-1px",
+														height: "10px",
+														left: "10px",
+														right: "10px",
+														transform: "translateY(-50%)",
+													}
 													: {
-															bottom: "-1px",
-															height: "10px",
-															left: "10px",
-															right: "10px",
-															transform: "translateY(50%)",
-														}),
+														bottom: "-1px",
+														height: "10px",
+														left: "10px",
+														right: "10px",
+														transform: "translateY(50%)",
+													}),
 									}}
 									onMouseEnter={() =>
 										setMouseState("hoveringHandle", { ...handle })
@@ -1239,11 +1242,11 @@ export function Cropper(
 								aria-live="polite"
 							>
 								<div
-									class="h-[18px] w-11 rounded-full text-center text-xs text-gray-12 border border-white/70 dark:border-white/20 drop-shadow-md outline-1 outline outline-black/80"
+									class="h-[18px] w-11 rounded-full text-center text-xs text-gray-12 border border-white/70 dark:border-white/20 drop-shadow-md outline-1 outline outline-black/80 apple-glass [[solarium]_&]:opacity-100"
 									classList={{
 										"backdrop-blur-sm bg-white/50 dark:bg-black/50 dark:backdrop-brightness-90 backdrop-brightness-200":
-											props.useBackdropFilter,
-										"bg-gray-3 opacity-80": !props.useBackdropFilter,
+											props.useBackdropFilter && !solarium,
+										"bg-gray-3 opacity-80 [[solarium]_&]:bg-transparent": !props.useBackdropFilter,
 									}}
 								>
 									{bounds[0]}:{bounds[1]}

@@ -80,6 +80,7 @@ html[solarium] .apple-glass-clear,
 html[solarium] .apple-glass-adaptive-subdued,
 html[solarium] .apple-glass-subdued {
 	box-shadow: none !important;
+	filter: none !important;
 	outline: none !important;
 	border: none !important;
 }
