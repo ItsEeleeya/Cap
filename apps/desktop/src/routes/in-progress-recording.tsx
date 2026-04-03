@@ -31,7 +31,6 @@ import {
 	createOptionsQuery,
 } from "~/utils/queries";
 import { handleRecordingResult } from "~/utils/recording";
-import { useSolarium } from "~/utils/solarium";
 import type {
 	CameraInfo,
 	CurrentRecording,
@@ -71,11 +70,6 @@ export default function () {
 
 function InProgressRecordingInner() {
 	console.log("[in-progress-recording] Inner component rendering");
-	const solarium = useSolarium();
-
-	if (solarium) {
-		const webview = getCurrentWindow();
-	}
 
 	const [state, setState] = createSignal<State>(
 		window.COUNTDOWN === 0
@@ -655,7 +649,7 @@ function InProgressRecordingInner() {
 								>
 									<button
 										disabled={stopRecording.isPending || isCountdown()}
-										class="flex flex-row items-center gap-[0.25rem] rounded-lg py-[0.25rem] px-[0.5rem] text-red-300 transition-colors duration-100 hover:bg-red-500/[0.08] active:bg-red-500/[0.12] disabled:opacity-60 disabled:hover:bg-transparent"
+										class="flex flex-row items-center gap-[0.25rem] rounded-lg [[solarium]_&]:rounded-full py-[0.25rem] px-[0.5rem] text-red-300 transition-colors duration-100 hover:bg-red-500/[0.08] active:bg-red-500/[0.12] disabled:opacity-60 disabled:hover:bg-transparent"
 										type="button"
 										onClick={() => stopRecording.mutate()}
 										title="Stop recording"
@@ -874,7 +868,7 @@ function ActionButton(props: ComponentProps<"button">) {
 		<button
 			{...props}
 			class={cx(
-				"p-[0.25rem] rounded-lg transition-colors duration-100",
+				"p-[0.25rem] rounded-lg [[solarium]_&]:rounded-full transition-colors duration-100",
 				"text-gray-11 hover:text-gray-12",
 				"hover:bg-gray-12/[0.06] dark:hover:bg-white/[0.08]",
 				"active:bg-gray-12/[0.1] dark:active:bg-white/[0.12]",

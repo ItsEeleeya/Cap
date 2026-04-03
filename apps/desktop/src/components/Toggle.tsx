@@ -1,9 +1,8 @@
 import { Switch as KSwitch } from "@kobalte/core/switch";
 import { createEventListenerMap } from "@solid-primitives/event-listener";
 import { type } from "@tauri-apps/plugin-os";
-import { cva, cx } from "cva";
-import { type ComponentProps, createRoot, Show, splitProps } from "solid-js";
-import { useSolarium } from "~/utils/solarium";
+import { cva } from "cva";
+import { type ComponentProps, createRoot, createSignal, splitProps } from "solid-js";
 import { commands } from "~/utils/tauri";
 
 const toggleControlStyles = cva("flex shrink-0 items-center rounded-full bg-gray-6 transition-[background-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer group-focus-visible:ring-2 group-focus-visible:ring-blue-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-transparent group-data-[disabled]:bg-gray-3 group-data-[checked]:bg-blue-500 group-data-[pressed]:bg-gray-5", {
@@ -32,12 +31,6 @@ const toggleThumbStyles = cva("ms-0.5 rounded-full bg-white shadow-[0px_0px_1px_
 	},
 });
 
-const SOLARIUM_TOGGLE_SIZE_MAP = {
-	sm: "min-w-[2rem] w-[2rem] h-[1rem]",
-	md: "min-w-[2.5rem] min-h-[1.5rem]",
-	lg: "min-w-[3rem] min-h-[2.5rem]",
-};
-
 const DRAG_THRESHOLD = 8;
 const macos = type() === "macos";
 function performHaptic() {
@@ -48,69 +41,61 @@ export function Toggle(
 	props: ComponentProps<typeof KSwitch> & { size?: "sm" | "md" | "lg" },
 ) {
 	const [local, others] = splitProps(props, ["size"]);
-	const solarium = useSolarium();
+	const [dragChecked, setDragChecked] = createSignal<boolean | undefined>(undefined);
+	const effectiveChecked = () => dragChecked() ?? Boolean(others.checked);
 
 	function onThumbPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
 		e.preventDefault();
 
-		const startX = e.clientX;
+		let refX = e.clientX;
+		let intendedState = Boolean(others.checked);
 		let didDragToggle = false;
 
 		createRoot((cleanup) => {
 			createEventListenerMap(window, {
 				pointermove: (e) => {
-					const deltaX = e.clientX - startX;
-					const isChecked = others.checked;
+					const deltaX = e.clientX - refX;
 
-					if (!isChecked && deltaX > DRAG_THRESHOLD) {
-						props.onChange?.(true);
+					if (!intendedState && deltaX > DRAG_THRESHOLD) {
+						intendedState = true;
 						didDragToggle = true;
+						refX = e.clientX;
+						setDragChecked(true);
 						performHaptic();
-					} else if (isChecked && deltaX < -DRAG_THRESHOLD) {
-						props.onChange?.(false);
+					} else if (intendedState && deltaX < -DRAG_THRESHOLD) {
+						intendedState = false;
 						didDragToggle = true;
+						refX = e.clientX;
+						setDragChecked(false);
 						performHaptic();
 					}
 				},
 				pointerup: () => {
 					if (didDragToggle) {
+						props.onChange?.(intendedState);
 						window.addEventListener("click", (e) => {
 							e.stopPropagation();
 							e.preventDefault();
 						}, { capture: true, once: true });
 					}
+					setDragChecked(undefined);
 					cleanup();
-				}
+				},
 			});
 		});
 	}
 
 	return (
-		<Show when={solarium?.() && false} fallback={
-			<KSwitch class="group relative inline-flex items-center" {...others}>
-				<KSwitch.Input class="peer absolute inset-0 cursor-pointer opacity-0" />
-				<KSwitch.Control class={toggleControlStyles({ size: local.size })}>
-					<KSwitch.Thumb
-						class={toggleThumbStyles({ size: local.size })}
-						onPointerDown={onThumbPointerDown}
-					/>
-				</KSwitch.Control>
-			</KSwitch>
-		}>
-			<input
-				ref={(el) => el.setAttribute("switch", "")}
-				type="checkbox"
-				role="switch"
-				checked={Boolean(others.checked)}
-				onInput={(e) => props?.onChange?.(e.currentTarget.checked)}
-				onFocus={others.onFocus}
-				onBlur={others.onBlur}
-				class={cx(
-					"accent-blue-500",
-					SOLARIUM_TOGGLE_SIZE_MAP[local.size || "md"]
-				)}
-			/>
-		</Show>
+
+		<KSwitch class="group relative inline-flex items-center" {...others} checked={effectiveChecked()}>
+			<KSwitch.Input class="peer absolute inset-0 cursor-pointer opacity-0" />
+			<KSwitch.Control class={toggleControlStyles({ size: local.size })}>
+				<KSwitch.Thumb
+					class={toggleThumbStyles({ size: local.size })}
+					onPointerDown={onThumbPointerDown}
+				/>
+			</KSwitch.Control>
+		</KSwitch>
 	);
 }
