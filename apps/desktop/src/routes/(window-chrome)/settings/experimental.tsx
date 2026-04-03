@@ -72,7 +72,7 @@ function Inner(props: {
 				>
 					<div class="space-y-3">
 						<h3 class="text-sm text-gray-12 w-fit">Preview</h3>
-						<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-2xl">
+						<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-3xl">
 							<ToggleSettingItem
 								label="Native camera preview"
 								description="Show the camera preview using a native GPU surface instead of rendering it within the webview. This is not functional on certain Windows systems so your mileage may vary."
@@ -86,7 +86,7 @@ function Inner(props: {
 					<Show when={APPLE_SUPPORTS_HOSTED_MATERIALS}>
 						<div class="space-y-3">
 							<h3 class="text-sm text-gray-12 w-fit">Interface</h3>
-							<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-2xl">
+							<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-3xl">
 								<ToggleSettingItem
 									label="Liquid Glass"
 									description="Enables the new solarium experimental re-design. Requires macOS 26+"

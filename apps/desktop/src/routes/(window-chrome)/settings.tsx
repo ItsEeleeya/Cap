@@ -3,12 +3,14 @@ import { A, type RouteSectionProps } from "@solidjs/router";
 import { getVersion } from "@tauri-apps/api/app";
 import * as shell from "@tauri-apps/plugin-shell";
 import "@total-typescript/ts-reset/filter-boolean";
-import { createResource, For, Show, Suspense } from "solid-js";
+import { createEffect, createResource, For, Show, Suspense } from "solid-js";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { SignInButton } from "~/components/SignInButton";
 
 import { authStore } from "~/store";
 import { trackEvent } from "~/utils/analytics";
+import { useSolarium } from "~/utils/solarium";
+import state, { setTitlebarState } from "~/utils/titlebar-state";
 
 export default function Settings(props: RouteSectionProps) {
 	const auth = authStore.createQuery();
@@ -23,7 +25,7 @@ export default function Settings(props: RouteSectionProps) {
 
 	return (
 		<div class="flex-1 flex flex-row divide-x divide-gray-3 text-[0.875rem] leading-[1.25rem] overflow-y-hidden">
-			<div class="flex flex-col h-full bg-gray-2">
+			<div class="flex flex-col h-full bg-gray-1">
 				<ul class="min-w-[12rem] h-full p-[0.625rem] space-y-1 text-gray-12">
 					<For
 						each={[
@@ -83,8 +85,8 @@ export default function Settings(props: RouteSectionProps) {
 							<li>
 								<A
 									href={item.href}
-									activeClass="bg-gray-5 pointer-events-none"
-									class="rounded-lg h-[2rem] hover:bg-gray-3 text-[13px] px-2 flex flex-row items-center gap-[0.375rem] transition-colors"
+									activeClass="bg-gray-5 pointer-events-none text-blue-11 apple-glass"
+									class="rounded-full h-9 hover:bg-gray-3 text-[13px] px-2.5 flex flex-row items-center gap-[0.375rem] transition-colors"
 								>
 									<item.icon class="opacity-60 size-4" />
 									<span>{item.name}</span>

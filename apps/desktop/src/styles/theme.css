@@ -402,5 +402,5 @@
 }
 
 .settings_group_container {
-	@apply px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-2xl;
+	@apply px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2 [[solarium]_&]:rounded-3xl;
 }

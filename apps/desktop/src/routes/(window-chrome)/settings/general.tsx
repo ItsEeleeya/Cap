@@ -597,7 +597,7 @@ function SettingGroup(
 ) {
 	return (
 		<div>
-			<h3 class={cx("mb-3 text-sm text-gray-12 w-fit", props.titleStyling)}>
+			<h3 class={cx("mb-3 text-sm text-gray-12 w-fit [[solarium]_&]:pl-3", props.titleStyling)}>
 				{props.title}
 			</h3>
 			<div class="settings_group_container">
