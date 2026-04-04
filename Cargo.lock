@@ -1358,6 +1358,7 @@ dependencies = [
  "sentry",
  "serde",
  "specta",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tracing",
