@@ -361,14 +361,14 @@ async recoverRecording(projectPath: string) : Promise<string> {
 async discardIncompleteRecording(projectPath: string) : Promise<null> {
     return await TAURI_INVOKE("discard_incomplete_recording", { projectPath });
 },
-async createOverlay(id: string, rect: JsRect, cornerRadius: number, variant: number) : Promise<null> {
-    return await TAURI_INVOKE("create_overlay", { id, rect, cornerRadius, variant });
+async createSolariumOverlay(id: string, overlay: SolariumOverlay) : Promise<null> {
+    return await TAURI_INVOKE("create_solarium_overlay", { id, overlay });
 },
-async destroyOverlay(id: string) : Promise<null> {
-    return await TAURI_INVOKE("destroy_overlay", { id });
+async updateSolariumOverlay(id: string, overlay: SolariumOverlay) : Promise<null> {
+    return await TAURI_INVOKE("update_solarium_overlay", { id, overlay });
 },
-async updateOverlay(id: string, rect: JsRect) : Promise<null> {
-    return await TAURI_INVOKE("update_overlay", { id, rect });
+async destroySolariumOverlay(id: string) : Promise<null> {
+    return await TAURI_INVOKE("destroy_solarium_overlay", { id });
 }
 }
 
@@ -506,6 +506,17 @@ quality: number | null;
  * Whether to prioritize speed over quality (default: false)
  */
 fast: boolean | null }
+export type GlassAdaptiveAppearance = "light" | "dark" | "automatic"
+/**
+ * GlassMaterialProvider.ContentEffect
+ */
+export type GlassContentLensing = "automatic" | "none" | "clip" | "lense"
+export type GlassEffectOptions = { cornerRadius: number; tintColor: TintColor | null; variant: GlassEffectVariant; subvariant: GlassMaterialSubvariant | null; interactionState: GlassInteractionState | null; subduedState: GlassSubduedState | null; scrimState: GlassScrimState | null; contentLensing: GlassContentLensing | null; adaptiveAppearance: GlassAdaptiveAppearance | null; useReducedShadowRadius: boolean | null; groupIdentifier: string | null; vibrantBlendingStyle: bigint | null }
+export type GlassEffectVariant = "regular" | "clear" | "dock" | "appIcons" | "widgets" | "text" | "avplayer" | "facetime" | "controlCenter" | "notificationCenter" | "monogram" | "bubbles" | "identity" | "focusBorder" | "focusPlatter" | "keyboard" | "sidebar" | "abuttedSidebar" | "inspector" | "control" | "loupe" | "slider" | "camera" | "cartouchePopover"
+export type GlassInteractionState = "normal" | "hovered" | "pressed"
+export type GlassMaterialSubvariant = "default" | "lockscreenControls" | "lockscreenNotifications" | "homescreenClose" | "camera" | "posterSwitcher" | "homescreenResizeHandle" | "cursorAccessory" | "homescreenFolder" | "tab" | "track" | "focusedButtonFill" | "entryField" | "volumeSlider" | "customizeSheet" | "watchFacePhotos" | "watchFacePhotosMini" | "watchFaceFlowStencil" | "watchFaceFlowSolid" | "iosnotificationCenter" | "watchPasscode" | "homescreenAppLibraryPod" | "menu" | "watchSmartStack" | "watchSmartStackAnimatedContent" | "siriSnippet" | "alarmSlider" | "mapsSign" | "sheet" | "messagesTapback"
+export type GlassScrimState = "none" | "light" | "dark"
+export type GlassSubduedState = "normal" | "subdued"
 export type GlideDirection = "none" | "left" | "right" | "up" | "down"
 export type HapticPattern = "alignment" | "levelChange" | "generic"
 export type HapticPerformanceTime = "default" | "now" | "drawCompleted"
@@ -588,6 +599,7 @@ export type ShadowConfiguration = { size: number; opacity: number; blur: number 
 export type SharingMeta = { id: string; link: string }
 export type ShowCapWindow = { Main: { init_target_mode: RecordingTargetMode | null } } | { Settings: { page: string | null } } | { Editor: { project_path: string } } | "RecordingsOverlay" | { WindowCaptureOccluder: { screen_id: DisplayId } } | { TargetSelectOverlay: { display_id: DisplayId; target_mode: RecordingTargetMode | null } } | { CaptureArea: { screen_id: DisplayId } } | { Camera: { centered: boolean } } | { InProgressRecording: { countdown: number | null; capture_target?: ScreenCaptureTarget | null } } | "Upgrade" | "ModeSelect" | { ScreenshotEditor: { path: string } } | "Onboarding"
 export type SingleSegment = { display: VideoMeta; camera?: VideoMeta | null; audio?: AudioMeta | null; cursor?: string | null }
+export type SolariumOverlay = { rect: JsRect; glassOptions: GlassEffectOptions | null }
 export type StartRecordingInputs = { capture_target: ScreenCaptureTarget; capture_system_audio?: boolean; mode: RecordingMode; organization_id?: string | null }
 export type StereoMode = "stereo" | "monoL" | "monoR"
 export type StudioRecordingMeta = { segment: SingleSegment } | { inner: MultipleSegments }
@@ -597,6 +609,7 @@ export type TargetUnderCursor = { display_id: DisplayId | null; window: WindowUn
 export type TextSegment = { start: number; end: number; track?: number; enabled?: boolean; content?: string; center?: XY<number>; size?: XY<number>; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; color?: string; fadeDuration?: number }
 export type TimelineConfiguration = { segments: TimelineSegment[]; zoomSegments: ZoomSegment[]; sceneSegments?: SceneSegment[]; maskSegments?: MaskSegment[]; textSegments?: TextSegment[]; captionSegments?: CaptionTrackSegment[]; keyboardSegments?: KeyboardTrackSegment[] }
 export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number }
+export type TintColor = { r: number; g: number; b: number; a: number }
 export type TranscriptionEngine = "Whisper" | "Parakeet"
 export type UploadMeta = { state: "MultipartUpload"; video_id: string; file_path: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "SinglePartUpload"; video_id: string; recording_dir: string; file_path: string; screenshot_path: string } | { state: "SegmentUpload"; video_id: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "Failed"; error: string } | { state: "Complete" }
 export type UploadMode = { Initial: { pre_created_video: VideoUploadInfo | null } } | "Reupload"

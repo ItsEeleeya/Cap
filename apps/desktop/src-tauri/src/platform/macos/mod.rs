@@ -13,6 +13,7 @@
 pub mod delegates;
 pub mod overlay;
 mod sc_shareable_content;
+pub mod solarium;
 
 pub use sc_shareable_content::*;
 

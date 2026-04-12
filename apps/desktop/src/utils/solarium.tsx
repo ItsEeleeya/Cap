@@ -1,21 +1,10 @@
 import { createContextProvider } from "@solid-primitives/context";
+import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { type } from "@tauri-apps/plugin-os";
-import {
-	createEffect,
-	createSignal,
-	onCleanup,
-	onMount,
-	type ParentProps,
-} from "solid-js";
+import { Component, createEffect, createSignal, onCleanup, onMount, ParentProps } from "solid-js";
 import { generalSettingsStore } from "~/store";
-import {
-	commands,
-	GlassEffectOptions,
-	JsRect,
-	SolariumOverlay,
-	type GlassEffectVariant,
-} from "./tauri";
+import { commands, GlassEffectVariant } from "./tauri";
 
 export const [SolariumContext, useSolarium] = createContextProvider(() => {
 	const generalSettings = generalSettingsStore.createQuery();
@@ -29,6 +18,47 @@ export const [SolariumContext, useSolarium] = createContextProvider(() => {
 	}
 	return enabled;
 });
+
+// 0–23, maps 1:1 to GlassMaterialVariant
+export type GlassVariant = number;
+
+// export const _GlassEffectVariant = {
+// 	regular: 0,
+// 	clear: 1,
+// 	dock: 2,
+// 	appIcons: 3,
+// 	widgets: 4,
+// 	text: 5,
+// 	avplayer: 6,
+// 	facetime: 7,
+// 	controlCenter: 8,
+// 	notificationCenter: 9,
+// 	monogram: 10,
+// 	bubbles: 11,
+// 	identity: 12,
+// 	focusBorder: 13,
+// 	focusPlatter: 14,
+// 	keyboard: 15,
+// 	sidebar: 16,
+// 	abuttedSidebar: 17,
+// 	inspector: 18,
+// 	control: 19,
+// 	loupe: 20,
+// 	slider: 21,
+// 	camera: 22,
+// 	cartouchePopover: 23,
+// };
+
+export interface OverlayOptions {
+	cornerRadius?: number;
+	variant?: GlassEffectVariant;
+	tintColor?: [number, number, number]; // RGB values 0-255
+	scale?: number; // Scale factor for the layer
+	animation?: {
+		duration?: number;
+		easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+	};
+}
 
 export interface Rect {
 	x: number;
@@ -60,7 +90,7 @@ export class OverlayTracker {
 	constructor(
 		private readonly id: string,
 		private readonly element: Element,
-		private readonly options: GlassEffectOptions,
+		private readonly options: OverlayOptions = {},
 	) {
 		this.resizeObserver = new ResizeObserver(this.schedule);
 		this.mutationObserver = new MutationObserver(this.schedule);
@@ -75,25 +105,21 @@ export class OverlayTracker {
 		const rect = getRect(this.element);
 
 		try {
-			// await commands.createSolariumOverlay(this.id, {
+			// await invoke("create_solarium_overlay", {
+			// 	id: this.id,
+			// 	window_label: "main",
 			// 	rect,
-			// 	corner_radius: this.options.cornerRadius ?? 0,
-			// 	variant: this.options.variant ?? "regular",
-			// 	tint_color: this.options.tintColor
-			// 		? {
-			// 				r: this.options.tintColor[0] / 255,
-			// 				g: this.options.tintColor[1] / 255,
-			// 				b: this.options.tintColor[2] / 255,
-			// 				a: this.options.tintColor[3] / 1,
-			// 			}
-			// 		: null,
-			// 	scale: null,
-			// 	fade_in: this.options.animate ?? false,
+			// 	corner_radius: this.options.cornerRadius ?? 12,
+			// 	variant: this.options.variant ?? 0,
 			// });
-			await commands.createSolariumOverlay(this.id, {
-				rect,
-				glassOptions: this.options,
-			});
+			await commands.createSolariumOverlay(
+				this.id,
+				{
+					rect,
+					corner_radius: this.options.cornerRadius ?? 12,
+					variant: this.options.variant ?? "regular"
+				},
+			);
 			this.active = true;
 			this.lastRect = rect;
 			this.attach();
@@ -171,13 +197,13 @@ export type SolariumOverlayProps = ParentProps<{
 	scale?: number;
 	animation?: {
 		duration?: number;
-		easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out";
+		easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 	};
 	class?: string;
 	style?: string;
 }>;
 
-export function SolariumOverlayC(props: SolariumOverlayProps) {
+export function SolariumOverlay(props: SolariumOverlayProps) {
 	const [element, setElement] = createSignal<Element | null>(null);
 	const [tracker, setTracker] = createSignal<OverlayTracker | null>(null);
 	const solarium = useSolarium();
@@ -226,4 +252,6 @@ export function SolariumOverlayC(props: SolariumOverlayProps) {
 			newTracker.start();
 		}
 	});
-}
+
+	return <div class={props.class} style={props.style} />
+};

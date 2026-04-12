@@ -4,7 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { createSignal, createUniqueId, For, onMount } from "solid-js";
-import { GlassEffectVariant, OverlayTracker } from "~/utils/solarium";
+import { OverlayTracker } from "~/utils/solarium";
 import { commands } from "~/utils/tauri";
 
 async function testOverlay() {
@@ -13,20 +13,35 @@ async function testOverlay() {
     position: fixed;
     top: 100px;
     left: 100px;
-    width: 60px;
-    height: 30px;
-    background: red;
-    border-radius: 15px;
+    width: 155px;
+    height: 85px;
+    border-radius: 50px;
     cursor: grab;
     z-index: 9999;
     user-select: none;
   `;
 	document.body.appendChild(el);
+	el.className = "";
 
 	const tracker = new OverlayTracker(
 		"test-overlay",
 		el,
-		{ cornerRadius: 15, variant: GlassEffectVariant.bubbles }
+		{
+			variant: "cartouchePopover",
+			subvariant: "entryField",
+			cornerRadius: 50,
+			tintColor: {
+				r: 0, g: 0, b: 0, a: 0,
+			},
+			contentLensing: "clip",
+			interactionState: "hovered",
+			subduedState: "normal",
+			scrimState: "none",
+			adaptiveAppearance: null,
+			useReducedShadowRadius: false,
+			groupIdentifier: null,
+			vibrantBlendingStyle: null,
+		}
 	);
 	await tracker.start();
 	console.log("overlay started");
@@ -57,7 +72,63 @@ async function testOverlay() {
 	};
 }
 
-testOverlay();
+async function testOverlayWebkit() {
+	const el = document.createElement("div");
+	el.style.cssText = `
+    position: fixed;
+    top: 100px;
+    left: 100px;
+    width: 100px;
+    height: 105px;
+    border-radius: 15px;
+    cursor: grab;
+    z-index: 9999;
+    user-select: none;
+	-apple-visual-effect: -apple-system-glass-material;
+  `;
+	document.body.appendChild(el);
+	el.className = "";
+
+	const tracker = new OverlayTracker(
+		"test-overlay",
+		el,
+		{
+			cornerRadius: 40,
+			variant: "regular",
+			tintColor: [255, 255, 255],
+			animate: true
+		}
+	);
+	await tracker.start();
+	console.log("overlay started");
+
+	// make it draggable so you can see it tracking
+	let ox = 0, oy = 0;
+	el.addEventListener("pointerdown", (e) => {
+		e.preventDefault();
+		ox = e.clientX - el.offsetLeft;
+		oy = e.clientY - el.offsetTop;
+		el.setPointerCapture(e.pointerId);
+		el.style.cursor = "grabbing";
+	});
+	el.addEventListener("pointermove", (e) => {
+		if (e.buttons !== 1) return;
+		el.style.top = `${e.clientY - oy}px`;
+		el.style.left = `${e.clientX - ox}px`;
+	});
+	el.addEventListener("pointerup", () => {
+		el.style.cursor = "grab";
+	});
+
+	// call testOverlayStop() to clean up
+	const testOverlayStop = async () => {
+		await tracker.stop();
+		el.remove();
+		console.log("overlay stopped");
+	};
+}
+
+// testOverlay();
 
 export default function Debug() {
 	const navigate = useNavigate();
@@ -70,6 +141,7 @@ export default function Debug() {
 		setVersion(v);
 
 		testOverlay();
+		// testOverlayWebkit();
 	});
 
 	const checkForUpdates = async () => {

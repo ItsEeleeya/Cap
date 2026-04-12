@@ -3503,9 +3503,9 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             recovery::find_incomplete_recordings,
             recovery::recover_recording,
             recovery::discard_incomplete_recording,
-            platform::overlay::create_overlay,
-            platform::overlay::destroy_overlay,
-            platform::overlay::update_overlay,
+            platform::solarium::create_solarium_overlay,
+            platform::solarium::update_solarium_overlay,
+            platform::solarium::destroy_solarium_overlay,
         ])
         .events(tauri_specta::collect_events![
             RecordingOptionsChanged,
@@ -3606,6 +3606,10 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
     #[cfg(target_os = "macos")]
     {
         builder = builder.plugin(tauri_nspanel::init());
+
+        if objc2::available!(macos = 26.0) {
+            builder = builder.plugin(platform::solarium::init());
+        }
 
         // if objc2::available!(macos = 26.0) {
         // builder = builder.plugin(platform::overlay::init());

@@ -3,7 +3,7 @@ import { createEventListenerMap } from "@solid-primitives/event-listener";
 import { type } from "@tauri-apps/plugin-os";
 import { cva } from "cva";
 import { type ComponentProps, createRoot, createSignal, splitProps } from "solid-js";
-import { GlassEffectVariant, OverlayTracker, useSolarium } from "~/utils/solarium";
+import { OverlayTracker, useSolarium } from "~/utils/solarium";
 import { commands } from "~/utils/tauri";
 
 const toggleControlStyles = cva("flex shrink-0 items-center rounded-full bg-gray-6 transition-[background-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer group-focus-visible:ring-2 group-focus-visible:ring-blue-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-transparent group-data-[disabled]:bg-gray-3 group-data-[checked]:bg-blue-500 group-data-[pressed]:bg-gray-5", {
@@ -60,7 +60,7 @@ export function Toggle(
 
 		const overlayTracker = !solarium?.() ? new OverlayTracker("toggle", thumbEl, {
 			cornerRadius: 100,
-			variant: GlassEffectVariant.loupe,
+			variant: "loupe",
 		}) : null;
 
 		if (overlayTracker) {

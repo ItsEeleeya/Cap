@@ -2234,8 +2234,10 @@ impl ShowCapWindow {
 
                     if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
                         builder = builder.with_webview_configuration(unsafe {
-                            preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
-                            let target_configuration = objc2_web_kit::WKWebViewConfiguration::new(mtm);
+                            preferences
+                                .setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+                            let target_configuration =
+                                objc2_web_kit::WKWebViewConfiguration::new(mtm);
                             target_configuration.setPreferences(&preferences);
                             target_configuration
                         });
