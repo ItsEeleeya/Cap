@@ -105,7 +105,8 @@ use upload::{create_or_get_video, upload_image, upload_video};
 use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
-    CapWindowId, EditorWindowIds, ScreenshotEditorWindowIds, ShowCapWindow, set_window_transparent,
+    CapWindowId, EditorWindowIds, ScreenshotEditorWindowIds, ShowCapWindow, hide_overlay,
+    set_window_transparent, show_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
@@ -206,6 +207,13 @@ where
     }
 }
 
+fn force_exit(code: i32) -> ! {
+    unsafe extern "C" {
+        fn _exit(code: i32) -> !;
+    }
+    unsafe { _exit(code) }
+}
+
 fn spawn_exit_watchdog() {
     std::thread::spawn(move || {
         std::thread::sleep(APP_EXIT_FORCE_TIMEOUT);
@@ -213,7 +221,7 @@ fn spawn_exit_watchdog() {
             timeout_ms = APP_EXIT_FORCE_TIMEOUT.as_millis(),
             "Forcing process exit after shutdown deadline"
         );
-        std::process::exit(0);
+        force_exit(0);
     });
 }
 
@@ -1074,13 +1082,18 @@ async fn cleanup_camera_window(app: AppHandle, session_id: u64) {
             label.starts_with("target-select-overlay-") && window.is_visible().unwrap_or(false)
         });
 
+        let main_window_visible = CapWindowId::Main
+            .get(&app)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false);
+
         let is_camera_only_mode = recording_settings::RecordingSettingsStore::get(&app)
             .ok()
             .flatten()
             .and_then(|s| s.target)
             .is_some_and(|t| matches!(t, ScreenCaptureTarget::CameraOnly));
 
-        if is_camera_only_mode {
+        if is_camera_only_mode && main_window_visible {
             tracing::info!("Camera cleanup: preserving camera feed for camera-only mode");
             return;
         }
@@ -1202,7 +1215,7 @@ fn finalize_app_exit(app: &AppHandle, exit_code: i32) -> ! {
         }
     });
     match app_exit_action(exit_code) {
-        AppExitAction::Process(code) => std::process::exit(code),
+        AppExitAction::Process(code) => force_exit(code),
     }
 }
 
@@ -1930,35 +1943,57 @@ async fn copy_rendered_screenshot_to_clipboard(
 #[instrument(skip(_app))]
 async fn open_file_path(_app: AppHandle, path: PathBuf) -> Result<(), String> {
     let path_str = path.to_str().ok_or("Invalid path")?;
+    let is_dir = path.is_dir();
 
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer")
-            .args(["/select,", path_str])
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {e}"))?;
+        if is_dir {
+            Command::new("explorer")
+                .arg(path_str)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        } else {
+            Command::new("explorer")
+                .args(["/select,", path_str])
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
-        Command::new("open")
-            .arg("-R")
-            .arg(path_str)
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {e}"))?;
+        if is_dir {
+            Command::new("open")
+                .arg(path_str)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        } else {
+            Command::new("open")
+                .arg("-R")
+                .arg(path_str)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        }
     }
 
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open")
-            .arg(
-                path.parent()
-                    .ok_or("Invalid path")?
-                    .to_str()
-                    .ok_or("Invalid path")?,
-            )
-            .spawn()
-            .map_err(|e| format!("Failed to open folder: {e}"))?;
+        if is_dir {
+            Command::new("xdg-open")
+                .arg(path_str)
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        } else {
+            Command::new("xdg-open")
+                .arg(
+                    path.parent()
+                        .ok_or("Invalid path")?
+                        .to_str()
+                        .ok_or("Invalid path")?,
+                )
+                .spawn()
+                .map_err(|e| format!("Failed to open folder: {e}"))?;
+        }
     }
 
     Ok(())
@@ -3248,6 +3283,36 @@ fn ignore_camera_window_position(
 
 #[tauri::command]
 #[specta::specta]
+#[instrument(skip(state))]
+async fn refresh_camera_feed(state: MutableState<'_, App>) -> Result<(), String> {
+    let app = state.read().await;
+    let camera_feed = app.camera_feed.clone();
+
+    #[allow(deprecated)]
+    let camera_ws_sender = app.camera_ws_sender.clone();
+
+    let camera_preview_sender = app.camera_preview.sender();
+
+    drop(app);
+
+    #[allow(deprecated)]
+    camera_feed
+        .ask(feeds::camera::AddSender(camera_ws_sender))
+        .await
+        .map_err(|err| format!("error re-adding camera ws sender: {err}"))?;
+
+    if let Some(sender) = camera_preview_sender {
+        camera_feed
+            .ask(feeds::camera::AddSender(sender))
+            .await
+            .map_err(|err| format!("error re-adding camera preview sender: {err}"))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 #[instrument(skip(app))]
 async fn await_camera_preview_ready(app: MutableState<'_, App>) -> Result<bool, String> {
     let app = app.read().await.camera_feed.clone();
@@ -3414,6 +3479,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             set_camera_window_position,
             ignore_camera_window_position,
             await_camera_preview_ready,
+            refresh_camera_feed,
             captions::create_dir,
             captions::save_model_file,
             captions::transcribe_audio,
@@ -3958,14 +4024,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                             }
                             CapWindowId::Settings => {
                                 for (label, window) in app.webview_windows() {
-                                    if let Ok(id) = CapWindowId::from_str(&label)
-                                        && matches!(
-                                            id,
-                                            CapWindowId::TargetSelectOverlay { .. }
-                                                | CapWindowId::Main
-                                        )
-                                    {
-                                        let _ = window.show();
+                                    if let Ok(id) = CapWindowId::from_str(&label) {
+                                        match id {
+                                            CapWindowId::TargetSelectOverlay { .. } => {
+                                                show_overlay(&window);
+                                            }
+                                            CapWindowId::Main => {
+                                                let _ = window.show();
+                                            }
+                                            _ => {}
+                                        }
                                     }
                                 }
 
@@ -3981,14 +4049,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                             }
                             CapWindowId::Upgrade | CapWindowId::ModeSelect => {
                                 for (label, window) in app.webview_windows() {
-                                    if let Ok(id) = CapWindowId::from_str(&label)
-                                        && matches!(
-                                            id,
-                                            CapWindowId::TargetSelectOverlay { .. }
-                                                | CapWindowId::Main
-                                        )
-                                    {
-                                        let _ = window.show();
+                                    if let Ok(id) = CapWindowId::from_str(&label) {
+                                        match id {
+                                            CapWindowId::TargetSelectOverlay { .. } => {
+                                                show_overlay(&window);
+                                            }
+                                            CapWindowId::Main => {
+                                                let _ = window.show();
+                                            }
+                                            _ => {}
+                                        }
                                     }
                                 }
                                 restore_camera_window(app);
@@ -4040,7 +4110,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                             if let Ok(id) = CapWindowId::from_str(&label)
                                 && matches!(id, CapWindowId::TargetSelectOverlay { .. })
                             {
-                                let _ = window.hide();
+                                hide_overlay(&window);
                             }
                         }
                     }
@@ -4206,7 +4276,7 @@ fn restore_camera_window(app: &AppHandle) {
     let should_restore_camera = app
         .state::<ArcLock<App>>()
         .try_read()
-        .map(|state| state.selected_camera_id.is_some())
+        .map(|state| state.selected_camera_id.is_some() && !state.camera_cleanup_done)
         .unwrap_or(false);
 
     if should_restore_camera {
@@ -4226,7 +4296,7 @@ fn close_target_select_overlays(app: &AppHandle) {
     for (label, window) in app.webview_windows() {
         if let Ok(CapWindowId::TargetSelectOverlay { display_id }) = CapWindowId::from_str(&label) {
             saw_overlay = true;
-            let _ = window.hide();
+            hide_overlay(&window);
             focus_manager.destroy(&display_id, app.global_shortcut());
         }
     }

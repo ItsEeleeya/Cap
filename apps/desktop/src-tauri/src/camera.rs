@@ -30,7 +30,7 @@ use wgpu::{CompositeAlphaMode, SurfaceTexture};
 
 static TOOLBAR_HEIGHT: f32 = 56.0;
 
-static GPU_SURFACE_SCALE: u32 = 4;
+static GPU_SURFACE_SCALE: u32 = 2;
 
 pub const MIN_CAMERA_SIZE: f32 = 150.0;
 pub const MAX_CAMERA_SIZE: f32 = 600.0;
@@ -137,6 +137,10 @@ impl CameraPreviewManager {
 
     pub fn is_initialized(&self) -> bool {
         self.preview.is_some()
+    }
+
+    pub fn sender(&self) -> Option<flume::Sender<FFmpegVideoFrame>> {
+        self.preview.as_ref().map(|p| p.camera_tx.clone())
     }
 
     pub fn notify_window_resized(&self, width: u32, height: u32) {
@@ -505,12 +509,21 @@ impl InitializedCameraPreview {
         let surface_capabilities = surface.get_capabilities(&adapter);
         let alpha_mode = preferred_alpha_mode(&surface_capabilities.alpha_modes);
 
+        let present_mode = if surface_capabilities
+            .present_modes
+            .contains(&wgpu::PresentMode::Mailbox)
+        {
+            wgpu::PresentMode::Mailbox
+        } else {
+            wgpu::PresentMode::Fifo
+        };
+
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: size.0,
             height: size.1,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode,
             alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -624,6 +637,7 @@ impl Renderer {
         let mut is_paused = false;
 
         let mut state = default_state;
+        let mut needs_full_reconfigure = false;
 
         let pause_and_hide = || {
             window
@@ -642,6 +656,7 @@ impl Renderer {
                     match reconfigure.recv().await {
                         Ok(ReconfigureEvent::Resume) => {
                             is_paused = false;
+                            while camera_rx.try_recv().is_ok() {}
                             break;
                         }
                         Ok(ReconfigureEvent::Shutdown) => {
@@ -650,6 +665,7 @@ impl Renderer {
                         }
                         Ok(ReconfigureEvent::State(new_state)) => {
                             state = new_state;
+                            needs_full_reconfigure = true;
                         }
                         Ok(ReconfigureEvent::WindowResized { width, height }) => {
                             self.reconfigure_gpu_surface(width, height);
@@ -662,14 +678,35 @@ impl Renderer {
                 }
             }
 
-            let event = loop {
-                let timeout_remaining = if received_first_frame {
-                    Duration::MAX
-                } else {
-                    startup_timeout.saturating_sub(start_time.elapsed())
-                };
+            if needs_full_reconfigure {
+                needs_full_reconfigure = false;
+                self.update_state_uniforms(&state);
+                let aspect_ratio = self.aspect_ratio.get_latest_key().copied().unwrap_or(
+                    if state.shape == CameraPreviewShape::Full {
+                        16.0 / 9.0
+                    } else {
+                        1.0
+                    },
+                );
+                self.aspect_ratio = Cached::default();
+                if let Ok((width, height)) = resize_window(&window, &state, aspect_ratio, false)
+                    .await
+                    .map_err(|err| {
+                        error!("Error resizing camera preview window after resume: {err}")
+                    })
+                {
+                    self.reconfigure_gpu_surface(width, height);
+                }
+            }
 
-                if timeout_remaining.is_zero() {
+            let frame_timeout = if received_first_frame {
+                Duration::from_secs(5)
+            } else {
+                startup_timeout.saturating_sub(start_time.elapsed())
+            };
+
+            let event = loop {
+                if frame_timeout.is_zero() {
                     warn!(
                         "Camera preview timed out waiting for first frame, entering paused state"
                     );
@@ -696,8 +733,12 @@ impl Renderer {
                             continue;
                         }
                     },
-                    _ = tokio::time::sleep(timeout_remaining) => {
-                        warn!("Camera preview timed out waiting for first frame, entering paused state");
+                    _ = tokio::time::sleep(frame_timeout) => {
+                        if received_first_frame {
+                            warn!("Camera preview: frames stalled, waiting for feed refresh");
+                            continue;
+                        }
+                        warn!("Camera preview: no frames received within startup timeout, entering paused state");
                         is_paused = true;
                         pause_and_hide();
                         continue 'main_loop;
@@ -706,7 +747,11 @@ impl Renderer {
             };
 
             match event {
-                Ok(frame) => {
+                Ok(mut frame) => {
+                    while let Ok(newer) = camera_rx.try_recv() {
+                        frame = newer;
+                    }
+
                     received_first_frame = true;
                     let aspect_ratio = frame.inner.width() as f32 / frame.inner.height() as f32;
                     self.sync_ratio_uniform_and_resize_window_to_it(&window, &state, aspect_ratio)
@@ -720,8 +765,9 @@ impl Renderer {
                             .ok()
                     });
                     if let Some(surface) = surface_result {
-                        let output_width = 1280;
-                        let output_height = (1280.0 / aspect_ratio) as u32;
+                        let window_px = (clamp_size(state.size) as u32) * GPU_SURFACE_SCALE;
+                        let output_width = window_px.max(320).min(frame.inner.width());
+                        let output_height = (output_width as f32 / aspect_ratio) as u32;
 
                         let resampler_frame = resampler_frame
                             .get_or_init((output_width, output_height), frame::Video::empty);
@@ -808,8 +854,7 @@ impl Renderer {
                         .ok();
                 }
                 Err(ReconfigureEvent::Resume) => {
-                    // On resume, we just need to present a frame to wake up the surface.
-                    // The actual window.show() happens in windows.rs ShowCapWindow::Camera.
+                    while camera_rx.try_recv().is_ok() {}
                     if let Some(surface) = &self.surface
                         && let Ok(texture) = surface.get_current_texture()
                     {
@@ -1173,6 +1218,26 @@ impl PreparedTexture {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            buffer,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(stride),
+                rows_per_image: Some(self.height),
+            },
+            wgpu::Extent3d {
+                width: self.width,
+                height: self.height,
+                depth_or_array_layers: 1,
+            },
+        );
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -1197,26 +1262,6 @@ impl PreparedTexture {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-
-            self.queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &self.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                buffer,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(stride),
-                    rows_per_image: Some(self.height),
-                },
-                wgpu::Extent3d {
-                    width: self.width,
-                    height: self.height,
-                    depth_or_array_layers: 1,
-                },
-            );
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
