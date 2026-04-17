@@ -879,6 +879,16 @@ pub async fn start_recording(
                         settings.excluded_windows.clone()
                     });
 
+                let window_exclusions = if matches!(inputs.mode, RecordingMode::Instant) {
+                    let camera_title = CapWindowId::Camera.title();
+                    crate::window_exclusion::filter_for_instant_mode(
+                        window_exclusions,
+                        &camera_title,
+                    )
+                } else {
+                    window_exclusions
+                };
+
                 crate::window_exclusion::resolve_window_ids(&window_exclusions)
             };
 
@@ -919,6 +929,20 @@ pub async fn start_recording(
                             )
                             .with_max_fps(
                                 general_settings.as_ref().map(|s| s.max_fps).unwrap_or(60),
+                            )
+                            .with_quality(
+                                match general_settings
+                                    .as_ref()
+                                    .map(|s| s.studio_recording_quality)
+                                    .unwrap_or_default()
+                                {
+                                    crate::general_settings::StudioRecordingQuality::Balanced => {
+                                        cap_recording::StudioQuality::Balanced
+                                    }
+                                    crate::general_settings::StudioRecordingQuality::Ultra => {
+                                        cap_recording::StudioQuality::Ultra
+                                    }
+                                },
                             );
 
                             #[cfg(target_os = "macos")]
@@ -1463,6 +1487,27 @@ pub async fn take_screenshot(
         None,
     );
 
+    let mut hid_any = false;
+    for (label, window) in app.webview_windows() {
+        if let Ok(id) = CapWindowId::from_str(&label)
+            && matches!(
+                id,
+                CapWindowId::TargetSelectOverlay { .. }
+                    | CapWindowId::WindowCaptureOccluder { .. }
+                    | CapWindowId::CaptureArea
+                    | CapWindowId::ModeSelect
+                    | CapWindowId::RecordingsOverlay
+            )
+        {
+            hide_overlay(&window);
+            hid_any = true;
+        }
+    }
+
+    if hid_any {
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
+
     let image = capture_screenshot(target)
         .await
         .map_err(|e| format!("Failed to capture screenshot: {e}"))?;
@@ -1685,11 +1730,13 @@ async fn handle_recording_end(
         let _ = camera.hide();
     }
 
+    app.camera_preview.pause();
+    let _ = app.mic_feed.ask(microphone::RemoveInput).await;
+    let _ = app.camera_feed.ask(camera::RemoveInput).await;
+
     if let Some(window) = CapWindowId::Main.get(&handle) {
         window.unminimize().ok();
     } else {
-        let _ = app.mic_feed.ask(microphone::RemoveInput).await;
-        let _ = app.camera_feed.ask(camera::RemoveInput).await;
         app.selected_mic_label = None;
         app.selected_camera_id = None;
     }

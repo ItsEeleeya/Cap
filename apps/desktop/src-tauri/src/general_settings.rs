@@ -42,6 +42,14 @@ pub enum EditorPreviewQuality {
     Full,
 }
 
+#[derive(Default, Serialize, Deserialize, Type, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StudioRecordingQuality {
+    #[default]
+    Balanced,
+    Ultra,
+}
+
 impl MainWindowRecordingStartBehaviour {
     pub fn perform(&self, window: &tauri::WebviewWindow) -> tauri::Result<()> {
         match self {
@@ -56,6 +64,11 @@ const DEFAULT_EXCLUDED_WINDOW_TITLES: &[&str] = &[
     "Cap Settings",
     "Cap Recording Controls",
     "Cap Camera",
+    "Cap Target Select",
+    "Cap Window Capture Occluder",
+    "Cap Capture Area",
+    "Cap Mode Selection",
+    "Cap Recordings Overlay",
 ];
 
 pub fn default_excluded_windows() -> Vec<WindowExclusion> {
@@ -144,6 +157,8 @@ pub struct GeneralSettingsStore {
     #[serde(default)]
     pub editor_preview_quality: EditorPreviewQuality,
     #[serde(default)]
+    pub studio_recording_quality: StudioRecordingQuality,
+    #[serde(default)]
     pub main_window_position: Option<WindowPosition>,
     #[serde(default)]
     pub camera_window_position: Option<WindowPosition>,
@@ -230,6 +245,7 @@ impl Default for GeneralSettingsStore {
             max_fps: 60,
             transcription_hints: default_transcription_hints(),
             editor_preview_quality: EditorPreviewQuality::Half,
+            studio_recording_quality: StudioRecordingQuality::Balanced,
             main_window_position: None,
             camera_window_position: None,
             camera_window_positions_by_monitor_name: BTreeMap::new(),
