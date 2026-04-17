@@ -48,7 +48,6 @@ export function Toggle(
 	const solarium = useSolarium();
 
 	let thumbEl!: HTMLDivElement;
-	const [thumbOverride, setThumbOverride] = createSignal<string | undefined>(undefined);
 
 	function onThumbPointerDown(e: PointerEvent) {
 		if (e.button !== 0 || e.target) return;
@@ -57,20 +56,6 @@ export function Toggle(
 		let refX = e.clientX;
 		let intendedState = Boolean(others.checked);
 		let didDragToggle = false;
-
-		const overlayTracker = !solarium?.() ? new OverlayTracker("toggle", thumbEl, {
-			cornerRadius: 100,
-			variant: "loupe",
-		}) : null;
-
-		if (overlayTracker) {
-			console.log("Tracker created");
-		}
-
-		if (overlayTracker) {
-			setThumbOverride("opacity-0 scale-[2]");
-			overlayTracker.start();
-		}
 
 		createRoot((cleanup) => {
 			createEventListenerMap(window, {
@@ -92,11 +77,6 @@ export function Toggle(
 					}
 				},
 				pointerup: () => {
-					if (overlayTracker) {
-						overlayTracker.stop();
-						setThumbOverride(undefined);
-					}
-
 					if (didDragToggle) {
 						props.onChange?.(intendedState);
 						window.addEventListener("click", (e) => {
@@ -118,7 +98,6 @@ export function Toggle(
 				<KSwitch.Thumb
 					ref={thumbEl}
 					class={toggleThumbStyles({ size: local.size })}
-					classList={{ [thumbOverride() ?? ""]: !!thumbOverride() }}
 					onPointerDown={onThumbPointerDown}
 				/>
 			</KSwitch.Control>

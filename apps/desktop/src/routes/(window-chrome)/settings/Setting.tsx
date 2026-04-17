@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
-import { Toggle } from "~/components/Toggle";
+// import { Toggle } from "~/components/Toggle";
+import { LiquidToggle, ZoomKnockoutToggleDemo } from "~/components/solarium";
 
 export function SettingItem(props: {
 	pro?: boolean;
@@ -32,11 +33,12 @@ export function ToggleSettingItem(props: {
 }) {
 	return (
 		<SettingItem {...props} onClick={() => props.onChange(!props.value)}>
-			<Toggle
-				size="md"
+			<LiquidToggle
+				// size="md"
+				class="w-24 h-10"
 				checked={props.value}
 				onChange={(v) => props.onChange(v)}
-				onClick={(e: PointerEvent) => e.stopPropagation()}
+			// onClick={(e: PointerEvent) => e.stopPropagation()}
 			/>
 		</SettingItem>
 	);

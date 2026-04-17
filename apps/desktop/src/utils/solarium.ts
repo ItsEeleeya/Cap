@@ -1,5 +1,4 @@
 import { createContextProvider } from "@solid-primitives/context";
-import { emit } from "@tauri-apps/api/event";
 import { type } from "@tauri-apps/plugin-os";
 import {
 	createEffect,
@@ -50,6 +49,7 @@ function getRect(el: Element): Rect {
 
 export class OverlayTracker {
 	private lastRect: Rect | null = null;
+	private lastCornerRadius: number | null = null;
 	private rafId: number | null = null;
 	private resizeObserver: ResizeObserver;
 	private mutationObserver: MutationObserver;
@@ -66,6 +66,21 @@ export class OverlayTracker {
 		this.mutationObserver = new MutationObserver(this.schedule);
 	}
 
+	private getCornerRadius(): number {
+		const style = getComputedStyle(this.element);
+		const radii = [
+			style.borderTopLeftRadius,
+			style.borderTopRightRadius,
+			style.borderBottomRightRadius,
+			style.borderBottomLeftRadius,
+		].map((radius) => Number.parseFloat(radius) || 0);
+		const maxRadius = radii.reduce(
+			(max, radius) => (radius > max ? radius : max),
+			0,
+		);
+		return maxRadius || this.options.cornerRadius;
+	}
+
 	async start(): Promise<void> {
 		if (this.active || this.creating) {
 			return;
@@ -73,29 +88,19 @@ export class OverlayTracker {
 
 		this.creating = true;
 		const rect = getRect(this.element);
+		const cornerRadius = this.getCornerRadius();
 
 		try {
-			// await commands.createSolariumOverlay(this.id, {
-			// 	rect,
-			// 	corner_radius: this.options.cornerRadius ?? 0,
-			// 	variant: this.options.variant ?? "regular",
-			// 	tint_color: this.options.tintColor
-			// 		? {
-			// 				r: this.options.tintColor[0] / 255,
-			// 				g: this.options.tintColor[1] / 255,
-			// 				b: this.options.tintColor[2] / 255,
-			// 				a: this.options.tintColor[3] / 1,
-			// 			}
-			// 		: null,
-			// 	scale: null,
-			// 	fade_in: this.options.animate ?? false,
-			// });
 			await commands.createSolariumOverlay(this.id, {
 				rect,
-				glassOptions: this.options,
+				glassOptions: {
+					...this.options,
+					cornerRadius,
+				},
 			});
 			this.active = true;
 			this.lastRect = rect;
+			this.lastCornerRadius = cornerRadius;
 			this.attach();
 		} finally {
 			this.creating = false;
@@ -156,10 +161,23 @@ export class OverlayTracker {
 		if (!this.active) return;
 
 		const rect = getRect(this.element);
-		if (this.lastRect !== null && rectsEqual(rect, this.lastRect)) return;
-		this.lastRect = rect;
+		const cornerRadius = this.getCornerRadius();
+		const rectChanged =
+			this.lastRect === null || !rectsEqual(rect, this.lastRect);
+		const radiusChanged =
+			this.lastCornerRadius === null || cornerRadius !== this.lastCornerRadius;
+		if (!rectChanged && !radiusChanged) return;
 
-		void emit("overlay://update", { id: this.id, rect });
+		this.lastRect = rect;
+		this.lastCornerRadius = cornerRadius;
+
+		void commands.updateSolariumOverlay(this.id, {
+			rect,
+			glassOptions: {
+				...this.options,
+				cornerRadius,
+			},
+		});
 	}
 }
 

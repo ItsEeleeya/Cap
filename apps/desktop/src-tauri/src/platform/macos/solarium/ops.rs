@@ -11,9 +11,11 @@ use objc2_app_kit::{
     NSViewLayerContentsRedrawPolicy, NSWindow,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSInteger, NSObjectProtocol, NSPoint, NSRect, NSSelectorFromString, NSSize,
-    NSString,
+    MainThreadMarker, NSInteger, NSObjectNSScriptClassDescription, NSObjectProtocol, NSPoint,
+    NSRect, NSSelectorFromString, NSSize, NSString,
 };
+#[cfg(debug_assertions)]
+use objc2_quartz_core::CALayer;
 use objc2_quartz_core::CATransaction;
 use tauri::{AppHandle, Runtime};
 
@@ -71,12 +73,6 @@ fn build_glass_view(
 ) -> Retained<NSView> {
     let view = NSGlassEffectView::initWithFrame(NSGlassEffectView::alloc(mtm), frame);
 
-    println!("DUMP CONTEXT --");
-    unsafe {
-        // dump_content_holder_view(&view);
-        dump_context_raw_bytes(&view)
-    };
-
     view.setCornerRadius(opts.corner_radius);
     if let Some(c) = &opts.tint_color {
         view.setTintColor(Some(&NSColor::colorWithRed_green_blue_alpha(
@@ -88,7 +84,7 @@ fn build_glass_view(
         ($sel:ident: $val:expr) => {
             if let Some(v) = $val {
                 if view.respondsToSelector(sel!($sel:)) {
-                    println!("responded to sel!");
+                    // println!("responded to sel!");
                     unsafe { let _: () = msg_send![&view, $sel: v as i64]; }
                 }
             }
@@ -109,7 +105,7 @@ fn build_glass_view(
 
     if let Some(v) = opts.use_reduced_shadow_radius {
         if view.respondsToSelector(sel!(set_useReducedShadowRadius:)) {
-            println!("Responsed to set_useReducedShadowRadius:");
+            // println!("Responsed to set_useReducedShadowRadius:");
             unsafe {
                 let _: () = msg_send![&view, set_useReducedShadowRadius: v];
             }
@@ -118,7 +114,7 @@ fn build_glass_view(
 
     if let Some(v) = opts.vibrant_blending_style {
         if view.respondsToSelector(sel!(_setVibrantBlendingStyleForSubtree:)) {
-            println!("Responsed to _setVibrantBlendingStyleForSubtree:");
+            // println!("Responsed to _setVibrantBlendingStyleForSubtree:");
             unsafe {
                 let _: () = msg_send![&view, _setVibrantBlendingStyleForSubtree: v];
             }
@@ -127,7 +123,7 @@ fn build_glass_view(
 
     if let Some(ref s) = opts.group_identifier {
         if view.respondsToSelector(sel!(set_groupIdentifier:)) {
-            println!("Responsed to set_groupIdentifier:");
+            // println!("Responsed to set_groupIdentifier:");
             let ns = NSString::from_str(s);
             unsafe {
                 let _: () = msg_send![&view, set_groupIdentifier: &*ns];
@@ -137,7 +133,7 @@ fn build_glass_view(
 
     if let Some(ref s) = opts.content_lensing {
         if view.respondsToSelector(sel!(set_contentLensing:)) {
-            println!("Responsed to set_contentLensing:");
+            // println!("Responsed to set_contentLensing:");
             let ns = NSString::from_str(s.as_str());
             unsafe {
                 let _: () = msg_send![&view, set_contentLensing: &*ns];
@@ -149,7 +145,7 @@ fn build_glass_view(
     // _variant, so variant must already be set at this point.
     if let Some(sv) = opts.subvariant {
         if view.respondsToSelector(sel!(set_subvariant:)) {
-            println!("Responsed to set_subvariant:");
+            // println!("Responsed to set_subvariant:");
             let ns = NSString::from_str(sv.as_str());
             unsafe {
                 let _: () = msg_send![&view, set_subvariant: &*ns];
@@ -157,7 +153,113 @@ fn build_glass_view(
         }
     }
 
-    unsafe { Retained::cast_unchecked(view) }
+    if let Err(err) = unsafe { add_backdrop_layer(&view) } {
+        println!("Error adding backdrop layer: {err}");
+    }
+
+    unsafe { dump_glass_layer_tree(&view) };
+
+    unsafe {
+        // let _ = configure_cabackdrop_layer(&view);
+        Retained::cast_unchecked(view)
+    }
+}
+
+pub unsafe fn configure_cabackdrop_layer(view: &NSGlassEffectView) -> Result<(), String> {
+    macro_rules! set_bool_if_responds {
+        ($obj:expr, $sel:ident, $value:expr) => {{
+            let responds: bool = msg_send![$obj, respondsToSelector: sel!($sel:)];
+            if responds {
+                println!("found selector: {}", stringify!($sel));
+                let _: () = msg_send![$obj, $sel: $value];
+            }
+        }};
+    }
+
+    macro_rules! set_f64_if_responds {
+        ($obj:expr, $sel:ident, $value:expr) => {{
+            let responds: bool = msg_send![$obj, respondsToSelector: sel!($sel:)];
+            if responds {
+                println!("found selector: {}", stringify!($sel));
+                let _: () = msg_send![$obj, $sel: $value];
+            }
+        }};
+    }
+
+    macro_rules! set_rect_if_responds {
+        ($obj:expr, $sel:ident, $value:expr) => {{
+            let responds: bool = msg_send![$obj, respondsToSelector: sel!($sel:)];
+            if responds {
+                println!("found selector: {}", stringify!($sel));
+                let _: () = msg_send![$obj, $sel: $value];
+            }
+        }};
+    }
+
+    if let Some(first_subview) = view.subviews().firstObject() {
+        println!(
+            "First subview name: {}",
+            first_subview.className().to_string()
+        );
+    }
+
+    let root: *mut AnyObject = msg_send![view, layer];
+    if root.is_null() {
+        return Err("NSGlassEffectView has no backing layer".into());
+    }
+
+    let mut stack = vec![root];
+
+    while let Some(layer) = stack.pop() {
+        let cls: *const AnyClass = msg_send![layer, class];
+        if cls.is_null() {
+            continue;
+        }
+
+        let name = unsafe { CStr::from_ptr(objc2::ffi::class_getName(cls)) }.to_string_lossy();
+        if name == "CABackdropLayer" {
+            println!("found layer class: CABackdropLayer");
+
+            let bounds: NSRect = msg_send![view, bounds];
+
+            let window: *mut AnyObject = msg_send![view, window];
+            let scale: f64 = if window.is_null() {
+                2.0
+            } else {
+                let s: f64 = msg_send![window, backingScaleFactor];
+                if s > 0.0 { s } else { 2.0 }
+            };
+
+            set_bool_if_responds!(layer, setEnabled, true);
+            set_bool_if_responds!(layer, setAllowsInPlaceFiltering, true);
+            set_bool_if_responds!(layer, setCaptureOnly, false);
+            set_bool_if_responds!(layer, setIgnoresOffscreenGroups, true);
+            set_bool_if_responds!(layer, setWindowServerAware, true);
+            set_bool_if_responds!(layer, setDisablesOccludedBackdropBlurs, false);
+            set_bool_if_responds!(layer, setPreallocatesScreenArea, true);
+            set_bool_if_responds!(layer, setIgnoresScreenClip, false);
+
+            set_f64_if_responds!(layer, setScale, scale);
+            set_f64_if_responds!(layer, setZoom, 0.5);
+            set_f64_if_responds!(layer, setBleedAmount, 0.0);
+            set_rect_if_responds!(layer, setBackdropRect, bounds);
+
+            return Ok(());
+        }
+
+        let sublayers: *mut AnyObject = msg_send![layer, sublayers];
+        if !sublayers.is_null() {
+            let count: usize = msg_send![sublayers, count];
+            for i in 0..count {
+                let sub: *mut AnyObject = msg_send![sublayers, objectAtIndex: i];
+                if !sub.is_null() {
+                    stack.push(sub);
+                }
+            }
+        }
+    }
+
+    Err("CABackdropLayer not found in NSGlassEffectView layer tree".into())
 }
 
 // ── Create ────────────────────────────────────────────────────────────────────
@@ -500,4 +602,80 @@ pub unsafe fn try_set_material_context_style(
 
     // Release the copy
     let _: () = msg_send![copy, release];
+}
+
+#[cfg(debug_assertions)]
+pub unsafe fn dump_layer_tree(layer: Retained<CALayer>) {
+    let mut depth = 0;
+    let indent = "  ".repeat(depth);
+    let cls = layer.class();
+    let cls_name = cls.name();
+
+    let layer_name = match layer.name() {
+        Some(name) => name.to_string(),
+        None => "<unnamed>".to_string(),
+    };
+
+    // For CABackdropLayer, print key properties
+    let extra = if cls_name.to_string_lossy().contains("Backdrop") {
+        let zoom: f64 = msg_send![&*layer, zoom];
+        let scale: f64 = msg_send![&*layer, scale];
+        let bleed: f64 = msg_send![&*layer, bleedAmount];
+        format!(" zoom={zoom:.2} scale={scale:.2} bleed={bleed:.2}")
+    } else {
+        String::new()
+    };
+
+    println!(
+        "{indent}[{}] \"{}\"{}",
+        cls_name.to_string_lossy(),
+        layer_name,
+        extra
+    );
+
+    let Some(sublayers) = (unsafe { layer.sublayers() }) else {
+        println!("sublayers end");
+        return;
+    };
+    for sublayer in sublayers {
+        unsafe { dump_layer_tree(sublayer) };
+        depth += 1;
+    }
+}
+
+// Call it on the glass view's layer
+pub unsafe fn dump_glass_layer_tree(view: &NSGlassEffectView) {
+    if let Some(layer) = view.layer() {
+        println!("=== Layer tree ===");
+        unsafe { dump_layer_tree(layer) };
+    }
+}
+
+pub unsafe fn add_backdrop_layer(view: &NSView) -> Result<(), String> {
+    view.setWantsLayer(true);
+    let Some(root_layer) = view.layer() else {
+        return Err("Missing CALayer".to_string());
+    };
+
+    let cls = AnyClass::get(c"CABackdropLayer").ok_or("missing CABackdropLayer".to_string())?;
+    let layer: *mut CALayer = msg_send![cls, layer];
+    if layer.is_null() {
+        return Err("CABackdropLayer class exists but layer creation returned null".into());
+    }
+
+    let bounds = view.bounds();
+
+    let _: () = msg_send![layer, setEnabled: true];
+    let _: () = msg_send![layer, setScale: 0.5];
+    let _: () = msg_send![layer, setZoom: 2];
+    let _: () = msg_send![layer, setBackdropRect: bounds];
+    let _: () = msg_send![layer, setAllowsInPlaceFiltering: true];
+    let _: () = msg_send![layer, setIgnoresOffscreenGroups: true];
+    let _: () = msg_send![layer, setWindowServerAware: true];
+    let _: () = msg_send![layer, setDisablesOccludedBackdropBlurs: false];
+    let _: () = msg_send![layer, setCaptureOnly: false];
+    let _: () = msg_send![layer, setBleedAmount: 2.0];
+
+    root_layer.insertSublayer_below(unsafe { &*layer }, None);
+    Ok(())
 }

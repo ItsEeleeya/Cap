@@ -2,6 +2,7 @@ mod ops;
 mod registry;
 mod types;
 
+use objc2_foundation::{NSClassFromString, NSString, ns_string};
 pub use types::{GlassEffectVariant, JsRect};
 
 use objc2::{
@@ -19,6 +20,7 @@ use types::{OverlayUpdatePayload, SolariumOverlay, TintColor};
 
 fn dump_class(name: &std::ffi::CStr) {
     let rname = name.to_string_lossy();
+
     let Some(cls) = AnyClass::get(name) else {
         println!("{rname} not found");
         return;
@@ -99,10 +101,35 @@ pub fn init<R: Runtime>() -> TauriPlugin<R, ()> {
             dump_class(c"NSGlassEffectView");
             println!("DUMP END");
 
-            dump_ivars(c"NSGlassEffectView");
-            dump_ivars(c"_Material");
-            dump_ivars(c"_GlassRecipe"); // probable name — try it
-            dump_ivars(c"_ContentLensing"); // if it's a struct class
+            unsafe {
+                use std::ffi::CString;
+                use std::os::raw::{c_char, c_int, c_void};
+
+                unsafe extern "C" {
+                    fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
+                }
+                const RTLD_NOW: c_int = 2;
+
+                let path = CString::new(
+                    "/System/Library/PrivateFrameworks/DesignLibrary.framework/DesignLibrary",
+                )
+                .unwrap();
+
+                let handle = dlopen(path.as_ptr(), RTLD_NOW);
+
+                if handle.is_null() {
+                    eprintln!("Failed to load library");
+                } else {
+                    println!("Loaded!");
+                }
+            }
+
+            // dump_ivars(c"NSGlassEffectView");
+            dump_class(c"_CABackgroundExtensionPortalView");
+            dump_class(c"_CABackgroundExtensionView");
+            dump_class(c"CABackgroundExtensionPortalView");
+            dump_class(c"CABackgroundExtensionView");
+            dump_class(c"CABackdropLayer"); // the blur layer
 
             if !app.manage(SolariumRegistry::default()) {
                 return Err("solarium registry already installed".into());
