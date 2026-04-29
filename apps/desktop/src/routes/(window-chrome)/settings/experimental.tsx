@@ -1,4 +1,3 @@
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { type } from "@tauri-apps/plugin-os";
 import { createResource, Show } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -42,10 +41,9 @@ function Inner(props: {
 		if (key === "enableNativeCameraPreview") {
 			await commands.setCameraInput(null, true);
 			try {
-				const cameraWindow = await WebviewWindow.getByLabel("camera");
-				await cameraWindow?.close();
+				await commands.destroyCameraWindow();
 			} catch (error) {
-				console.error("Failed to close camera window", error);
+				console.error("Failed to destroy camera window", error);
 			}
 		}
 	};
@@ -99,6 +97,18 @@ function Inner(props: {
 						</div>
 					</Show>
 				</Show>
+
+				<div class="space-y-3">
+					<h3 class="text-sm text-gray-12 w-fit">Reliability</h3>
+					<div class="px-3 rounded-xl border divide-y divide-gray-3 border-gray-3 bg-gray-2">
+						<ToggleSettingItem
+							label="Out-of-process muxer"
+							description="Run the fragmented-MP4 muxer in an isolated subprocess so a muxer crash or codec assertion can no longer take down your recording. Requires the bundled cap-muxer binary. Early-access — please report issues if your recordings fail to finalize."
+							value={!!settings.outOfProcessMuxer}
+							onChange={(value) => handleChange("outOfProcessMuxer", value)}
+						/>
+					</div>
+				</div>
 			</div>
 		</div>
 	);

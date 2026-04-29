@@ -167,6 +167,10 @@ pub struct GeneralSettingsStore {
     #[serde(default = "default_true")]
     pub has_completed_onboarding: bool,
     #[serde(default = "default_true")]
+    pub enable_telemetry: bool,
+    #[serde(default)]
+    pub out_of_process_muxer: bool,
+    #[serde(default = "default_true")]
     pub experimental_solarium: bool,
 }
 
@@ -250,6 +254,8 @@ impl Default for GeneralSettingsStore {
             camera_window_position: None,
             camera_window_positions_by_monitor_name: BTreeMap::new(),
             has_completed_onboarding: false,
+            enable_telemetry: true,
+            out_of_process_muxer: false,
             experimental_solarium: true,
         }
     }
@@ -289,6 +295,8 @@ impl GeneralSettingsStore {
         store.set("general_settings", json!(settings));
         store.save().map_err(|e| e.to_string())?;
 
+        crate::posthog::set_telemetry_enabled(settings.enable_telemetry);
+
         #[cfg(target_os = "macos")]
         crate::permissions::sync_macos_dock_visibility(app);
 
@@ -317,6 +325,9 @@ pub fn init(app: &AppHandle) {
         }
     };
 
+    crate::posthog::set_telemetry_enabled(store.enable_telemetry);
+    register_bundled_muxer_binary(app);
+
     if let Err(e) = store.save(app) {
         error!("Failed to save general settings: {}", e);
     }
@@ -325,6 +336,43 @@ pub fn init(app: &AppHandle) {
     crate::permissions::sync_macos_dock_visibility(app);
 
     println!("GeneralSettingsState managed");
+}
+
+fn register_bundled_muxer_binary(_app: &AppHandle) {
+    if std::env::var_os(cap_recording::oop_muxer::ENV_BIN_PATH).is_some() {
+        return;
+    }
+
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        let candidate = dir.join(bundled_muxer_bin_name());
+        if candidate.is_file() {
+            match cap_recording::oop_muxer::set_muxer_binary_override(candidate.clone()) {
+                Ok(()) => {
+                    tracing::info!(
+                        path = %candidate.display(),
+                        "Registered executable-adjacent cap-muxer binary for out-of-process muxer"
+                    );
+                }
+                Err(existing) => {
+                    tracing::debug!(
+                        existing = %existing.display(),
+                        candidate = %candidate.display(),
+                        "cap-muxer override already registered; keeping existing"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn bundled_muxer_bin_name() -> &'static str {
+    if cfg!(windows) {
+        "cap-muxer.exe"
+    } else {
+        "cap-muxer"
+    }
 }
 
 #[tauri::command]
