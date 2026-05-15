@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { Select as KSelect } from "@kobalte/core/select";
 import { createMutation } from "@tanstack/solid-query";
 import { Channel } from "@tauri-apps/api/core";
@@ -98,19 +98,19 @@ function ShareButton() {
 			// Now proceed with upload
 			const result = meta().sharing
 				? await commands.uploadExportedVideo(
-						projectPath,
-						"Reupload",
-						uploadChannel,
-						null,
-					)
+					projectPath,
+					"Reupload",
+					uploadChannel,
+					null,
+				)
 				: await commands.uploadExportedVideo(
-						projectPath,
-						{
-							Initial: { pre_created_video: null },
-						},
-						uploadChannel,
-						null,
-					);
+					projectPath,
+					{
+						Initial: { pre_created_video: null },
+					},
+					uploadChannel,
+					null,
+				);
 
 			if (result === "NotAuthenticated") {
 				throw new Error("You need to sign in to share recordings");
@@ -160,8 +160,8 @@ function ShareButton() {
 					const customUrl = () =>
 						customDomain.data?.custom_domain
 							? new URL(
-									`${customDomain.data?.custom_domain}/s/${meta().sharing?.id}`,
-								)
+								`${customDomain.data?.custom_domain}/s/${meta().sharing?.id}`,
+							)
 							: null;
 
 					const normalLink = `${normalUrl().host}${normalUrl().pathname}`;
@@ -307,20 +307,19 @@ function ShareButton() {
 							<div
 								class="bg-blue-9 h-2.5 rounded-full"
 								style={{
-									width: `${
-										uploadState.type === "uploading"
+									width: `${uploadState.type === "uploading"
 											? uploadState.progress
 											: uploadState.type === "link-copied"
 												? 100
 												: uploadState.type === "rendering"
 													? Math.min(
-															(uploadState.renderedFrames /
-																uploadState.totalFrames) *
-																100,
-															100,
-														)
+														(uploadState.renderedFrames /
+															uploadState.totalFrames) *
+														100,
+														100,
+													)
 													: 0
-									}%`,
+										}%`,
 								}}
 							/>
 						</div>

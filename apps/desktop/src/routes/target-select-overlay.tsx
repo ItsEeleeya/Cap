@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { createElementSize } from "@solid-primitives/resize-observer";
 import { useSearchParams } from "@solidjs/router";
@@ -348,9 +348,8 @@ function Inner() {
 									<Show when={display.physical_size}>
 										{(size) => (
 											<span class="mb-2 text-xs">
-												{`${size().width}x${size().height} · ${
-													display.refresh_rate
-												}FPS`}
+												{`${size().width}x${size().height} · ${display.refresh_rate
+													}FPS`}
 											</span>
 										)}
 									</Show>
@@ -427,7 +426,7 @@ function Inner() {
 								x: logical.x,
 								y: logical.y,
 							});
-						} catch (_) {}
+						} catch (_) { }
 					});
 
 					createEffect(() => {
@@ -468,7 +467,7 @@ function Inner() {
 							await win.setPosition(
 								new LogicalPosition(original.x, original.y),
 							);
-						} catch (_) {}
+						} catch (_) { }
 					}
 
 					onCleanup(() => {
@@ -1391,7 +1390,7 @@ function CameraPreviewInline() {
 					Date.now() - lastFrameTime > WS_STALL_TIMEOUT_MS
 				) {
 					lastFrameTime = Date.now();
-					commands.refreshCameraFeed().catch(() => {});
+					commands.refreshCameraFeed().catch(() => { });
 					ws?.close();
 					resetBackoff();
 					ws = createSocket();

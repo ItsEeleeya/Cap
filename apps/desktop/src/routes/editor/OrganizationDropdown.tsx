@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { DropdownMenu as KDropdownMenu } from "@kobalte/core/dropdown-menu";
 import { cx } from "cva";
 import {
@@ -181,10 +181,10 @@ function BrandSettingsDialog(props: {
 			const file = logoFile();
 			const logo = file
 				? {
-						action: "upload" as const,
-						contentType: file.type as OrganizationLogoContentType,
-						data: await encodeFileAsBase64(file),
-					}
+					action: "upload" as const,
+					contentType: file.type as OrganizationLogoContentType,
+					data: await encodeFileAsBase64(file),
+				}
 				: logoRemoved()
 					? { action: "remove" as const }
 					: { action: "keep" as const };

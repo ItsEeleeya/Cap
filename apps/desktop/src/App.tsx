@@ -8,7 +8,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { createEffect, lazy, onCleanup, onMount, Suspense } from "solid-js";
 import { Toaster } from "solid-toast";
 
-import "@cap/ui-solid/main.css";
+import "@cap/ui-desktop/main.css";
 import "unfonts.css";
 import "./styles/theme.css";
 
@@ -244,7 +244,7 @@ function createThemeListener(currentWindow: WebviewWindow) {
 			} else {
 				localStorage.setItem("cap-theme", appTheme);
 			}
-		} catch {}
+		} catch { }
 
 		commands.setTheme(appTheme).then(() => {
 			document.documentElement.classList.toggle("dark", isDark);

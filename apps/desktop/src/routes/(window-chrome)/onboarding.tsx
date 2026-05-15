@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { makePersisted } from "@solid-primitives/storage";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -1787,7 +1787,7 @@ function StartupOverlay(props: {
 
 		const tryPlay = () => {
 			if (!audioEl || audioEl.muted) return;
-			void audioEl.play().catch(() => {});
+			void audioEl.play().catch(() => { });
 		};
 
 		tryPlay();
@@ -1809,7 +1809,7 @@ function StartupOverlay(props: {
 		setAudioState("isMuted", next);
 		if (audioEl) {
 			audioEl.muted = next;
-			if (!next) void audioEl.play().catch(() => {});
+			if (!next) void audioEl.play().catch(() => { });
 		}
 	};
 
@@ -2034,7 +2034,7 @@ function PermissionsStep(props: {
 			}
 		} catch (err) {
 			console.error(`Error requesting permission: ${err}`);
-			fetchPermissions().catch(() => {});
+			fetchPermissions().catch(() => { });
 		} finally {
 			setRequestingPermission(false);
 		}
@@ -2132,13 +2132,13 @@ function PermissionsStep(props: {
 											disabled={requestingPermission()}
 											onClick={() =>
 												permission.requiresManualGrant ||
-												permStatus() === "denied"
+													permStatus() === "denied"
 													? openSettings(permission.key)
 													: requestPermission(permission.key)
 											}
 										>
 											{permission.requiresManualGrant ||
-											permStatus() === "denied"
+												permStatus() === "denied"
 												? "Open Settings"
 												: "Grant"}
 										</Button>

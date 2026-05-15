@@ -15,7 +15,7 @@
 	"dependencies": {
 		"@aerofoil/rive-solid-canvas": "^2.1.4",
 		"@cap/database": "workspace:*",
-		"@cap/ui-solid": "workspace:*",
+		"@cap/ui-desktop": "workspace:*",
 		"@cap/utils": "workspace:*",
 		"@cap/web-api-contract": "workspace:*",
 		"@corvu/tooltip": "^0.2.1",

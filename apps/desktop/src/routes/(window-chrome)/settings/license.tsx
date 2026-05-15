@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import type { licenseContract } from "@cap/web-api-contract";
 import { createMutation, useQueryClient } from "@tanstack/solid-query";
 import type { ClientInferResponseBody } from "@ts-rest/core";

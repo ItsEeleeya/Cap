@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { useMutation } from "@tanstack/solid-query";
 import { createResource, createSignal, Show, Suspense } from "solid-js";
 import { createSelectedOrganization } from "~/utils/organization-branding";
@@ -51,9 +51,9 @@ const fetchStorageIntegrations = async (
 		query:
 			refreshStorageQuota || orgId
 				? {
-						...(refreshStorageQuota ? { refreshStorageQuota: true } : {}),
-						...(orgId ? { orgId } : {}),
-					}
+					...(refreshStorageQuota ? { refreshStorageQuota: true } : {}),
+					...(orgId ? { orgId } : {}),
+				}
 				: undefined,
 		headers: await protectedHeaders(),
 	});

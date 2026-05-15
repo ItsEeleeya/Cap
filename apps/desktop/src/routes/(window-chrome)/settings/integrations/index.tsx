@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { useNavigate } from "@solidjs/router";
 import { createResource, For, onMount } from "solid-js";
 import IconLucideDatabase from "~icons/lucide/database";

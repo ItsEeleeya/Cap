@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import Tooltip from "@corvu/tooltip";
 import { createElementBounds } from "@solid-primitives/bounds";
 import { makePersisted } from "@solid-primitives/storage";
@@ -248,8 +248,7 @@ export default function () {
 																)}
 																progressMessage={
 																	state.type === "choosing-location" &&
-																	`Choose where to ${
-																		isRecording ? "export video" : "save image"
+																	`Choose where to ${isRecording ? "export video" : "save image"
 																	}...`
 																}
 															/>
@@ -822,31 +821,31 @@ function createRecordingMutations(
 type ActionState =
 	| { type: "idle" }
 	| {
-			type: "copy";
-			state:
-				| { type: "rendering"; state: RenderState }
-				| { type: "copying" }
-				| { type: "copied" };
-	  }
+		type: "copy";
+		state:
+		| { type: "rendering"; state: RenderState }
+		| { type: "copying" }
+		| { type: "copied" };
+	}
 	| {
-			type: "save";
-			state:
-				| { type: "choosing-location"; mediaType: "video" | "screenshot" }
-				| { type: "rendering"; state: RenderState }
-				| { type: "saving" }
-				| { type: "saved" };
-	  }
+		type: "save";
+		state:
+		| { type: "choosing-location"; mediaType: "video" | "screenshot" }
+		| { type: "rendering"; state: RenderState }
+		| { type: "saving" }
+		| { type: "saved" };
+	}
 	| {
-			type: "upload";
-			state:
-				| { type: "rendering"; state: RenderState }
-				| {
-						type: "uploading";
-						// 0-100
-						progress: number;
-				  }
-				| { type: "link-copied" };
-	  };
+		type: "upload";
+		state:
+		| { type: "rendering"; state: RenderState }
+		| {
+			type: "uploading";
+			// 0-100
+			progress: number;
+		}
+		| { type: "link-copied" };
+	};
 
 function createRenderProgressCallback(
 	actionType: Exclude<ActionState["type"], "idle">,
@@ -903,8 +902,8 @@ function actionProgressPercentage(state: ActionState): number {
 
 type RenderState =
 	| {
-			type: "rendering";
-			renderedFrames: number;
-			totalFrames: number;
-	  }
+		type: "rendering";
+		renderedFrames: number;
+		totalFrames: number;
+	}
 	| { type: "starting" };

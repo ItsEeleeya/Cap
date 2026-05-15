@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { useNavigate } from "@solidjs/router";
 import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -130,7 +130,7 @@ export default function () {
 														width: `${Math.min(
 															((status()?.progress ?? 0) /
 																(status()?.contentLength ?? 0)) *
-																100,
+															100,
 															100,
 														)}%`,
 													}}

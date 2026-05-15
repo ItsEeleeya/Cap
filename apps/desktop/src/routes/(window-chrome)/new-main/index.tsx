@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { useNavigate } from "@solidjs/router";
 import { createMutation, queryOptions, useQuery } from "@tanstack/solid-query";
 import { Channel } from "@tauri-apps/api/core";
@@ -2254,10 +2254,10 @@ function Page() {
 				onOpenSettings={
 					rawOptions.micName
 						? () =>
-								openMicrophoneMenu(
-									options.micName() ?? null,
-									rawOptions.micName != null,
-								)
+							openMicrophoneMenu(
+								options.micName() ?? null,
+								rawOptions.micName != null,
+							)
 						: undefined
 				}
 			/>

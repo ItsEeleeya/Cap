@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { createMutation } from "@tanstack/solid-query";
 import { createSignal, onMount, Show } from "solid-js";
 import { commands, type IncompleteRecordingInfo } from "~/utils/tauri";

@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { Select as KSelect } from "@kobalte/core/select";
 import { cx } from "cva";
 import { batch, createMemo, createSignal, Show } from "solid-js";

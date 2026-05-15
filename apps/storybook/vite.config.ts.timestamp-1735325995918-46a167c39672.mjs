@@ -1,7 +1,7 @@
 // vite.config.ts
 import { defineConfig } from "file:///Users/onyedikachi/Documents/codes/algora-bounties/Cap/node_modules/.pnpm/vite@5.4.8_@types+node@20.16.9_terser@5.34.0/node_modules/vite/dist/node/index.js";
 import solid from "file:///Users/onyedikachi/Documents/codes/algora-bounties/Cap/node_modules/.pnpm/vite-plugin-solid@2.10.2_@testing-library+jest-dom@6.5.0_solid-js@1.9.3_vite@5.4.8_@types+node@20.16.9_terser@5.34.0_/node_modules/vite-plugin-solid/dist/esm/index.mjs";
-import capUIPlugin from "file:///Users/onyedikachi/Documents/codes/algora-bounties/Cap/packages/ui-solid/vite.js";
+import capUIPlugin from "file:///Users/onyedikachi/Documents/codes/algora-bounties/Cap/packages/ui-desktop/vite.js";
 
 var vite_config_default = defineConfig({
 	plugins: [solid(), capUIPlugin],

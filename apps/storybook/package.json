@@ -7,7 +7,7 @@
 		"build:storybook": "storybook build"
 	},
 	"dependencies": {
-		"@cap/ui-solid": "workspace:*",
+		"@cap/ui-desktop": "workspace:*",
 		"postcss-pseudo-companion-classes": "^0.1.1",
 		"solid-js": "^1.9.3",
 		"zod": "^3"

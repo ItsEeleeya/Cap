@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { action, useAction, useSubmission } from "@solidjs/router";
 import { getVersion } from "@tauri-apps/api/app";
 import { type OsType, type as ostype } from "@tauri-apps/plugin-os";
@@ -187,11 +187,10 @@ export default function FeedbackTab() {
 											<p class="text-gray-11 font-medium">Capture Support</p>
 											<div class="flex gap-2 flex-wrap">
 												<span
-													class={`px-2 py-1 rounded text-xs ${
-														captureSupported
+													class={`px-2 py-1 rounded text-xs ${captureSupported
 															? "bg-green-500/20 text-green-400"
 															: "bg-red-500/20 text-red-400"
-													}`}
+														}`}
 												>
 													Screen Capture:{" "}
 													{captureSupported ? "Supported" : "Not Supported"}

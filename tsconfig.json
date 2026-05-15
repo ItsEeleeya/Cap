@@ -1,13 +1,27 @@
 {
 	"files": [],
 	"references": [
-		{ "path": "./packages/ui" },
-		{ "path": "./packages/ui-solid" },
-		{ "path": "./packages/utils" },
-		{ "path": "./apps/desktop" },
-		{ "path": "./apps/web" }
+		{
+			"path": "./packages/ui"
+		},
+		{
+			"path": "./packages/ui-desktop"
+		},
+		{
+			"path": "./packages/utils"
+		},
+		{
+			"path": "./apps/desktop"
+		},
+		{
+			"path": "./apps/web"
+		}
 	],
 	"compilerOptions": {
-		"plugins": [{ "name": "@effect/language-service" }]
+		"plugins": [
+			{
+				"name": "@effect/language-service"
+			}
+		]
 	}
 }

@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import { debounce } from "@solid-primitives/scheduled";
 import { makePersisted } from "@solid-primitives/storage";
 import { createMutation } from "@tanstack/solid-query";
@@ -45,18 +45,18 @@ import { type RenderState, useEditorContext } from "./context";
 import { RESOLUTION_OPTIONS } from "./Header";
 import { Dialog, Field } from "./ui";
 
-class SilentError extends Error {}
+class SilentError extends Error { }
 
 export const COMPRESSION_OPTIONS: Array<{
 	label: string;
 	value: ExportCompression;
 	bpp: number;
 }> = [
-	{ label: "Maximum", value: "Maximum", bpp: 0.3 },
-	{ label: "Social Media", value: "Social", bpp: 0.15 },
-	{ label: "Web", value: "Web", bpp: 0.08 },
-	{ label: "Potato", value: "Potato", bpp: 0.04 },
-];
+		{ label: "Maximum", value: "Maximum", bpp: 0.3 },
+		{ label: "Social Media", value: "Social", bpp: 0.15 },
+		{ label: "Web", value: "Web", bpp: 0.08 },
+		{ label: "Potato", value: "Potato", bpp: 0.04 },
+	];
 
 const COMPRESSION_TO_BPP: Record<ExportCompression, number> = {
 	Maximum: 0.3,
@@ -683,17 +683,17 @@ export function ExportPage() {
 
 				const result = meta().sharing
 					? await commands.uploadExportedVideo(
-							projectPath,
-							"Reupload",
-							uploadChannel,
-							settings.organizationId ?? null,
-						)
+						projectPath,
+						"Reupload",
+						uploadChannel,
+						settings.organizationId ?? null,
+					)
 					: await commands.uploadExportedVideo(
-							projectPath,
-							{ Initial: { pre_created_video: null } },
-							uploadChannel,
-							settings.organizationId ?? null,
-						);
+						projectPath,
+						{ Initial: { pre_created_video: null } },
+						uploadChannel,
+						settings.organizationId ?? null,
+					);
 
 				if (result === "NotAuthenticated")
 					throw new Error("You need to sign in to share recordings");
@@ -1012,7 +1012,7 @@ export function ExportPage() {
 												: option.value === "Mp4" && requiresTransparentExport()
 													? "MP4 doesn't support transparency"
 													: option.value === "Gif" &&
-															settings.exportTo === "link"
+														settings.exportTo === "link"
 														? "Links require MP4 format"
 														: undefined;
 
@@ -1083,10 +1083,10 @@ export function ExportPage() {
 										shouldUseGifMode()
 											? [RESOLUTION_OPTIONS._720p, RESOLUTION_OPTIONS._1080p]
 											: [
-													RESOLUTION_OPTIONS._720p,
-													RESOLUTION_OPTIONS._1080p,
-													RESOLUTION_OPTIONS._4k,
-												]
+												RESOLUTION_OPTIONS._720p,
+												RESOLUTION_OPTIONS._1080p,
+												RESOLUTION_OPTIONS._4k,
+											]
 									}
 								>
 									{(option) => (
@@ -1806,15 +1806,14 @@ function RenderProgress(props: { state: RenderState; label: string }) {
 			amount={
 				props.state.type === "rendering"
 					? (props.state.progress.renderedCount /
-							props.state.progress.totalFrames) *
-						100
+						props.state.progress.totalFrames) *
+					100
 					: 0
 			}
 			label={
 				props.state.type === "rendering"
-					? `Rendering ${props.label} (${
-							props.state.progress.renderedCount
-						}/${props.state.progress.totalFrames} frames)`
+					? `Rendering ${props.label} (${props.state.progress.renderedCount
+					}/${props.state.progress.totalFrames} frames)`
 					: "Preparing to render..."
 			}
 		/>

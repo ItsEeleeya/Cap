@@ -1,4 +1,4 @@
-import { ProgressCircle } from "@cap/ui-solid";
+import { ProgressCircle } from "@cap/ui-desktop";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ask, save } from "@tauri-apps/plugin-dialog";
 import { remove } from "@tauri-apps/plugin-fs";
@@ -50,25 +50,25 @@ function formatRefreshRate(refreshRate?: number) {
 
 type TargetCardProps = (
 	| {
-			variant: "display";
-			target: CaptureDisplayWithThumbnail;
-	  }
+		variant: "display";
+		target: CaptureDisplayWithThumbnail;
+	}
 	| {
-			variant: "window";
-			target: CaptureWindowWithThumbnail;
-	  }
+		variant: "window";
+		target: CaptureWindowWithThumbnail;
+	}
 	| {
-			variant: "recording";
-			target: RecordingWithPath;
-			uploadProgress?: number;
-			isReuploading?: boolean;
-			onReupload?: (path: string) => void;
-			onRefetch?: () => void;
-	  }
+		variant: "recording";
+		target: RecordingWithPath;
+		uploadProgress?: number;
+		isReuploading?: boolean;
+		onReupload?: (path: string) => void;
+		onRefetch?: () => void;
+	}
 	| {
-			variant: "screenshot";
-			target: ScreenshotWithPath;
-	  }
+		variant: "screenshot";
+		target: ScreenshotWithPath;
+	}
 ) &
 	Omit<ComponentProps<"button">, "children"> & {
 		highlightQuery?: string;
@@ -331,9 +331,8 @@ export default function TargetCard(props: TargetCardProps) {
 					{(src) => (
 						<img
 							src={src()}
-							alt={`${
-								local.variant === "display" ? "Display" : "Window"
-							} preview for ${label()}`}
+							alt={`${local.variant === "display" ? "Display" : "Window"
+								} preview for ${label()}`}
 							class="object-cover w-full h-full"
 							loading="lazy"
 							draggable={false}

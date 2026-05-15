@@ -46,10 +46,10 @@ Use Cap for product demos, bug reports, onboarding, tutorials, design reviews, e
 
 ## Recording Modes
 
-| Mode | Best for | How it works |
-| --- | --- | --- |
-| Instant Mode | Fast feedback, bug reports, async updates | Cap uploads while you record, then gives you a share link as soon as recording stops. |
-| Studio Mode | Product demos, tutorials, launches, client work | Cap records locally, opens the editor, and lets you export or share a polished video. |
+| Mode         | Best for                                        | How it works                                                                          |
+| ------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Instant Mode | Fast feedback, bug reports, async updates       | Cap uploads while you record, then gives you a share link as soon as recording stops. |
+| Studio Mode  | Product demos, tutorials, launches, client work | Cap records locally, opens the editor, and lets you export or share a polished video. |
 
 ## Data Ownership
 
@@ -93,11 +93,11 @@ docker compose logs cap-web
 
 ### Deployment Options
 
-| Method | Best for |
-| --- | --- |
-| Docker Compose | VPS, home servers, and any Docker-capable host |
-| [Railway](https://railway.com/new/template/PwpGcf) | One-click managed hosting |
-| Coolify | Self-hosted PaaS deployments with `docker-compose.coolify.yml` |
+| Method                                             | Best for                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| Docker Compose                                     | VPS, home servers, and any Docker-capable host                 |
+| [Railway](https://railway.com/new/template/PwpGcf) | One-click managed hosting                                      |
+| Coolify                                            | Self-hosted PaaS deployments with `docker-compose.coolify.yml` |
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/PwpGcf)
 
@@ -131,46 +131,46 @@ pnpm cap-setup
 
 Common commands:
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Start the full local development stack |
-| `pnpm dev:web` | Start the web app without the desktop app |
-| `pnpm dev:desktop` | Start the desktop app |
-| `pnpm build` | Build the workspace |
-| `pnpm tauri:build` | Build the desktop release |
-| `pnpm lint` | Run Biome linting |
-| `pnpm format` | Format with Biome |
-| `pnpm typecheck` | Run TypeScript project references |
-| `cargo test -p <crate>` | Run Rust tests for a crate |
+| Command                 | Purpose                                   |
+| ----------------------- | ----------------------------------------- |
+| `pnpm dev`              | Start the full local development stack    |
+| `pnpm dev:web`          | Start the web app without the desktop app |
+| `pnpm dev:desktop`      | Start the desktop app                     |
+| `pnpm build`            | Build the workspace                       |
+| `pnpm tauri:build`      | Build the desktop release                 |
+| `pnpm lint`             | Run Biome linting                         |
+| `pnpm format`           | Format with Biome                         |
+| `pnpm typecheck`        | Run TypeScript project references         |
+| `cargo test -p <crate>` | Run Rust tests for a crate                |
 
 Database commands:
 
-| Command | Purpose |
-| --- | --- |
+| Command            | Purpose                     |
+| ------------------ | --------------------------- |
 | `pnpm db:generate` | Generate database artifacts |
-| `pnpm db:push` | Push schema changes |
-| `pnpm db:studio` | Open Drizzle Studio |
+| `pnpm db:push`     | Push schema changes         |
+| `pnpm db:studio`   | Open Drizzle Studio         |
 
 ## Repository Map
 
-| Path | What lives there |
-| --- | --- |
-| `apps/desktop` | Tauri v2 desktop app with SolidStart UI and Rust backend |
-| `apps/web` | Next.js web app for marketing, docs, dashboard, sharing, API routes, and auth |
-| `apps/cli` | Rust CLI |
-| `apps/media-server` | Media processing service used by the web app |
-| `apps/discord-bot` | Discord integration |
-| `packages/database` | Drizzle schema and database access |
-| `packages/ui` | Shared React UI |
-| `packages/ui-solid` | Shared Solid UI |
-| `packages/web-backend` | Backend service layer |
-| `packages/web-domain` | Web domain models and types |
-| `packages/env` | Environment validation |
-| `packages/sdk-embed` | Embed SDK |
-| `packages/sdk-recorder` | Recorder SDK |
-| `crates/*` | Recording, capture, camera, audio, encoding, rendering, muxing, export, and test crates |
-| `scripts/*` | Setup, analytics, build, and maintenance tooling |
-| `infra/*` | Infrastructure configuration |
+| Path                    | What lives there                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `apps/desktop`          | Tauri v2 desktop app with SolidStart UI and Rust backend                                |
+| `apps/web`              | Next.js web app for marketing, docs, dashboard, sharing, API routes, and auth           |
+| `apps/cli`              | Rust CLI                                                                                |
+| `apps/media-server`     | Media processing service used by the web app                                            |
+| `apps/discord-bot`      | Discord integration                                                                     |
+| `packages/database`     | Drizzle schema and database access                                                      |
+| `packages/ui`           | Shared React UI                                                                         |
+| `packages/ui-desktop`   | Shared Solid UI                                                                         |
+| `packages/web-backend`  | Backend service layer                                                                   |
+| `packages/web-domain`   | Web domain models and types                                                             |
+| `packages/env`          | Environment validation                                                                  |
+| `packages/sdk-embed`    | Embed SDK                                                                               |
+| `packages/sdk-recorder` | Recorder SDK                                                                            |
+| `crates/*`              | Recording, capture, camera, audio, encoding, rendering, muxing, export, and test crates |
+| `scripts/*`             | Setup, analytics, build, and maintenance tooling                                        |
+| `infra/*`               | Infrastructure configuration                                                            |
 
 The web API uses Effect and `@effect/platform` HTTP APIs. Desktop capture and export paths are backed by Rust crates for fast recording, rendering, and platform-specific media access.
 
@@ -178,10 +178,10 @@ The web API uses Effect and `@effect/platform` HTTP APIs. Desktop capture and ex
 
 Cap uses [Tinybird](https://www.tinybird.co) for viewer telemetry dashboards. Set `TINYBIRD_ADMIN_TOKEN` or `TINYBIRD_TOKEN` before running analytics commands.
 
-| Command | Purpose |
-| --- | --- |
+| Command                | Purpose                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
 | `pnpm analytics:setup` | Deploy Tinybird datasources and pipes from `scripts/analytics/tinybird` |
-| `pnpm analytics:check` | Validate that the Tinybird workspace matches the app expectations |
+| `pnpm analytics:check` | Validate that the Tinybird workspace matches the app expectations       |
 
 `analytics:setup` can remove Tinybird resources outside the checked-in analytics configuration. Use it only against the workspace you intend to manage from this repo.
 

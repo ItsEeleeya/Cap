@@ -1,4 +1,4 @@
-import { Button } from "@cap/ui-solid";
+import { Button } from "@cap/ui-desktop";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -366,8 +366,8 @@ const UploadIcon = (props: ComponentProps<"svg">) => {
 				stroke-linejoin="round"
 				class={cx(
 					exportState.type !== "idle" &&
-						exportState.type !== "done" &&
-						"bounce",
+					exportState.type !== "done" &&
+					"bounce",
 				)}
 			/>
 		</svg>
@@ -399,7 +399,7 @@ function NameEditor(props: { name: string }) {
 						"absolute inset-0 px-px m-0 opacity-0 overflow-hidden focus:opacity-100 bg-transparent border-b border-transparent focus:border-gray-7 focus:outline-hidden peer whitespace-pre",
 						truncated() && "truncate",
 						(prettyName().length < 5 || prettyName().length > 100) &&
-							"focus:border-red-500",
+						"focus:border-red-500",
 					)}
 					value={prettyName()}
 					onInput={(e) => setPrettyName(e.currentTarget.value)}
