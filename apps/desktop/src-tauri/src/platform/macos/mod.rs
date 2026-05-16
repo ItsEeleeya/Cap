@@ -55,12 +55,12 @@ pub fn create_wk_configuration(
 
     unsafe {
         // Enable Material Hosting on macOS 26+
-        if objc2::available!(macos = 26.0)
-            && preferences.respondsToSelector(objc2::sel!(_useSystemAppearance))
-        {
-            preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
-        } else {
-            tracing::error!("useSystemAppearance not available on WKWebviewConfiguration");
+        if objc2::available!(macos = 26.0) {
+            if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
+                preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
+            } else {
+                tracing::error!("useSystemAppearance not available on WKWebviewConfiguration");
+            }
         }
 
         if disable_throttling {
@@ -99,7 +99,6 @@ pub fn create_wk_configuration(
 fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
     use objc2_web_kit::WKProcessPool;
 
-    let init_with_config = sel!(_initWithConfiguration:);
     let pool_class = WKProcessPool::class();
 
     let Some(config_class) = AnyClass::get(c"_WKProcessPoolConfiguration") else {
@@ -112,7 +111,7 @@ fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
         return default_pool;
     };
 
-    if !pool_class.responds_to(init_with_config) {
+    if !pool_class.responds_to(sel!(_initWithConfiguration:)) {
         tracing::error!("WKProcessPool does NOT respond to _initWithConfiguration:; Using default");
         let default_pool = unsafe { WKProcessPool::new(mtm) };
         tracing::error!(
