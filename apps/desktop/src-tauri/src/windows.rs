@@ -2259,6 +2259,22 @@ impl CapWindow {
             } else {
                 builder = builder.decorations(false)
             }
+
+            // Don't pool heavy editors with the rest of the app
+            let pool_policy = match self {
+                Self::Editor { .. } | Self::ScreenshotEditor { .. } => {
+                    crate::platform::WebviewProcessPoolPolicy::Own
+                }
+                _ => crate::platform::WebviewProcessPoolPolicy::Shared,
+            };
+
+            builder = dispatch2::run_on_main(move |mtm| {
+                builder.with_webview_configuration(crate::platform::create_wk_configuration(
+                    mtm,
+                    pool_policy,
+                    true,
+                ))
+            });
         }
 
         #[cfg(windows)]
