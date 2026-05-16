@@ -10,7 +10,6 @@ import {
 	children,
 	createEffect,
 	lazy,
-	onCleanup,
 	onMount,
 	type ParentProps,
 	Suspense,
@@ -22,15 +21,9 @@ import "unfonts.css";
 import "./styles/theme.css";
 
 import { createEventListener } from "@solid-primitives/event-listener";
-import { setTheme } from "@tauri-apps/api/app";
-import {
-	getCurrentWindow,
-	type Window as TauriWindow,
-} from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
-import { generalSettingsStore } from "./store";
 import { initAnonymousUser } from "./utils/analytics";
-import { commands, type Appearance } from "./utils/tauri";
 import titlebar from "./utils/titlebar-state";
 
 const WindowChromeLayout = lazy(() => import("./routes/(window-chrome)"));
@@ -246,7 +239,7 @@ function AutoRevealWindowOnReady() {
 		);
 		if (shouldDefer) return;
 		windowShown = true;
-		commands.markWebviewReadyToShow();
+		getCurrentWindow().show();
 	});
 
 	return null;
@@ -259,7 +252,7 @@ export function RevealWindowWithSuspense(props: ParentProps) {
 	createEffect(() => {
 		if (windowShown || !resolved() || isRouting()) return;
 		windowShown = true;
-		commands.markWebviewReadyToShow();
+		getCurrentWindow().show();
 	});
 
 	return <Suspense fallback={null}>{resolved()}</Suspense>;
