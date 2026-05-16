@@ -79,7 +79,7 @@ pub fn create_wk_configuration(
         }
 
         config.setPreferences(&preferences);
-        tracing::trace!("Preferences configured on WKWebViewConfiguration");
+        tracing::debug!("Preferences configured on WKWebViewConfiguration");
     }
 
     // Disable delayed web process launch
@@ -129,7 +129,7 @@ fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
         if uses_single_responds {
             let _: () = msg_send![&*config, setUsesSingleWebProcess: true];
             let uses_single_value: bool = msg_send![&*config, usesSingleWebProcess];
-            tracing::info!(
+            tracing::debug!(
                 "_WKProcessPoolConfiguration usesSingleWebProcess after set: {}",
                 uses_single_value
             );
@@ -164,7 +164,12 @@ fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
                 );
                 if cfg_obj.class().responds_to(sel!(usesSingleWebProcess)) {
                     let uses_single: bool = msg_send![cfg_obj, usesSingleWebProcess];
-                    tracing::info!("_configuration.usesSingleWebProcess = {}", uses_single);
+                    tracing::debug!("_configuration.usesSingleWebProcess = {}", uses_single);
+                    if !uses_single {
+                        tracing::error!(
+                            "_WKProcessPoolConfiguration usesSingleWebProces was NOT enabled"
+                        );
+                    }
                 } else {
                     tracing::error!("_configuration does not respond to usesSingleWebProcess");
                 }
