@@ -44,9 +44,6 @@ use crate::{
 };
 use cap_recording::{feeds, sources::screen_capture::ScreenCaptureTarget};
 
-#[cfg(target_os = "macos")]
-const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> = LogicalPosition::new(13.0, 16.0);
-
 pub fn hide_overlay(window: &WebviewWindow) {
     let _ = window.set_ignore_cursor_events(true);
     let _ = window.hide();
@@ -720,6 +717,25 @@ impl CapWindowId {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn needs_toolbar_shell(&self) -> bool {
+        matches!(
+            self,
+            Self::Settings // Self::Main
+                           // | Self::Editor { .. }
+                           // | Self::ScreenshotEditor { .. }
+                           // | Self::Upgrade
+                           // | Self::ModeSelect
+                           // | Self::Onboarding
+        )
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn disables_fullscreen(&self) -> bool {
+        #[allow(clippy::single_match)]
+        matches!(self, Self::Settings)
+    }
+
     pub fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Main => (330.0, 395.0),
@@ -1194,7 +1210,6 @@ impl CapWindow {
             return Ok(window);
         }
 
-        let _id = self.id(app);
         let cursor_monitor = CursorMonitorInfo::get();
 
         let window = match self {
@@ -2206,8 +2221,27 @@ impl CapWindow {
         };
 
         #[cfg(target_os = "macos")]
-        if _id.activates_dock() {
-            crate::permissions::sync_macos_dock_visibility(app);
+        {
+            use crate::platform::WebviewWindowExt;
+
+            let id = self.id(app);
+
+            if id.activates_dock() {
+                crate::permissions::sync_macos_dock_visibility(app);
+            }
+
+            if objc2::available!(macos = 26.0) && id.needs_toolbar_shell() {
+                crate::platform::add_toolbar_shell(&window)?;
+            }
+
+            if id.disables_fullscreen() {
+                window.with_nswindow_on_main(|_mtm, nswindow| {
+                    nswindow.setCollectionBehavior(
+                        nswindow.collectionBehavior()
+                            | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
+                    );
+                })?;
+            }
         }
 
         Ok(window)
@@ -2230,17 +2264,19 @@ impl CapWindow {
     ) -> WebviewWindowBuilder<'a, Wry, AppHandle<Wry>> {
         let id = self.id(app);
 
-        let theme: Option<tauri::Theme> = GeneralSettingsStore::get(app)
+        let settings = GeneralSettingsStore::get(app)
             .ok()
             .flatten()
-            .and_then(|s| s.appearance.into());
+            .unwrap_or_default();
+
+        let appearance = settings.appearance;
 
         let mut builder = WebviewWindow::builder(app, label, WebviewUrl::App(url.into()))
             .title(id.title())
             .visible(false)
             .accept_first_mouse(true)
             .shadow(true)
-            .theme(theme)
+            .theme(appearance.into())
             .devtools(cfg!(debug_assertions));
 
         if let Some(min) = id.min_size() {
@@ -2251,11 +2287,18 @@ impl CapWindow {
 
         #[cfg(target_os = "macos")]
         {
+            const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> =
+                LogicalPosition::new(13.0, 16.0);
+
             if let Some(pos) = id.traffic_lights_position() {
                 builder = builder
                     .hidden_title(true)
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_POS));
+                    .title_bar_style(tauri::TitleBarStyle::Overlay);
+
+                if !id.needs_toolbar_shell() && settings.experimental_use_solarium {
+                    builder =
+                        builder.traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_POS));
+                }
             } else {
                 builder = builder.decorations(false)
             }

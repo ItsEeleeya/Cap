@@ -11,18 +11,27 @@ use objc2::{
     runtime::AnyClass,
     sel,
 };
-use objc2_foundation::{NSNumber, NSObjectProtocol};
-use objc2_web_kit::{WKProcessPool, WKWebView, WKWebViewConfiguration};
+use objc2_app_kit::{
+    NSToolbar, NSWindow, NSWindowDidExitFullScreenNotification,
+    NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification,
+};
+use objc2_foundation::{
+    NSNotificationCenter, NSNumber, NSObjectProtocol, NSOperationQueue, ns_string,
+};
+use objc2_web_kit::{WKProcessPool, WKWebViewConfiguration};
 pub use sc_shareable_content::*;
-use tauri::WebviewWindow;
+use tauri::{WebviewWindow, WindowEvent};
 
-struct MainThreadBound<T>(T);
+use crate::now_millis;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebviewProcessPoolPolicy {
     Shared,
     Own,
 }
+
+#[derive(Clone, Copy)]
+struct MainThreadBound<T>(T);
 
 // SAFETY: access is gated behind MainThreadMarker
 unsafe impl<T> Sync for MainThreadBound<T> {}
@@ -56,7 +65,7 @@ pub fn create_wk_configuration(
     unsafe {
         // Enable Material Hosting on macOS 26+
         if objc2::available!(macos = 26.0) {
-            if preferences.respondsToSelector(objc2::sel!(_useSystemAppearance)) {
+            if preferences.respondsToSelector(sel!(_useSystemAppearance)) {
                 preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
             } else {
                 tracing::error!("useSystemAppearance not available on WKWebviewConfiguration");
@@ -64,9 +73,7 @@ pub fn create_wk_configuration(
         }
 
         if disable_throttling {
-            if preferences
-                .respondsToSelector(objc2::sel!(pageVisibilityBasedProcessSuppressionEnabled))
-            {
+            if preferences.respondsToSelector(sel!(pageVisibilityBasedProcessSuppressionEnabled)) {
                 preferences.setValue_forKey(
                     Some(&no),
                     ns_string!("pageVisibilityBasedProcessSuppressionEnabled"),
@@ -83,7 +90,7 @@ pub fn create_wk_configuration(
     }
 
     // Disable delayed web process launch
-    if config.respondsToSelector(objc2::sel!(setDelaysWebProcessLaunchUntilFirstLoad:)) {
+    if config.respondsToSelector(sel!(setDelaysWebProcessLaunchUntilFirstLoad:)) {
         unsafe {
             let _: () = msg_send![&*config, setDelaysWebProcessLaunchUntilFirstLoad: false];
         }
@@ -193,17 +200,106 @@ pub fn set_window_level(window: tauri::Window, level: objc2_app_kit::NSWindowLev
     });
 }
 
-// pub trait WebviewWindowExt {
-//     fn objc2_nswindow(&self) -> &NSWindow;
-// }
+pub fn add_toolbar_shell(webview: &WebviewWindow) -> tauri::Result<()> {
+    webview.run_on_main_thread({
+        let window = webview.as_ref().window();
+        move || {
+            let nswindow = unsafe { &*window.ns_window().unwrap().cast::<NSWindow>() };
+            let mtm = MainThreadMarker::new().expect("Run on main");
 
-// impl WebviewWindowExt for WebviewWindow {
-//     #[inline]
-//     fn objc2_nswindow(&self) -> &NSWindow {
-//         // SAFETY: This cast is safe as long as we get a NSWindow from Tauri.
-//         unsafe { &*self.ns_window().expect("NSWindow not ready").cast() }
-//     }
-// }
+            let toolbar = NSToolbar::initWithIdentifier(
+                NSToolbar::alloc(mtm),
+                ns_string!("cap-toolbar-shell"),
+            );
+            toolbar.setAutosavesConfiguration(false);
+            toolbar.setAllowsUserCustomization(false);
+            toolbar.setDisplayMode(objc2_app_kit::NSToolbarDisplayMode::IconOnly);
+            nswindow.setToolbar(Some(&toolbar));
+
+            let nc = NSNotificationCenter::defaultCenter();
+
+            let enter_block = RcBlock::new({
+                let window = window.clone();
+                move |_| {
+                    if let Ok(win) = window.ns_window() {
+                        let nswindow = unsafe { &*win.cast::<NSWindow>() };
+                        if let Some(tb) = nswindow.toolbar() {
+                            tb.setVisible(false);
+                        }
+                    }
+                }
+            });
+
+            let exit_block = RcBlock::new({
+                let window = window.clone();
+                move |_| {
+                    if let Ok(win) = window.ns_window() {
+                        let nswindow = unsafe { &*win.cast::<NSWindow>() };
+                        if let Some(tb) = nswindow.toolbar() {
+                            tb.setVisible(true);
+                        }
+                    }
+                }
+            });
+
+            let enter = unsafe {
+                nc.addObserverForName_object_queue_usingBlock(
+                    Some(NSWindowWillEnterFullScreenNotification),
+                    Some(nswindow),
+                    Some(&*NSOperationQueue::mainQueue()),
+                    &enter_block,
+                )
+            };
+
+            let exit = unsafe {
+                nc.addObserverForName_object_queue_usingBlock(
+                    Some(NSWindowDidExitFullScreenNotification),
+                    Some(nswindow),
+                    Some(&*NSOperationQueue::mainQueue()),
+                    &exit_block,
+                )
+            };
+
+            let observers = MainThreadBound((enter, exit));
+
+            window.on_window_event(move |event| match event {
+                WindowEvent::Destroyed => {
+                    let observers = observers.clone();
+                    dispatch2::run_on_main(move |_| unsafe {
+                        let observers = observers;
+                        let nc = NSNotificationCenter::defaultCenter();
+                        nc.removeObserver(observers.0.0.as_ref());
+                        nc.removeObserver(observers.0.1.as_ref());
+                    });
+                }
+                _ => {}
+            });
+        }
+    })
+}
+
+pub trait WebviewWindowExt {
+    fn with_nswindow_on_main<F: FnOnce(MainThreadMarker, &NSWindow) + Send + 'static>(
+        &self,
+        f: F,
+    ) -> tauri::Result<()>;
+}
+
+impl WebviewWindowExt for WebviewWindow {
+    fn with_nswindow_on_main<F: FnOnce(MainThreadMarker, &NSWindow) + Send + 'static>(
+        &self,
+        f: F,
+    ) -> tauri::Result<()> {
+        self.run_on_main_thread({
+            let webview = self.clone();
+            move || {
+                let nswindow = unsafe { &*webview.ns_window().expect("NSWindow not ready").cast() };
+                let mtm = MainThreadMarker::new().expect("Running on main");
+                f(mtm, nswindow);
+            }
+        })
+    }
+}
 
 // Using `with_webview`` seems to cause Tauri to not be able to close the webview process when the window is closed.
 // pub fn show_after_next_presentation_update(webview: &WebviewWindow) -> Result<(), tauri::Error> {
