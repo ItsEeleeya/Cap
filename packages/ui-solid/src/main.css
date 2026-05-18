@@ -139,6 +139,15 @@
 	--animate-collapsible-up: collapsible-up 0.2s ease-out;
 	--animate-shimmer: shimmer 2s ease-in-out infinite;
 
+	--color-base-100: var(--base-100);
+	--color-base-200: var(--base-200);
+	--color-base-300: var(--base-300);
+	--color-base: var(--base);
+	--color-base-content-100: var(--base-content-100);
+	--color-base-content-200: var(--base-content-200);
+	--color-base-content-300: var(--base-content-300);
+	--color-base-content: var(--base-content);
+
 	@keyframes collapsible-down {
 		from {
 			height: 0;
@@ -169,6 +178,40 @@
 	}
 }
 
+@layer utilities {
+	.base-100 {
+		background-color: var(--base-100);
+	}
+
+	.base-200 {
+		background-color: var(--base-200);
+	}
+
+	.base-300 {
+		background-color: var(--base-300);
+	}
+
+	.base {
+		background-color: var(--base);
+	}
+
+	.base-content-100 {
+		color: var(--base-content-100);
+	}
+
+	.base-content-200 {
+		color: var(--base-content-200);
+	}
+
+	.base-content-300 {
+		color: var(--base-content-300);
+	}
+
+	.base-content {
+		color: var(--base-content);
+	}
+}
+
 :root {
 	@apply antialiased;
 }
@@ -176,6 +219,9 @@
 body {
 	font-family: "Geist Sans", sans-serif;
 	font-weight: 500;
+
+	text-size-adjust: 100%;
+	-webkit-text-size-adjust: 100%;
 }
 
 .custom-bg {

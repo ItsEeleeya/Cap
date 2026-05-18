@@ -19,6 +19,7 @@ import { Toaster } from "solid-toast";
 import "@cap/ui-solid/main.css";
 import "unfonts.css";
 import "./styles/theme.css";
+import "./styles/solarium.css";
 
 import { createEventListener } from "@solid-primitives/event-listener";
 import { getCurrentWindow } from "@tauri-apps/api/window";

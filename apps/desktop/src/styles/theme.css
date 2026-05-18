@@ -77,6 +77,15 @@
 	--red-transparent-20: rgba(255, 71, 102, 0.2);
 
 	--shadow-s: 0px 8px 16px 0px rgba(18, 22, 31, 0.04);
+
+	--base-100: var(--gray-1);
+	--base-200: var(--gray-2);
+	--base-300: var(--gray-3);
+	--base-content-100: var(--gray-12);
+	--base-content-200: var(--gray-11);
+	--base-content-300: var(--gray-10);
+	--base: var(--base-100);
+	--base-content: var(--base-content-100);
 }
 
 /* Dark theme variables */
@@ -143,6 +152,15 @@
 	--red-transparent-20: rgba(255, 71, 102, 0.2);
 
 	--shadow-s: 0px 8px 16px 0px rgba(0, 0, 0, 0.4);
+
+	--base-100: var(--gray-12);
+	--base-200: var(--gray-11);
+	--base-300: var(--gray-10);
+	--base-content-100: var(--gray-1);
+	--base-content-200: var(--gray-2);
+	--base-content-300: var(--gray-3);
+	--base: var(--base-100);
+	--base-content: var(--base-content-100);
 }
 
 .dark .dark-button-shadow {
@@ -421,6 +439,40 @@
 }
 
 /* Preserve the same default border color from Tailwind 3 */
+@layer utilities {
+	.base-100 {
+		background-color: var(--base-100);
+	}
+
+	.base-200 {
+		background-color: var(--base-200);
+	}
+
+	.base-300 {
+		background-color: var(--base-300);
+	}
+
+	.base {
+		background-color: var(--base);
+	}
+
+	.base-content-100 {
+		color: var(--base-content-100);
+	}
+
+	.base-content-200 {
+		color: var(--base-content-200);
+	}
+
+	.base-content-300 {
+		color: var(--base-content-300);
+	}
+
+	.base-content {
+		color: var(--base-content);
+	}
+}
+
 @layer base {
 	*,
 	::after,
