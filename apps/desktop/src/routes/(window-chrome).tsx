@@ -12,7 +12,6 @@ import {
 } from "solid-js";
 
 import { AbsoluteInsetLoader } from "~/components/Loader";
-import CaptionControlsMacOS from "~/components/titlebar/controls/CaptionControlsMacOS";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { initializeTitlebar } from "~/utils/titlebar-state";
@@ -53,9 +52,30 @@ export default function (props: RouteSectionProps) {
 		window.removeEventListener("keydown", handleKeyDown);
 	});
 
+<<<<<<<< < Temporary merge branch 1
 	return (
 		<WindowChromeContext>
 			<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1">
+=========
+	const isMacOS = ostype() === "macos";
+
+	createEffect(() => {
+		void applyMacOSWindowMaterial(
+			location.pathname.startsWith("/settings") ? "settings" : "panel",
+		).catch((error) => {
+			console.error("Failed to apply macOS window material:", error);
+		});
+	});
+
+	return (
+		<WindowChromeContext>
+			<div
+				class={cx(
+					"cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1",
+					isMacOS && "rounded-[16px]",
+				)}
+			>
+>>>>>>>>> Temporary merge branch 2
 				<Header />
 
 				{/* breaks sometimes */}
@@ -100,8 +120,8 @@ function Header() {
 			data-tauri-drag-region="deep"
 		>
 			{ctx.state()?.items}
-			{isWindows && <CaptionControlsWindows11 class="!ml-auto" />}
-			{isMacOS && <div class="h-full w-[4rem]" />}
+			{isWindows && <CaptionControlsWindows11 class="ml-auto!" />}
+			{isMacOS && <div class="h-full w-[64px]" />}
 		</header>
 	);
 }

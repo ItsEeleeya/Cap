@@ -26,8 +26,8 @@ tauri = { workspace = true, features = [
     "image-png",
 ] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "typescript"] }
-tauri-plugin-dialog = "2.2.0"
-tauri-plugin-fs = "2.2.0"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-fs = "2.5.1"
 tauri-plugin-global-shortcut = "2.2.0"
 tauri-plugin-http = "2.2.0"
 tauri-plugin-notification = "2.2.0"
@@ -36,7 +36,7 @@ tauri-plugin-process = "2.2.0"
 tauri-plugin-shell = "2.2.0"
 tauri-plugin-single-instance = { version = "2.2.0", features = ["deep-link"] }
 tauri-plugin-store = "2.2.0"
-tauri-plugin-updater = "2.9.0"
+tauri-plugin-updater = "2.10.1"
 tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "v2" }
 tauri-plugin-window-state = "2.2.0"
 tauri-plugin-positioner = "2.2.0"
@@ -145,6 +145,8 @@ objc2-web-kit = "0.3.2"
 swift-rs = "1.0.6"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
 cidre = { workspace = true }
+objc = "0.2.7"
+cocoa = "0.26.0"
 
 [target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
 parakeet-rs = "0.3.4"
