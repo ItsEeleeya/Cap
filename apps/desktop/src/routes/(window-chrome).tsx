@@ -1,13 +1,20 @@
-import type { RouteSectionProps } from "@solidjs/router";
+import { type RouteSectionProps, useLocation } from "@solidjs/router";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { cx } from "cva";
-import { onCleanup, onMount, type ParentProps, Suspense } from "solid-js";
+import {
+	createEffect,
+	onCleanup,
+	onMount,
+	type ParentProps,
+	Suspense,
+} from "solid-js";
 
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsMacOS from "~/components/titlebar/controls/CaptionControlsMacOS";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
+import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { initializeTitlebar } from "~/utils/titlebar-state";
 import {
 	useWindowChromeContext,
@@ -16,6 +23,7 @@ import {
 
 export default function (props: RouteSectionProps) {
 	let unlistenResize: UnlistenFn | undefined;
+	const location = useLocation();
 
 	onMount(async () => {
 		console.log("window chrome mounted");
@@ -71,6 +79,7 @@ export default function (props: RouteSectionProps) {
 
 function Header() {
 	const ctx = useWindowChromeContext();
+	const location = useLocation();
 	if (!ctx)
 		throw new Error(
 			"useWindowChrome must be used within a WindowChromeContext",
@@ -78,11 +87,14 @@ function Header() {
 
 	const isWindows = ostype() === "windows";
 	const isMacOS = ostype() === "macos";
+	const isSettings = () => location.pathname.startsWith("/settings");
+
+	if (isMacOS && isSettings()) return null;
 
 	return (
 		<header
 			class={cx(
-				"flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2",
+				"cap-window-header flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2",
 				isWindows ? "flex-row" : "flex-row-reverse",
 			)}
 			data-tauri-drag-region="deep"

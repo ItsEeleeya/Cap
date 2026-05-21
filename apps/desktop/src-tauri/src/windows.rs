@@ -29,8 +29,7 @@ use crate::panel_manager::{PanelManager, PanelState, PanelWindowType, is_window_
 
 use crate::{
     App, ArcLock, CameraWindowCloseGate, CameraWindowPositionGuard, MainWindowReadyState,
-    NewNotification, RequestScreenCapturePrewarm, RequestSetTargetMode,
-    camera_preview_error_message,
+    NewNotification, RequestSetTargetMode, camera_preview_error_message,
     display_utils::{CursorMonitorInfo, MonitorExt},
     editor_window::PendingEditorInstances,
     emit_camera_preview_clear, emit_camera_preview_error, fake_window,
@@ -238,7 +237,7 @@ pub(crate) async fn ensure_camera_input_active(app_state: &mut App) {
     }
 }
 
-async fn restore_main_window_inputs(app: &AppHandle) {
+pub(crate) async fn restore_main_window_inputs(app: &AppHandle) {
     let Some(state) = app.try_state::<ArcLock<App>>() else {
         warn!("App state unavailable while restoring main window inputs");
         return;
@@ -713,6 +712,7 @@ impl CapWindowId {
             | Self::RecordingsOverlay
             | Self::RecordingControls
             | Self::TargetSelectOverlay { .. } => None,
+            Self::Settings => Some(Some(LogicalPosition::new(22.0, 22.0))),
             _ => Some(None),
         }
     }
@@ -741,7 +741,7 @@ impl CapWindowId {
             Self::Main => (330.0, 395.0),
             Self::Editor { .. } => (1275.0, 800.0),
             Self::ScreenshotEditor { .. } => (800.0, 600.0),
-            Self::Settings => (800.0, 580.0),
+            Self::Settings => (780.0, 560.0),
             Self::Camera => (200.0, 200.0),
             Self::Upgrade => (950.0, 850.0),
             Self::ModeSelect => (580.0, 340.0),
@@ -1179,9 +1179,7 @@ impl CapWindow {
                     },
                 );
             } else {
-                if let Self::Main { .. } = self {
-                    restore_main_window_inputs(app).await;
-                }
+                let should_restore_main_window_inputs = matches!(self, Self::Main { .. });
 
                 if let Self::Onboarding = self {
                     let _ = window.set_ignore_cursor_events(false);
@@ -1199,6 +1197,13 @@ impl CapWindow {
                             display_id: cursor_display_id,
                         },
                     );
+                }
+
+                if should_restore_main_window_inputs {
+                    let app = app.clone();
+                    tokio::spawn(async move {
+                        restore_main_window_inputs(&app).await;
+                    });
                 }
             }
 
@@ -1222,7 +1227,7 @@ impl CapWindow {
                 let should_protect = should_protect_window(app, &title);
 
                 #[cfg(target_os = "macos")]
-                permissions::prepare_macos_panel_window(app);
+                let panel_activation_guard = permissions::prepare_macos_panel_window(app);
 
                 let window = self
                     .window_builder(app, "/")
@@ -1307,7 +1312,7 @@ impl CapWindow {
                 };
 
                 #[cfg(target_os = "macos")]
-                permissions::prepare_macos_panel_window(app);
+                let panel_activation_guard = permissions::prepare_macos_panel_window(app);
 
                 let mut window_builder = self
                     .window_builder(
@@ -1374,7 +1379,9 @@ impl CapWindow {
                     app.run_on_main_thread({
                         let window = window.clone();
                         let app = app.clone();
+                        let panel_activation_guard = panel_activation_guard;
                         move || {
+                            let _panel_activation_guard = panel_activation_guard;
                             use tauri_nspanel::cocoa::appkit::NSWindowCollectionBehavior;
                             use tauri_nspanel::panel_delegate;
                             use tauri_nspanel::WebviewWindowExt as NSPanelWebviewWindowExt;
@@ -1410,6 +1417,10 @@ impl CapWindow {
 
                             panel.set_delegate(delegate);
 
+                            #[allow(non_upper_case_globals)]
+                            const NSWindowStyleMaskNonActivatingPanel: i32 = 1 << 7;
+                            panel.set_style_mask(NSWindowStyleMaskNonActivatingPanel);
+
                             let max_level = unsafe { CGWindowLevelForKey(kCGMaximumWindowLevelKey) };
                             panel.set_level(max_level - 1);
                             panel.set_style_mask(objc2_app_kit::NSWindowStyleMask::NonactivatingPanel.0 as i32);
@@ -1431,21 +1442,27 @@ impl CapWindow {
                 window
             }
             Self::Settings { page } => {
-                let window = self
+                let mut builder = self
                     .window_builder(
                         app,
                         format!("/settings/{}", page.clone().unwrap_or_default()),
                     )
-                    .inner_size(800.0, 580.0)
-                    .min_inner_size(800.0, 580.0)
+                    .inner_size(782.0, 775.0)
+                    .min_inner_size(780.0, 560.0)
                     .resizable(true)
                     .maximized(false)
-                    .focused(true)
-                    .build()?;
+                    .focused(true);
+
+                #[cfg(target_os = "macos")]
+                {
+                    builder = builder.transparent(true);
+                }
+
+                let window = builder.build()?;
 
                 #[cfg(windows)]
                 {
-                    if let Err(e) = window.set_size(LogicalSize::new(800.0, 580.0)) {
+                    if let Err(e) = window.set_size(LogicalSize::new(782.0, 775.0)) {
                         warn!("Failed to set Settings window size on Windows: {}", e);
                     }
                     if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
@@ -1694,7 +1711,7 @@ impl CapWindow {
                     let should_protect = should_protect_window(app, &title);
 
                     #[cfg(target_os = "macos")]
-                    permissions::prepare_macos_panel_window(app);
+                    let panel_activation_guard = permissions::prepare_macos_panel_window(app);
 
                     let label = camera_window_label
                         .clone()
@@ -1822,7 +1839,9 @@ impl CapWindow {
                         app.run_on_main_thread({
                             let window = window.clone();
                             let app = app.clone();
+                            let panel_activation_guard = panel_activation_guard;
                             move || {
+                                let _panel_activation_guard = panel_activation_guard;
                                 use tauri_nspanel::cocoa::appkit::NSWindowCollectionBehavior;
                                 use tauri_nspanel::panel_delegate;
                                 use crate::panel_manager::try_to_panel;
@@ -2020,7 +2039,7 @@ impl CapWindow {
                 let should_protect = should_protect_window(app, &title);
 
                 #[cfg(target_os = "macos")]
-                permissions::prepare_macos_panel_window(app);
+                let panel_activation_guard = permissions::prepare_macos_panel_window(app);
 
                 #[cfg(target_os = "macos")]
                 let window = {
@@ -2092,7 +2111,9 @@ impl CapWindow {
                     app.run_on_main_thread({
                         let window = window.clone();
                         let app = app.clone();
+                        let panel_activation_guard = panel_activation_guard;
                         move || {
+                            let _panel_activation_guard = panel_activation_guard;
                             use tauri_nspanel::cocoa::appkit::{NSWindowCollectionBehavior, NSWindowStyleMask};
                             use tauri_nspanel::panel_delegate;
                             use tauri_nspanel::WebviewWindowExt as NSPanelWebviewWindowExt;
