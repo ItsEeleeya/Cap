@@ -736,7 +736,6 @@ impl CapWindowId {
 
     #[cfg(target_os = "macos")]
     pub fn disables_fullscreen(&self) -> bool {
-        #[allow(clippy::single_match)]
         matches!(self, Self::Settings)
     }
 
@@ -2063,7 +2062,7 @@ impl CapWindow {
                     app.run_on_main_thread({
                         let window = window.clone();
                         let app = app.clone();
-                        let _panel_activation_guard = panel_activation_guard;
+                        let panel_activation_guard = panel_activation_guard;
                         move || {
                             let _panel_activation_guard = panel_activation_guard;
                             use tauri_nspanel::cocoa::appkit::{NSWindowCollectionBehavior, NSWindowStyleMask};
@@ -2194,12 +2193,8 @@ impl CapWindow {
         let id = self.id(app);
 
         #[cfg(target_os = "macos")]
-        if id.activates_dock() {
-            crate::permissions::sync_macos_dock_visibility(app);
         {
             use crate::platform::WebviewWindowExt;
-
-            let id = self.id(app);
 
             if id.activates_dock() {
                 crate::permissions::sync_macos_dock_visibility(app);
