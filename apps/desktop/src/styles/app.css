@@ -1,0 +1,41 @@
+@import "@cap/ui-solid/main.css";
+@import "./theme.css";
+@import "./solarium.css";
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwind-scrollbar";
+
+@tailwind utilities;
+
+@custom-variant windows {
+	&:is([data-platform="windows"] *) {
+		@slot;
+
+		&::before,
+		&::after {
+			@slot;
+		}
+	}
+}
+
+@custom-variant macos {
+	&:is(html[data-platform="macos"] *) {
+		@slot;
+
+		&::before,
+		&::after {
+			@slot;
+		}
+	}
+}
+
+@custom-variant solarium {
+	&:is([data-solarium] *) {
+		@slot;
+
+		&::before,
+		&::after {
+			@slot;
+		}
+	}
+}

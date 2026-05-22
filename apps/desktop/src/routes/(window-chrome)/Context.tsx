@@ -1,16 +1,33 @@
 import { createContextProvider } from "@solid-primitives/context";
-import { createSignal, type JSX, onCleanup } from "solid-js";
+import {
+	createRenderEffect,
+	createSignal,
+	type JSX,
+	onCleanup,
+	type ParentProps,
+} from "solid-js";
 
 interface WindowChromeState {
+	/** @deprecated */
 	hideMaximize?: boolean;
-	items?: JSX.Element;
+	/** @deprecated */
+	items?: () => JSX.Element;
 }
 
 export const [WindowChromeContext, useWindowChromeContext] =
 	createContextProvider(() => {
 		const [state, setState] = createSignal<WindowChromeState>();
 
-		return { state, setState };
+		return {
+			state,
+			setState: (newState: WindowChromeState | undefined) => {
+				if (newState === undefined) {
+					setState(undefined);
+				} else {
+					setState((prev) => ({ ...prev, ...newState }));
+				}
+			},
+		};
 	});
 
 export function useWindowChrome(state: WindowChromeState) {
@@ -20,21 +37,22 @@ export function useWindowChrome(state: WindowChromeState) {
 			"useWindowChrome must be used within a WindowChromeContext",
 		);
 
-	ctx.setState?.(state);
+	createRenderEffect(() => ctx.setState?.(state));
 	onCleanup(() => {
-		ctx.setState?.();
+		ctx.setState?.(undefined);
 	});
 }
 
-export function WindowChromeHeader(props: {
-	hideMaximize?: boolean;
-	children?: JSX.Element;
-}) {
+export function WindowChromeHeader(
+	props: ParentProps<{
+		hideMaximize?: boolean;
+		/** @deprecated */
+		items?: JSX.Element;
+	}>,
+) {
 	useWindowChrome({
 		hideMaximize: props.hideMaximize,
-		get items() {
-			return props.children;
-		},
+		items: () => props.children,
 	});
 
 	return null;

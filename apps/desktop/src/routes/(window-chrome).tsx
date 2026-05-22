@@ -1,135 +1,128 @@
-import { type RouteSectionProps, useLocation } from "@solidjs/router";
-import type { UnlistenFn } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { type as ostype } from "@tauri-apps/plugin-os";
-import { cx } from "cva";
-import {
-	createEffect,
-	onCleanup,
-	onMount,
-	type ParentProps,
-	Suspense,
-} from "solid-js";
-
+import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
+import { type } from "@tauri-apps/plugin-os";
+import { createMemo, type ParentProps, Show, Suspense } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
-import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
-import { initializeTitlebar } from "~/utils/titlebar-state";
 import {
 	useWindowChromeContext,
 	WindowChromeContext,
 } from "./(window-chrome)/Context";
 
 export default function (props: RouteSectionProps) {
-	let unlistenResize: UnlistenFn | undefined;
-	const location = useLocation();
-
-	onMount(async () => {
-		console.log("window chrome mounted");
-		void initializeTitlebar().then((unlisten) => {
-			unlistenResize = unlisten;
-		});
-	});
-
-	const handleKeyDown = (e: KeyboardEvent) => {
-		const isMac = ostype() === "macos";
-		const closeShortcut = isMac
-			? e.metaKey && e.key === "w"
-			: e.ctrlKey && e.key === "w";
-
-		if (closeShortcut) {
-			e.preventDefault();
-			getCurrentWindow().close();
-		}
-	};
-
-	onMount(() => {
-		window.addEventListener("keydown", handleKeyDown);
-	});
-
-	onCleanup(() => {
-		unlistenResize?.();
-		window.removeEventListener("keydown", handleKeyDown);
-	});
-
-<<<<<<<< < Temporary merge branch 1
 	return (
 		<WindowChromeContext>
-			<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1">
-=========
-	const isMacOS = ostype() === "macos";
-
-	createEffect(() => {
-		void applyMacOSWindowMaterial(
-			location.pathname.startsWith("/settings") ? "settings" : "panel",
-		).catch((error) => {
-			console.error("Failed to apply macOS window material:", error);
-		});
-	});
-
-	return (
-		<WindowChromeContext>
-			<div
-				class={cx(
-					"cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1",
-					isMacOS && "rounded-[16px]",
-				)}
-			>
->>>>>>>>> Temporary merge branch 2
-				<Header />
-
-				{/* breaks sometimes */}
-				{/* <Transition
-        mode="outin"
-        enterActiveClass="transition-opacity duration-100"
-        exitActiveClass="transition-opacity duration-100"
-        enterClass="opacity-0"
-        exitToClass="opacity-0"
-        > */}
-				<Suspense fallback={<AbsoluteInsetLoader />}>
-					<Inner>
-						<Suspense fallback={null}>{props.children}</Suspense>
-					</Inner>
-				</Suspense>
-				{/* </Transition> */}
+			<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1">
+				<div class="flex overflow-y-hidden flex-1 animate-in fade-in">
+					<Inner>{props.children}</Inner>
+				</div>
 			</div>
 		</WindowChromeContext>
 	);
 }
 
-function Header() {
+function Inner(props: ParentProps) {
 	const ctx = useWindowChromeContext();
-	const location = useLocation();
 	if (!ctx)
 		throw new Error(
 			"useWindowChrome must be used within a WindowChromeContext",
 		);
 
-	const isWindows = ostype() === "windows";
-	const isMacOS = ostype() === "macos";
-	const isSettings = () => location.pathname.startsWith("/settings");
-
-	if (isMacOS && isSettings()) return null;
+	const matches = useCurrentMatches();
+	const newChrome = createMemo(() =>
+		matches().some((match) => match.route.info?.useNewChrome === true),
+	);
 
 	return (
-		<header
-			class={cx(
-				"cap-window-header flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2",
-				isWindows ? "flex-row" : "flex-row-reverse",
-			)}
-			data-tauri-drag-region="deep"
+		<Show
+			when={newChrome()}
+			fallback={<LegacyChrome>{props.children}</LegacyChrome>}
 		>
-			{ctx.state()?.items}
-			{isWindows && <CaptionControlsWindows11 class="ml-auto!" />}
-			{isMacOS && <div class="h-full w-[64px]" />}
-		</header>
+			<div class="relative flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1">
+				<Suspense>
+					<header
+						data-tauri-drag-region="deep"
+						class="fixed flex items-center min-w-0 w-full h-9 select-none shrink-0 windows:flex-row macos:flex-row-reverse"
+					>
+						{type() === "windows" && <CaptionControlsWindows11 class="ml-auto!" />}
+						{type() === "macos" && <div class="h-full w-[68px]" />}
+					</header>
+
+					<div class="flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
+						{props.children}
+					</div>
+					{/* 
+					<div
+						class={
+							fullSizeContentView()
+								? "relative flex-1 overflow-hidden"
+								: "flex overflow-hidden flex-1"
+						}
+					>
+						<Show when={ctx.state()?.sidebar} fallback={mainContent()}>
+							<Show
+								when={!fullSizeContentView()}
+								fallback={
+									<div class="relative flex-1 overflow-hidden">
+										<div class="absolute inset-0">{props.children}</div>
+										<div class="relative z-10 flex h-full overflow-hidden bg-gray-2 shadow-xl">
+											<div class="flex h-full min-w-[280px] overflow-hidden border-r border-gray-4">
+												{ctx.state()?.sidebar?.()}
+											</div>
+										</div>
+									</div>
+								}
+							>
+								<SplitView
+									name="window-chrome-sidebar"
+									class="flex-1 overflow-hidden"
+								>
+									<SplitViewPanel
+										initialSize={0.28}
+										minSize={0.18}
+										collapsible={ctx.state()?.sidebarCollapsible}
+										class="flex flex-col overflow-hidden bg-gray-2"
+									>
+										{ctx.state()?.sidebar?.()}
+									</SplitViewPanel>
+									<SplitViewHandle withHandle />
+									<SplitViewPanel class="flex flex-col overflow-hidden">
+										{mainContent()}
+									</SplitViewPanel>
+								</SplitView>
+							</Show>
+						</Show>
+					</div> */}
+				</Suspense>
+			</div>
+		</Show>
 	);
 }
 
-function Inner(props: ParentProps) {
+function LegacyChrome(props: ParentProps) {
+	const ctx = useWindowChromeContext();
+	if (!ctx)
+		throw new Error(
+			"useWindowChrome must be used within a WindowChromeContext",
+		);
+
 	return (
-		<div class="flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
-			{props.children}
+		<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1">
+			<Suspense fallback={<AbsoluteInsetLoader />}>
+				<header
+					data-tauri-drag-region="deep"
+					class="flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2 windows:flex-row macos:flex-row-reverse"
+				>
+					{ctx.state()?.items?.()}
+					{type() === "windows" && (
+						<CaptionControlsWindows11 class="ml-auto!" />
+					)}
+					{type() === "macos" && <div class="h-full w-[68px]" />}
+				</header>
+
+				<div class="flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
+					{props.children}
+				</div>
+			</Suspense>
 		</div>
 	);
 }

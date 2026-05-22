@@ -18,8 +18,7 @@ import { Toaster } from "solid-toast";
 
 import "@cap/ui-solid/main.css";
 import "unfonts.css";
-import "./styles/theme.css";
-import "./styles/solarium.css";
+import "./styles/app.css";
 
 import { createEventListener } from "@solid-primitives/event-listener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -161,7 +160,7 @@ function Inner() {
 						<Route
 							path="/settings"
 							component={SettingsLayout}
-							info={{ autoShow: false }}
+							info={{ autoShow: false, useNewChrome: true }}
 						>
 							<Route path="/" component={SettingsGeneralPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
