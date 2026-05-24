@@ -201,7 +201,7 @@ export default function Settings(props: RouteSectionProps) {
 				SETTINGS_SIDEBAR_STORAGE_KEY,
 				String(sidebarCollapsed()),
 			);
-		} catch {}
+		} catch { }
 	});
 
 	const handleAuth = async () => {
@@ -246,7 +246,7 @@ export default function Settings(props: RouteSectionProps) {
 	};
 
 	return (
-		<div class="cap-settings-shell flex flex-1 flex-row divide-x divide-gray-3 overflow-hidden text-[0.875rem] leading-5">
+		<div data-transparent-window class="cap-settings-shell flex flex-1 flex-row divide-x divide-gray-3 overflow-hidden text-[0.875rem] leading-5">
 			<div
 				class="cap-settings-sidebar flex h-full flex-col overflow-hidden bg-gray-2 transition-[width,min-width,max-width,opacity] duration-200 ease-out"
 				style={sidebarStyle()}

@@ -1,7 +1,6 @@
 import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
 import { type } from "@tauri-apps/plugin-os";
 import {
-	createEffect,
 	createMemo,
 	type JSX,
 	type ParentProps,
@@ -10,7 +9,6 @@ import {
 } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
-import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { useWindowChromeMetrics } from "~/utils/window-chrome";
 import {
 	useWindowChromeContext,
@@ -41,27 +39,12 @@ function Inner(props: ParentProps) {
 	const newChrome = createMemo(() =>
 		matches().some((match) => match.route.info?.useNewChrome === true),
 	);
-	const macosMaterial = createMemo(() => {
-		const currentMatch = [...matches()]
-			.reverse()
-			.find((match) => match.route.info?.macosMaterial);
-		return currentMatch?.route.info?.macosMaterial as
-			| "panel"
-			| "settings"
-			| undefined;
-	});
+
 	const shellStyle = createMemo<JSX.CSSProperties>(() => ({
 		"--window-caption-width": `${chromeMetrics().captionWidth}px`,
 		"--window-caption-padding-left": chromeMetrics().captionPaddingLeft,
 		"--window-caption-padding-right": chromeMetrics().captionPaddingRight,
 	}));
-
-	createEffect(() => {
-		if (type() !== "macos") return;
-		const material = macosMaterial();
-		if (!material) return;
-		void applyMacOSWindowMaterial(material);
-	});
 
 	return (
 		<Show

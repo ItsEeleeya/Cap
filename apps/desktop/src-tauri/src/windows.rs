@@ -722,16 +722,21 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn needs_toolbar_shell(&self) -> bool {
+    pub fn appears_transparent(&self) -> bool {
         matches!(
             self,
-            Self::Settings // Self::Main
-                           // | Self::Editor { .. }
-                           // | Self::ScreenshotEditor { .. }
-                           // | Self::Upgrade
-                           // | Self::ModeSelect
-                           // | Self::Onboarding
+            Self::Camera
+                | Self::CaptureArea
+                | Self::RecordingControls
+                | Self::RecordingsOverlay
+                | Self::TargetSelectOverlay { .. }
+                | Self::WindowCaptureOccluder { .. }
         )
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn needs_toolbar_shell(&self) -> bool {
+        matches!(self, Self::Settings)
     }
 
     #[cfg(target_os = "macos")]
@@ -1243,7 +1248,6 @@ impl CapWindow {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .content_protected(should_protect)
-                    .transparent(true)
                     .initialization_script(format!(
                         "
                         window.__CAP__ = window.__CAP__ ?? {{}};
@@ -1311,7 +1315,6 @@ impl CapWindow {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .skip_taskbar(true)
-                    .transparent(true)
                     .initialization_script(format!(
                         "window.__CAP__ = window.__CAP__ ?? {{}}; window.__CAP__.cameraWsPort = {camera_ws_port};"
                     ));
@@ -1577,7 +1580,6 @@ impl CapWindow {
                     .inner_size(width, height)
                     .min_inner_size(860.0, 690.0)
                     .maximizable(false)
-                    .transparent(true)
                     .focused(true)
                     .shadow(true)
                     .build()?;
@@ -1688,8 +1690,7 @@ impl CapWindow {
 		                ",
                             state.camera_ws_port, centered, enable_native_camera_preview
                         ))
-                        .content_protected(should_protect)
-                        .transparent(true);
+                        .content_protected(should_protect);
 
                     let window = match window_builder.build() {
                         Ok(w) => w,
@@ -1914,17 +1915,14 @@ impl CapWindow {
                     .content_protected(should_protect)
                     .skip_taskbar(true)
                     .inner_size(bounds.width(), bounds.height())
-                    .position(position.x(), position.y())
-                    .transparent(true);
+                    .position(position.x(), position.y());
 
                 let window = window_builder.build()?;
 
                 window.set_ignore_cursor_events(true).unwrap();
 
                 #[cfg(target_os = "macos")]
-                {
-                    crate::platform::set_window_level(window.as_ref().window(), 900);
-                }
+                window.with_nswindow_on_main(|_, nswindow| nswindow.setLevel(900))?;
 
                 window
             }
@@ -1940,8 +1938,7 @@ impl CapWindow {
                     .content_protected(should_protect)
                     .skip_taskbar(true)
                     .closable(true)
-                    .decorations(false)
-                    .transparent(true);
+                    .decorations(false);
 
                 let Some(display) = Display::from_id(screen_id) else {
                     return Err(tauri::Error::WindowNotFound);
@@ -1964,10 +1961,9 @@ impl CapWindow {
                 let window = window_builder.build()?;
 
                 #[cfg(target_os = "macos")]
-                crate::platform::set_window_level(
-                    window.as_ref().window(),
-                    objc2_app_kit::NSPopUpMenuWindowLevel,
-                );
+                window.with_nswindow_on_main(|_, nswindow| {
+                    nswindow.setLevel(objc2_app_kit::NSPopUpMenuWindowLevel)
+                })?;
 
                 // Hide the main window if the target monitor is the same
                 if let Some(main_window) = CapWindowId::Main.get(app)
@@ -1997,7 +1993,6 @@ impl CapWindow {
                         .fullscreen(false)
                         .shadow(false)
                         .always_on_top(true)
-                        .transparent(true)
                         .visible_on_all_workspaces(true)
                         .content_protected(should_protect)
                         .inner_size(width, height)
@@ -2015,7 +2010,6 @@ impl CapWindow {
                     .fullscreen(false)
                     .shadow(false)
                     .always_on_top(true)
-                    .transparent(true)
                     .visible_on_all_workspaces(true)
                     .content_protected(should_protect)
                     .inner_size(width, height)
@@ -2138,7 +2132,6 @@ impl CapWindow {
                     .content_protected(should_protect)
                     .inner_size(cursor_monitor.width, cursor_monitor.height)
                     .skip_taskbar(true)
-                    .transparent(true)
                     .build()?;
 
                 let _ = window.set_position(tauri::LogicalPosition::new(
@@ -2199,12 +2192,21 @@ impl CapWindow {
                 crate::platform::add_toolbar_shell(&window)?;
             }
 
-            if id.disables_fullscreen() {
-                window.with_nswindow_on_main(|_mtm, nswindow| {
-                    nswindow.setCollectionBehavior(
-                        nswindow.collectionBehavior()
-                            | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
-                    );
+            let disables_fullscreen = id.disables_fullscreen();
+            let is_transparent = id.appears_transparent();
+
+            if disables_fullscreen || !is_transparent {
+                window.with_nswindow_on_main(move |_, nswindow| {
+                    if disables_fullscreen {
+                        nswindow.setCollectionBehavior(
+                            nswindow.collectionBehavior()
+                                | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
+                        );
+                    }
+
+                    if !is_transparent {
+                        nswindow.setOpaque(true);
+                    }
                 })?;
             }
         }
@@ -2265,6 +2267,7 @@ impl CapWindow {
             .title(id.title())
             .visible(false)
             .resizable(id.resizable())
+            .transparent(id.appears_transparent())
             .accept_first_mouse(true)
             .shadow(true)
             .theme(appearance.into())
@@ -2286,12 +2289,24 @@ impl CapWindow {
                     .hidden_title(true)
                     .title_bar_style(tauri::TitleBarStyle::Overlay);
 
-                if !id.needs_toolbar_shell() && settings.experimental_use_solarium {
+                if !id.needs_toolbar_shell() && !settings.experimental_use_solarium {
                     builder =
                         builder.traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_POS));
                 }
             } else {
                 builder = builder.decorations(false)
+            }
+
+            // Use UnderWindowBackground on macOS. We set transparent here for the webview.
+            // When the window is built we set it to opaque.
+            if !id.appears_transparent() {
+                builder = builder
+                    .effects(
+                        tauri::window::EffectsBuilder::default()
+                            .effect(tauri::window::Effect::UnderWindowBackground)
+                            .build(),
+                    )
+                    .transparent(true);
             }
 
             // Don't pool heavy editors with the rest of the app
