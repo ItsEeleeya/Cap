@@ -1435,11 +1435,6 @@ impl CapWindow {
                     .min_inner_size(780.0, 560.0)
                     .focused(true);
 
-                #[cfg(target_os = "macos")]
-                {
-                    builder = builder.transparent(true);
-                }
-
                 builder.build()?
             }
             Self::Editor { .. } => {
