@@ -2414,10 +2414,10 @@ function Page() {
 				onOpenSettings={
 					rawOptions.micName
 						? () =>
-							openMicrophoneMenu(
-								options.micName() ?? null,
-								rawOptions.micName != null,
-							)
+								openMicrophoneMenu(
+									options.micName() ?? null,
+									rawOptions.micName != null,
+								)
 						: undefined
 				}
 			/>
