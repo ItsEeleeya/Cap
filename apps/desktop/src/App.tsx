@@ -26,6 +26,11 @@ import { CapErrorBoundary } from "./components/CapErrorBoundary";
 import { initAnonymousUser } from "./utils/analytics";
 import titlebar from "./utils/titlebar-state";
 
+if (import.meta.env.TAURI_ENV_PLATFORM === "darwin") {
+	import("~/styles/solarium.css");
+	import("~/utils/smoothed-global");
+}
+
 const WindowChromeLayout = lazy(() => import("./routes/(window-chrome)"));
 const NewMainPage = lazy(() => import("./routes/(window-chrome)/new-main"));
 const SettingsLayout = lazy(() => import("./routes/(window-chrome)/settings"));
