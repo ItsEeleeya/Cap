@@ -4,38 +4,22 @@
 
 @plugin "@tailwindcss/typography";
 @plugin "tailwind-scrollbar";
+@plugin "tailwindcss-fade";
 
 @tailwind utilities;
 
-@custom-variant windows {
-	&:is([data-platform="windows"] *) {
-		@slot;
+@custom-variant win (&:where(html[data-platform="windows"] *));
 
-		&::before,
-		&::after {
-			@slot;
-		}
-	}
-}
+@custom-variant macos (&:where(html[data-platform="macos"] *));
 
-@custom-variant macos {
-	&:is(html[data-platform="macos"] *) {
-		@slot;
+@custom-variant solarium (&:where(html[data-solarium] *));
 
-		&::before,
-		&::after {
-			@slot;
-		}
-	}
-}
+.sidebar {
+	.sidebar_inner {
+		@apply size-full;
 
-@custom-variant solarium {
-	&:is([data-solarium] *) {
-		@slot;
-
-		&::before,
-		&::after {
-			@slot;
+		@variant solarium {
+			@apply apple-glass;
 		}
 	}
 }
