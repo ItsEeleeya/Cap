@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
 	Effect,
@@ -31,6 +30,10 @@ export async function applyMacOSWindowMaterial(material: MacOSWindowMaterial) {
 	const visualSystem = majorVersion >= 26 ? "liquid-glass" : "vibrancy";
 	const radius =
 		material === "settings" && visualSystem === "liquid-glass" ? 26 : 16;
+	const backgroundEffect =
+		material === "settings"
+			? Effect.UnderPageBackground
+			: Effect.WindowBackground;
 	const root = document.documentElement;
 	root.dataset.macosNativeMaterial = material;
 	root.dataset.macosVisualSystem = visualSystem;
@@ -41,20 +44,8 @@ export async function applyMacOSWindowMaterial(material: MacOSWindowMaterial) {
 	);
 	await focusUnlisten;
 
-	if (visualSystem === "liquid-glass") {
-		const appliedNativeGlass = await invoke<boolean>(
-			"apply_macos_liquid_glass_background",
-			{ enabled: true, radius },
-		).catch((error) => {
-			console.warn("Failed to apply native macOS Liquid Glass:", error);
-			return false;
-		});
-
-		if (appliedNativeGlass) return;
-	}
-
 	const effects: Effects = {
-		effects: [Effect.WindowBackground],
+		effects: [backgroundEffect],
 		state: EffectState.FollowsWindowActiveState,
 		radius,
 	};

@@ -165,7 +165,11 @@ function Inner() {
 						<Route
 							path="/settings"
 							component={SettingsLayout}
-							info={{ autoShow: false, useNewChrome: true }}
+							info={{
+								autoShow: false,
+								useNewChrome: true,
+								macosMaterial: "settings",
+							}}
 						>
 							<Route path="/" component={SettingsGeneralPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
