@@ -2,14 +2,12 @@ import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
 import { type } from "@tauri-apps/plugin-os";
 import {
 	createMemo,
-	type JSX,
 	type ParentProps,
 	Show,
 	Suspense,
 } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
-import { useWindowChromeMetrics } from "~/utils/window-chrome";
 import {
 	useWindowChromeContext,
 	WindowChromeContext,
@@ -35,16 +33,9 @@ function Inner(props: ParentProps) {
 		);
 
 	const matches = useCurrentMatches();
-	const chromeMetrics = useWindowChromeMetrics();
 	const newChrome = createMemo(() =>
 		matches().some((match) => match.route.info?.useNewChrome === true),
 	);
-
-	const shellStyle = createMemo<JSX.CSSProperties>(() => ({
-		"--window-caption-width": `${chromeMetrics().captionWidth}px`,
-		"--window-caption-padding-left": chromeMetrics().captionPaddingLeft,
-		"--window-caption-padding-right": chromeMetrics().captionPaddingRight,
-	}));
 
 	return (
 		<Show
@@ -52,9 +43,7 @@ function Inner(props: ParentProps) {
 			fallback={<LegacyChrome>{props.children}</LegacyChrome>}
 		>
 			<div
-				class="cap-window-shell relative flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1"
-				data-window-caption-side={chromeMetrics().captionSide}
-				style={shellStyle()}
+				class="relative flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1"
 			>
 				<Suspense>
 					<header

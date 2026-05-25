@@ -11,29 +11,19 @@ import * as dialog from "@tauri-apps/plugin-dialog";
 import * as shell from "@tauri-apps/plugin-shell";
 import { check } from "@tauri-apps/plugin-updater";
 import {
-	createEffect,
 	createMemo,
 	createResource,
 	createSignal,
 	For,
-	type JSX,
 	Show,
 } from "solid-js";
 import { RevealWindowWithSuspense } from "~/App";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
-import SidebarToggleIcon from "~/components/SidebarToggleIcon";
 import { SignInButton } from "~/components/SignInButton";
-import {
-	Toolbar,
-	ToolbarGroup,
-	ToolbarItemGroup,
-	ToolbarSpacer,
-} from "~/components/Toolbar";
 import { authStore } from "~/store";
 import { trackEvent } from "~/utils/analytics";
 import { clientEnv } from "~/utils/env";
 import { apiClient, protectedHeaders } from "~/utils/web-api";
-import { useWindowChromeMetrics } from "~/utils/window-chrome";
 import IconLucideUserRound from "~icons/lucide/user-round";
 
 const SETTINGS_SIDEBAR_STORAGE_KEY = "cap.settings.sidebarCollapsed";
@@ -101,14 +91,6 @@ const SETTINGS_ITEMS = [
 	},
 ] as const;
 
-function readStoredSidebarCollapsed() {
-	try {
-		return localStorage.getItem(SETTINGS_SIDEBAR_STORAGE_KEY) === "true";
-	} catch {
-		return false;
-	}
-}
-
 function isSettingsItemActive(pathname: string, href: string) {
 	const normalizedPath =
 		pathname === "/settings" ? "/settings/general" : pathname;
@@ -118,13 +100,10 @@ function isSettingsItemActive(pathname: string, href: string) {
 export default function Settings(props: RouteSectionProps) {
 	const navigate = useNavigate();
 	const location = useLocation();
-	const chromeMetrics = useWindowChromeMetrics();
 	const auth = authStore.createQuery();
 	const [version] = createResource(() => getVersion());
 	const [isCheckingForUpdates, setIsCheckingForUpdates] = createSignal(false);
-	const [sidebarCollapsed, setSidebarCollapsed] = createSignal(
-		readStoredSidebarCollapsed(),
-	);
+
 	const userProfile = createQuery(() => ({
 		queryKey: ["settings-user-profile", auth.data?.user_id],
 		enabled: !!auth.data,
@@ -144,19 +123,6 @@ export default function Settings(props: RouteSectionProps) {
 			return response.body;
 		},
 	}));
-	const activeSettingsItem = createMemo(
-		() =>
-			SETTINGS_ITEMS.find((item) =>
-				isSettingsItemActive(location.pathname, item.href),
-			) ?? SETTINGS_ITEMS[0],
-	);
-	const toolbarItems = createMemo(() => {
-		const primaryItems = SETTINGS_ITEMS.filter((item) => item.showInToolbar);
-		const activeItem = activeSettingsItem();
-		return primaryItems.some((item) => item.href === activeItem.href)
-			? primaryItems
-			: [...primaryItems, activeItem];
-	});
 	const accountName = createMemo(() => {
 		if (!auth.data) return "Signed Out";
 
@@ -182,27 +148,6 @@ export default function Settings(props: RouteSectionProps) {
 			new URL("/dashboard", clientEnv.VITE_SERVER_URL).toString(),
 		);
 	};
-	const toggleSidebar = () => setSidebarCollapsed((value) => !value);
-	const sidebarStyle = createMemo<JSX.CSSProperties>(() => ({
-		width: sidebarCollapsed() ? "0px" : "var(--macos-settings-sidebar-width)",
-		"min-width": sidebarCollapsed()
-			? "0px"
-			: "var(--macos-settings-sidebar-width)",
-		"max-width": sidebarCollapsed()
-			? "0px"
-			: "var(--macos-settings-sidebar-width)",
-		opacity: sidebarCollapsed() ? "0" : "1",
-		"pointer-events": sidebarCollapsed() ? "none" : "auto",
-	}));
-
-	createEffect(() => {
-		try {
-			localStorage.setItem(
-				SETTINGS_SIDEBAR_STORAGE_KEY,
-				String(sidebarCollapsed()),
-			);
-		} catch { }
-	});
 
 	const handleAuth = async () => {
 		if (auth.data) {
@@ -249,18 +194,7 @@ export default function Settings(props: RouteSectionProps) {
 		<div data-transparent-window class="cap-settings-shell flex flex-1 flex-row divide-x divide-gray-3 overflow-hidden text-[0.875rem] leading-5">
 			<div
 				class="cap-settings-sidebar flex h-full flex-col overflow-hidden bg-gray-2 transition-[width,min-width,max-width,opacity] duration-200 ease-out"
-				style={sidebarStyle()}
 			>
-				<Toolbar class="cap-settings-sidebar-toolbar shrink-0">
-					<ToolbarGroup>
-						<SidebarToggleButton
-							collapsed={sidebarCollapsed()}
-							side={chromeMetrics().captionSide}
-							onClick={toggleSidebar}
-						/>
-					</ToolbarGroup>
-					<ToolbarSpacer />
-				</Toolbar>
 
 				<button
 					type="button"
@@ -368,32 +302,6 @@ export default function Settings(props: RouteSectionProps) {
 			</div>
 
 			<div class="cap-settings-content flex min-w-0 flex-1 flex-col overflow-hidden">
-				<Toolbar class="cap-settings-content-toolbar shrink-0 border-b border-black/10">
-					<ToolbarGroup>
-						<SidebarToggleButton
-							collapsed={sidebarCollapsed()}
-							side={chromeMetrics().captionSide}
-							onClick={toggleSidebar}
-						/>
-					</ToolbarGroup>
-					<ToolbarItemGroup class="max-w-full flex-1">
-						<For each={toolbarItems()}>
-							{(item) => (
-								<A
-									href={item.href}
-									activeClass="bg-gray-12 text-gray-1 pointer-events-none"
-									class="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-gray-11 transition-[opacity,filter,background-color,color] duration-200 ease-out animate-in fade-in zoom-in-95"
-									data-tauri-drag-region="false"
-								>
-									<item.icon class="size-3.5 opacity-70" aria-hidden="true" />
-									<span>{item.name}</span>
-								</A>
-							)}
-						</For>
-					</ToolbarItemGroup>
-					<ToolbarSpacer />
-				</Toolbar>
-
 				<div class="min-w-0 flex-1 overflow-y-hidden animate-in fade-in">
 					<CapErrorBoundary>
 						<RevealWindowWithSuspense>
@@ -406,21 +314,3 @@ export default function Settings(props: RouteSectionProps) {
 	);
 }
 
-function SidebarToggleButton(props: {
-	collapsed: boolean;
-	side: "left" | "right";
-	onClick: () => void;
-}) {
-	return (
-		<button
-			type="button"
-			class="flex size-8 items-center justify-center rounded-full text-gray-11 transition-colors hover:bg-black/6 hover:text-gray-12 active:bg-black/8"
-			onClick={props.onClick}
-			data-tauri-drag-region="false"
-			aria-label={props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-			aria-pressed={!props.collapsed}
-		>
-			<SidebarToggleIcon collapsed={props.collapsed} side={props.side} />
-		</button>
-	);
-}
