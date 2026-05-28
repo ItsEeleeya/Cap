@@ -473,7 +473,7 @@ fn center_camera_window(app: &AppHandle, window: &WebviewWindow) {
     let toolbar_height = 56.0;
     let size = camera_state.size as f64;
     let is_full = camera_state.shape == crate::camera::CameraPreviewShape::Full;
-    let aspect_ratio = 16.0 / 9.0;
+    let aspect_ratio = crate::camera::WIDE_CAMERA_ASPECT_RATIO as f64;
 
     let window_width = if is_full { size * aspect_ratio } else { size };
     let window_height = size + toolbar_height;
@@ -1435,7 +1435,6 @@ impl CapWindow {
                         format!("/settings/{}", page.clone().unwrap_or_default()),
                     )
                     .inner_size(782.0, 775.0)
-                    .min_inner_size(780.0, 560.0)
                     .focused(true);
 
                 builder.build()?
@@ -1446,8 +1445,6 @@ impl CapWindow {
                 let window = self
                     .window_builder(app, "/editor")
                     .maximizable(true)
-                    .inner_size(1275.0, 800.0)
-                    .min_inner_size(1275.0, 800.0)
                     .focused(true)
                     .build()?;
 
@@ -1477,7 +1474,6 @@ impl CapWindow {
                     .window_builder(app, "/screenshot-editor")
                     .maximizable(true)
                     .inner_size(1240.0, 800.0)
-                    .min_inner_size(800.0, 600.0)
                     .focused(true)
                     .build()
                 {
@@ -1514,8 +1510,6 @@ impl CapWindow {
 
                 let window = self
                     .window_builder(app, "/upgrade")
-                    .inner_size(950.0, 850.0)
-                    .min_inner_size(950.0, 850.0)
                     .focused(true)
                     .always_on_top(true)
                     .shadow(true)
@@ -1544,8 +1538,6 @@ impl CapWindow {
 
                 let window = self
                     .window_builder(app, "/mode-select")
-                    .inner_size(580.0, 340.0)
-                    .min_inner_size(580.0, 340.0)
                     .maximizable(false)
                     .focused(true)
                     .shadow(true)
@@ -1578,7 +1570,6 @@ impl CapWindow {
                 let window = self
                     .window_builder(app, "/onboarding")
                     .inner_size(width, height)
-                    .min_inner_size(860.0, 690.0)
                     .maximizable(false)
                     .focused(true)
                     .shadow(true)
@@ -1761,7 +1752,7 @@ impl CapWindow {
                     let (camera_pos_x, camera_pos_y) = if let Some(pos) = saved_position {
                         (pos.x, pos.y)
                     } else if *centered {
-                        let aspect_ratio = 16.0 / 9.0;
+                        let aspect_ratio = crate::camera::WIDE_CAMERA_ASPECT_RATIO as f64;
                         let toolbar_height = 56.0;
                         let window_width = CENTERED_WINDOW_SIZE * aspect_ratio;
                         let window_height = CENTERED_WINDOW_SIZE + toolbar_height;

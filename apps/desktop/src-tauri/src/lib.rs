@@ -115,7 +115,10 @@ use crate::{
     recording_settings::{RecordingSettingsStore, RecordingTargetMode},
     upload::InstantMultipartUpload,
 };
-use exit_shutdown::{AppExitAction, app_exit_action, collect_device_inventory, run_while_active};
+use exit_shutdown::{
+    AppExitAction, ExitRequestDecision, app_exit_action, collect_device_inventory,
+    handle_exit_requested, run_while_active,
+};
 use futures::FutureExt;
 use std::panic::AssertUnwindSafe;
 
@@ -597,6 +600,14 @@ impl App {
         Ok(())
     }
 
+    async fn ensure_mic_feed_alive(&mut self) -> Result<(), String> {
+        if self.mic_feed.is_alive() {
+            return Ok(());
+        }
+
+        self.restart_mic_feed().await
+    }
+
     async fn add_recording_logging_handle(&mut self, path: &PathBuf) -> Result<(), String> {
         let logfile =
             std::fs::File::create(path).map_err(|e| format!("Failed to create logfile: {e}"))?;
@@ -692,6 +703,8 @@ impl App {
     }
 
     async fn ensure_selected_mic_ready(&mut self) -> Result<(), String> {
+        self.ensure_mic_feed_alive().await?;
+
         if let Some(label) = self.selected_mic_label.clone() {
             let settings = self.microphone_settings_for_label(&label);
             let ready = self
@@ -733,6 +746,8 @@ async fn set_mic_input(state: MutableState<'_, App>, label: Option<String>) -> R
 
     let (mic_feed, studio_handle, previous_label, app_handle) = {
         let mut app = state.write().await;
+        app.ensure_mic_feed_alive().await?;
+
         if desired_label == app.selected_mic_label {
             if desired_label.is_some() && !matches!(app.recording_state, RecordingState::Active(_))
             {
@@ -4001,7 +4016,9 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             get_current_recording,
             export::begin_export_session,
             export::end_export_session,
+            export::cancel_export,
             export::export_video,
+            export::export_video_with_id,
             export::export_video_to_file,
             export::get_export_estimates,
             export::generate_export_preview,
@@ -4195,7 +4212,10 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
 
     #[cfg(target_os = "macos")]
     {
-        builder = builder.plugin(tauri_nspanel::init());
+        builder = builder
+            .menu(platform::menu::build_app_menu)
+            .on_menu_event(platform::menu::on_event)
+            .plugin(tauri_nspanel::init());
     }
 
     builder
@@ -4245,6 +4265,9 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             let app = app.handle().clone();
+
+            #[cfg(target_os = "macos")]
+            platform::menu::init(&app)?;
 
             if let Err(err) = update_project_names::migrate_if_needed(&app) {
                 tracing::error!("Failed to migrate project file names: {}", err);
@@ -4537,7 +4560,14 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
 
                 match event {
                     WindowEvent::CloseRequested { api, .. } => {
-                        if export::export_session_active() {
+                        let window_id = CapWindowId::from_str(label).ok();
+                        if matches!(
+                            window_id,
+                            Some(CapWindowId::Editor { .. })
+                                | Some(CapWindowId::ScreenshotEditor { .. })
+                        ) {
+                            export::cancel_exports_for_window(label);
+                        } else if export::export_session_active() {
                             api.prevent_close();
                             warn!(
                                 window = label,
@@ -4546,7 +4576,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                             return;
                         }
 
-                        if let Ok(window_id) = CapWindowId::from_str(label) {
+                        if let Some(window_id) = window_id {
                             match window_id {
                                 CapWindowId::Camera => {
                                     if app
@@ -4556,19 +4586,19 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                         return;
                                     }
 
-                                api.prevent_close();
-                                let _ = window.hide();
-                                tracing::warn!("Camera window CloseRequested event received!");
-                                let session_id = app
-                                    .try_state::<Arc<AtomicU64>>()
-                                    .map(|state| state.load(Ordering::Acquire))
-                                    .unwrap_or(0);
-                                let app = app.clone();
-                                spawn_on_runtime(async move {
-                                    cleanup_camera_window(app, session_id).await;
-                                });
-                            }
-                            CapWindowId::Main => {
+                                    api.prevent_close();
+                                    let _ = window.hide();
+                                    tracing::warn!("Camera window CloseRequested event received!");
+                                    let session_id = app
+                                        .try_state::<Arc<AtomicU64>>()
+                                        .map(|state| state.load(Ordering::Acquire))
+                                        .unwrap_or(0);
+                                    let app = app.clone();
+                                    spawn_on_runtime(async move {
+                                        cleanup_camera_window(app, session_id).await;
+                                    });
+                                }
+                                CapWindowId::Main => {
                                 api.prevent_close();
                                 let _ = window.hide();
 
@@ -4633,20 +4663,23 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                     if app_is_exiting(app) {
                         return;
                     }
-                    // If a webview crashes mid-export (memory pressure, GPU teardown, etc.) we
-                    // get a Destroyed event for the editor window. Tearing down camera/mic
-                    // feeds and editor registry entries here would race the running export
-                    // sidecar and could trigger Tauri's "last window closed" exit path. Skip
-                    // cleanup entirely while an export is active — the regular Destroyed flow
-                    // will run again when the export completes if the window is still gone.
-                    if export::export_session_active() {
+                    let window_id = CapWindowId::from_str(label).ok();
+                    let is_editor_window = matches!(
+                        window_id,
+                        Some(CapWindowId::Editor { .. })
+                            | Some(CapWindowId::ScreenshotEditor { .. })
+                    );
+                    if is_editor_window {
+                        export::cancel_exports_for_window(label);
+                    }
+                    if export::export_session_active() && !is_editor_window {
                         warn!(
                             window = label,
                             "Skipping Destroyed cleanup during active export"
                         );
                         return;
                     }
-                    if let Ok(window_id) = CapWindowId::from_str(label) {
+                    if let Some(window_id) = window_id {
                         if matches!(window_id, CapWindowId::Camera) {
                             tracing::warn!("Camera window Destroyed event received!");
                         }
@@ -4999,43 +5032,54 @@ fn handle_run_event(_handle: &AppHandle, event: tauri::RunEvent) {
         tauri::RunEvent::ExitRequested { code, api, .. } => {
             info!(?code, "App exit requested");
 
-            if _handle
-                .try_state::<AppExitState>()
-                .is_some_and(|state| state.is_exiting())
-            {
-                return;
+            match handle_exit_requested(
+                _handle
+                    .try_state::<AppExitState>()
+                    .is_some_and(|state| state.is_exiting()),
+                export::export_session_active(),
+                code.is_some(),
+                || api.prevent_exit(),
+            ) {
+                ExitRequestDecision::StartCleanup => {
+                    let _ = code;
+                    let handle = _handle.clone();
+                    spawn_on_runtime(async move {
+                        request_app_exit(handle).await;
+                    });
+                }
+                ExitRequestDecision::AlreadyExiting => {}
+                ExitRequestDecision::ExportActive => {
+                    warn!("Preventing app exit request during active export");
+                }
+                ExitRequestDecision::AllowRuntimeExit => {}
             }
-
-            api.prevent_exit();
-
-            if export::export_session_active() {
-                warn!("Preventing app exit request during active export");
-                return;
-            }
-
-            let _ = code;
-            let handle = _handle.clone();
-            spawn_on_runtime(async move {
-                request_app_exit(handle).await;
-            });
         }
         tauri::RunEvent::Exit => {
-            let already_exiting = match _handle.try_state::<AppExitState>() {
-                Some(state) => !state.begin(),
-                None => false,
-            };
-            if already_exiting {
-                return;
+            #[cfg(target_os = "macos")]
+            {
+                warn!("macOS runtime exit reached; forcing process exit");
+                force_exit(0);
             }
 
-            let handle = _handle.clone();
-            spawn_on_runtime(async move {
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(2),
-                    cleanup_app_resources_for_exit(&handle),
-                )
-                .await;
-            });
+            #[cfg(not(target_os = "macos"))]
+            {
+                let already_exiting = match _handle.try_state::<AppExitState>() {
+                    Some(state) => !state.begin(),
+                    None => false,
+                };
+                if already_exiting {
+                    return;
+                }
+
+                let handle = _handle.clone();
+                spawn_on_runtime(async move {
+                    let _ = tokio::time::timeout(
+                        Duration::from_secs(2),
+                        cleanup_app_resources_for_exit(&handle),
+                    )
+                    .await;
+                });
+            }
         }
         _ => {}
     }

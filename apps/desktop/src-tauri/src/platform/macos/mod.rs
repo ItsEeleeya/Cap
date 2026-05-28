@@ -1,3 +1,4 @@
+pub mod menu;
 mod sc_shareable_content;
 
 use std::sync::OnceLock;
