@@ -21,6 +21,7 @@ mod http_client;
 mod import;
 mod logging;
 mod notifications;
+#[cfg(target_os = "macos")]
 mod panel_manager;
 mod permissions;
 mod platform;
@@ -2786,8 +2787,10 @@ fn close_recordings_overlay_window(app: AppHandle) {
             if let Ok(panel) =
                 app_for_close.get_webview_panel(&CapWindowId::RecordingsOverlay.label())
             {
-                panel.released_when_closed(false);
-                panel.close();
+                panel.set_released_when_closed(false);
+                if let Some(window) = panel.to_window() {
+                    let _ = window.close();
+                }
             }
         })
         .ok();
@@ -4249,6 +4252,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                     CapWindowId::RecordingsOverlay.label().as_str(),
                     CapWindowId::RecordingControls.label().as_str(),
                     CapWindowId::Upgrade.label().as_str(),
+                    #[cfg(target_os = "macos")]
+                    CapWindowId::Main.label().as_str(),
                 ])
                 .map_label(|label| match label {
                     label if label.starts_with("camera-") => "camera",
