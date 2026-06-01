@@ -42,6 +42,7 @@
 		"core:window:allow-set-theme",
 		"core:window:allow-set-progress-bar",
 		"core:window:allow-set-effects",
+		"core:window:allow-set-background-color",
 		"core:window:allow-set-ignore-cursor-events",
 		"core:window:allow-set-visible-on-all-workspaces",
 		"core:window:deny-set-visible-on-all-workspaces",

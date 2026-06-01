@@ -1,7 +1,6 @@
 import { createEventListenerMap, makeEventListener } from "@solid-primitives/event-listener";
 import { makePersisted } from "@solid-primitives/storage";
 import { type CursorIcon, getCurrentWindow } from "@tauri-apps/api/window";
-import { cx } from "cva";
 import {
     children,
     createContext,
@@ -26,8 +25,11 @@ const ANIMATION_DURATION_INNER = 250;
 
 type Side = "left" | "right";
 
-const clamp = (value: number, min: number, max: number) =>
-    Math.min(max, Math.max(min, value));
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
 
 interface SidebarContextValue {
     side: () => Side;
@@ -58,6 +60,18 @@ export function useSidebar() {
     return ctx;
 }
 
+// ── Ephemeral state ───────────────────────────────────────────────────────────
+
+interface SidebarState {
+    isDragging: boolean;
+    dragStartX: number;
+    dragStartWidth: number;
+    autoCollapsed: boolean;
+    overlayOpen: boolean;
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+
 interface SidebarProviderProps extends ParentProps {
     side?: Side;
     minWidth?: number;
@@ -66,18 +80,6 @@ interface SidebarProviderProps extends ParentProps {
     collapsible?: boolean;
     resizable?: boolean;
     storageKey?: string;
-}
-
-function createWidth(defaultVal: number, persist: boolean, key: string) {
-    const signal = createSignal(defaultVal);
-    if (!persist) return signal;
-    return makePersisted(signal, { name: key });
-}
-
-function createCollapsed(persist: boolean, key: string) {
-    const signal = createSignal(false);
-    if (!persist) return signal;
-    return makePersisted(signal, { name: key });
 }
 
 export function SidebarProvider(props: SidebarProviderProps) {
@@ -89,30 +91,30 @@ export function SidebarProvider(props: SidebarProviderProps) {
     const resizable = () => props.resizable ?? false;
     const storageKey = () => props.storageKey ?? "sidebar";
 
-    const persistWidth = () => resizable();
-    const persistCollapsed = () => collapsible();
-
     const currentWindow = getCurrentWindow();
+    const [windowWidth, setWindowWidth] = createSignal(window.innerWidth);
 
-    const [width, setWidth] = createWidth(
-        clamp(defaultWidth(), minWidth(), maxWidth()),
-        persistWidth(),
-        `${storageKey()}-width`,
-    );
-    const [collapsed, setCollapsed] = createCollapsed(
-        persistCollapsed(),
-        `${storageKey()}-collapsed`,
-    );
+    // Only two fields are worth persisting — each gets a plain persisted signal.
+    // Conditional: no storage touch if the feature isn't enabled.
+    const [width, setWidth] = resizable()
+        ? makePersisted(
+            createSignal(clamp(defaultWidth(), minWidth(), maxWidth())),
+            { name: `${storageKey()}-width` },
+        )
+        : createSignal(clamp(defaultWidth(), minWidth(), maxWidth()));
 
-    const [state, setState] = createStore({
+    const [collapsed, setCollapsed] = collapsible()
+        ? makePersisted(createSignal(false), { name: `${storageKey()}-collapsed` })
+        : createSignal(false);
+
+    // Everything else is ephemeral — never persisted.
+    const [state, setState] = createStore<SidebarState>({
         isDragging: false,
         dragStartX: 0,
         dragStartWidth: 0,
         autoCollapsed: false,
         overlayOpen: false,
     });
-
-    const [windowWidth, setWindowWidth] = createSignal(window.innerWidth);
 
     const effectiveMax = createMemo(() =>
         Math.min(maxWidth(), Math.floor(windowWidth() / 2)),
@@ -125,6 +127,16 @@ export function SidebarProvider(props: SidebarProviderProps) {
     const currentWidth = createMemo(() => {
         if (collapsed() || state.overlayOpen) return 0;
         return visualWidth();
+    });
+
+    // Sync --sidebar-w on :root so CSS (toolbar grid columns, .cap-sidebar width)
+    // reacts without any extra JS. The @property registration in chrome.css makes
+    // transitions on dependent calc()/max() expressions work automatically.
+    createEffect(() => {
+        document.documentElement.style.setProperty(
+            "--sidebar-w",
+            `${currentWidth()}px`,
+        );
     });
 
     createEffect(() => {
@@ -152,13 +164,15 @@ export function SidebarProvider(props: SidebarProviderProps) {
         return "colResize";
     }
 
-    const openOverlay = () => {
+    function openOverlay() {
         if (collapsed() && state.autoCollapsed) setState("overlayOpen", true);
-    };
+    }
 
-    const closeOverlay = () => setState("overlayOpen", false);
+    function closeOverlay() {
+        setState("overlayOpen", false);
+    }
 
-    const toggle = () => {
+    function toggle() {
         if (!collapsible()) return;
         if (collapsed()) {
             if (state.autoCollapsed) {
@@ -170,7 +184,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
             setState({ autoCollapsed: false, overlayOpen: false });
             setCollapsed(true);
         }
-    };
+    }
 
     function onHandleMouseEnter() {
         if (!resizable() || state.isDragging) return;
@@ -193,14 +207,15 @@ export function SidebarProvider(props: SidebarProviderProps) {
         e.preventDefault();
 
         if (collapsed()) {
-            setState({ autoCollapsed: false, overlayOpen: false });
-            setCollapsed(false);
-            setWidth(minWidth());
             setState({
+                autoCollapsed: false,
+                overlayOpen: false,
                 isDragging: true,
                 dragStartX: e.clientX,
                 dragStartWidth: minWidth(),
             });
+            setCollapsed(false);
+            setWidth(minWidth());
             currentWindow.setCursorIcon(getResizeCursor(minWidth()));
             return;
         }
@@ -217,7 +232,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
                 pointermove: onPointerMove,
                 pointerup: () => cancelMove(dispose),
                 blur: () => cancelMove(dispose),
-            })
+            }),
         );
     }
 
@@ -286,8 +301,9 @@ export function SidebarProvider(props: SidebarProviderProps) {
     );
 }
 
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
 interface SidebarProps {
-    class?: string;
     children?: JSX.Element;
 }
 
@@ -324,7 +340,10 @@ export function Sidebar(props: SidebarProps) {
                     requestAnimationFrame(() => setOpen(true));
                 } else {
                     setOpen(false);
-                    const t = setTimeout(() => setMounted(false), ANIMATION_DURATION_INNER);
+                    const t = setTimeout(
+                        () => setMounted(false),
+                        ANIMATION_DURATION_INNER,
+                    );
                     onCleanup(() => clearTimeout(t));
                 }
             },
@@ -373,7 +392,7 @@ export function Sidebar(props: SidebarProps) {
                 <Portal mount={document.body}>
                     <div
                         ref={panelRef}
-                        class={`sidebar ${props.class}`}
+                        class="cap-sidebar"
                         style={{
                             position: "fixed",
                             top: "0",
@@ -389,15 +408,15 @@ export function Sidebar(props: SidebarProps) {
                             if (isOverlay()) closeOverlay();
                         }}
                     >
-                        <div class="sidebar_inner">
-                            {resolvedChildren()}
-                        </div>
+                        <div class="cap-sidebar__inner apple-glas rounded-[18px]">{resolvedChildren()}</div>
                     </div>
                 </Portal>
             </Show>
         </>
     );
 }
+
+// ── SidebarTrigger ────────────────────────────────────────────────────────────
 
 interface SidebarTriggerProps {
     class?: string;

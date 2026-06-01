@@ -720,7 +720,6 @@ impl CapWindowId {
             | Self::RecordingsOverlay
             | Self::RecordingControls
             | Self::TargetSelectOverlay { .. } => None,
-            Self::Settings => Some(Some(LogicalPosition::new(22.0, 22.0))),
             _ => Some(None),
         }
     }
@@ -1456,24 +1455,15 @@ impl CapWindow {
                     .ok();
                 }
 
-                #[cfg(not(target_os = "macos"))]
-                {
-                    window.show().ok();
-                }
-
                 window
             }
-            Self::Settings { page } => {
-                let mut builder = self
-                    .window_builder(
-                        app,
-                        format!("/settings/{}", page.clone().unwrap_or_default()),
-                    )
-                    .inner_size(782.0, 775.0)
-                    .focused(true);
-
-                builder.build()?
-            }
+            Self::Settings { page } => self
+                .window_builder(
+                    app,
+                    format!("/settings/{}", page.clone().unwrap_or_default()),
+                )
+                .inner_size(782.0, 775.0)
+                .build()?,
             Self::Editor { .. } => {
                 hide_recording_windows(app);
 
@@ -2205,32 +2195,26 @@ impl CapWindow {
         {
             use crate::platform::WebviewWindowExt;
 
-            {
-                if id.activates_dock() {
-                    crate::permissions::sync_macos_dock_visibility(app);
-                }
+            if id.activates_dock() {
+                crate::permissions::sync_macos_dock_visibility(app);
+            }
 
-                if objc2::available!(macos = 26.0) && id.needs_toolbar_shell() {
-                    crate::platform::add_toolbar_shell(&window)?;
-                }
+            let disables_fullscreen = id.disables_fullscreen();
+            let is_transparent = id.appears_transparent();
 
-                let disables_fullscreen = id.disables_fullscreen();
-                let is_transparent = id.appears_transparent();
+            if disables_fullscreen || !is_transparent {
+                window.with_nswindow_on_main(move |_, nswindow| {
+                    if !is_transparent {
+                        nswindow.setOpaque(true);
+                    }
 
-                if disables_fullscreen || !is_transparent {
-                    window.with_nswindow_on_main(move |_, nswindow| {
-                        if disables_fullscreen {
-                            nswindow.setCollectionBehavior(
-                                nswindow.collectionBehavior()
-                                    | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
-                            );
-                        }
-
-                        if !is_transparent {
-                            nswindow.setOpaque(true);
-                        }
-                    })?;
-                }
+                    // if disables_fullscreen {
+                    //     nswindow.setCollectionBehavior(
+                    //         nswindow.collectionBehavior()
+                    //             | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
+                    //     );
+                    // }
+                })?;
             }
 
             if id.frame_autosaves() {
@@ -2240,6 +2224,10 @@ impl CapWindow {
                     nswindow.setFrameAutosaveName(&autosave_name);
                     nswindow.setFrameUsingName_force(&autosave_name, true);
                 })?;
+            }
+
+            if objc2::available!(macos = 26.0) && id.needs_toolbar_shell() {
+                crate::platform::add_toolbar_shell(&window)?;
             }
         }
 
@@ -2297,11 +2285,7 @@ impl CapWindow {
             .title(id.title())
             .visible(false)
             .resizable(id.resizable())
-            .transparent(id.appears_transparent())
-            .accept_first_mouse(true)
-            .shadow(true)
-            .theme(appearance.into())
-            .devtools(cfg!(debug_assertions));
+            .transparent(true);
 
         if let Some(min) = id.min_size() {
             builder = builder
@@ -2311,32 +2295,29 @@ impl CapWindow {
 
         #[cfg(target_os = "macos")]
         {
-            const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> =
-                LogicalPosition::new(13.0, 16.0);
+            // Use UnderWindowBackground on macOS. We set transparent here for the webview.
+            // When the window is built we set it to opaque.
+            if id.appears_transparent() {
+                builder = builder.decorations(false);
+            } else {
+                builder = builder.effects(
+                    tauri::window::EffectsBuilder::default()
+                        .effect(tauri::window::Effect::UnderWindowBackground)
+                        .build(),
+                );
+            }
 
+            // Window does NOT conform to solarium
             if let Some(pos) = id.traffic_lights_position() {
-                builder = builder
-                    .hidden_title(true)
-                    .title_bar_style(tauri::TitleBarStyle::Overlay);
+                if !id.needs_toolbar_shell()
+                    && !(settings.experimental_use_solarium && objc2::available!(macos = 26.0))
+                {
+                    const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> =
+                        LogicalPosition::new(13.0, 16.0);
 
-                if !id.needs_toolbar_shell() && !settings.experimental_use_solarium {
                     builder =
                         builder.traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_POS));
                 }
-            } else {
-                builder = builder.decorations(false)
-            }
-
-            // Use UnderWindowBackground on macOS. We set transparent here for the webview.
-            // When the window is built we set it to opaque.
-            if !id.appears_transparent() {
-                builder = builder
-                    .effects(
-                        tauri::window::EffectsBuilder::default()
-                            .effect(tauri::window::Effect::UnderWindowBackground)
-                            .build(),
-                    )
-                    .transparent(true);
             }
 
             // Don't pool heavy editors with the rest of the app
@@ -2355,6 +2336,12 @@ impl CapWindow {
                 ))
             });
         }
+
+        builder = builder
+            .accept_first_mouse(true)
+            .theme(appearance.into())
+            .hidden_title(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay);
 
         #[cfg(windows)]
         {

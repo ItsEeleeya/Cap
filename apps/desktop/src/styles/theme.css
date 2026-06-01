@@ -70,15 +70,6 @@
 	--red-transparent-20: rgba(255, 71, 102, 0.2);
 
 	--shadow-s: 0px 8px 16px 0px rgba(18, 22, 31, 0.04);
-
-	--base-100: var(--gray-1);
-	--base-200: var(--gray-2);
-	--base-300: var(--gray-3);
-	--base-content-100: var(--gray-12);
-	--base-content-200: var(--gray-11);
-	--base-content-300: var(--gray-10);
-	--base: var(--base-100);
-	--base-content: var(--base-content-100);
 }
 
 /* Dark theme variables */

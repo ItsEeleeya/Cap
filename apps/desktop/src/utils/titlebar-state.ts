@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import type { JSX } from "solid-js";
 import { createStore } from "solid-js/store";
+import { commands } from "./tauri";
 
 export interface TitlebarState {
 	height: string;
@@ -20,7 +21,7 @@ export interface TitlebarState {
 
 const [state, setState] = createStore<TitlebarState>({
 	height: "36px",
-	hideMaximize: true,
+	hideMaximize: false,
 	order: "platform",
 	items: null,
 	maximized: false,
@@ -41,7 +42,7 @@ async function initializeTitlebar(): Promise<UnlistenFn | undefined> {
 
 	const [maximized, maximizable] = await Promise.all([
 		currentWindow.isMaximized(),
-		currentWindow.isMaximizable(),
+		!currentWindow.isMaximizable(),
 	]);
 
 	setState({

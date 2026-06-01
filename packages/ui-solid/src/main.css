@@ -217,8 +217,9 @@
 }
 
 body {
-	font-family: "Geist Sans", sans-serif;
-	font-weight: 500;
+	/* TODO(Ilya): Make customizable */
+	/* font-family: "Geist Sans", sans-serif; */
+	font-family: system-ui, -apple-system, "Segoe UI";
 
 	text-size-adjust: 100%;
 	-webkit-text-size-adjust: 100%;

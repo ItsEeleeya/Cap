@@ -14,7 +14,7 @@ use objc2::{
 };
 use objc2_app_kit::{
     NSToolbar, NSWindow, NSWindowDidExitFullScreenNotification,
-    NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification,
+    NSWindowWillEnterFullScreenNotification,
 };
 use objc2_foundation::{
     NSNotificationCenter, NSNumber, NSObjectProtocol, NSOperationQueue, ns_string,
@@ -105,8 +105,6 @@ pub fn create_wk_configuration(
 }
 
 fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
-    use objc2_web_kit::WKProcessPool;
-
     let pool_class = WKProcessPool::class();
 
     let Some(config_class) = AnyClass::get(c"_WKProcessPoolConfiguration") else {
