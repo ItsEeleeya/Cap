@@ -266,6 +266,24 @@ pub fn add_toolbar_shell(webview: &WebviewWindow) -> tauri::Result<()> {
     })
 }
 
+pub fn remove_toolbar_shell(webview: &WebviewWindow) -> tauri::Result<()> {
+    webview.run_on_main_thread({
+        let window = webview.as_ref().window();
+        move || {
+            let nswindow = unsafe { &*window.ns_window().unwrap().cast::<NSWindow>() };
+            // Only remove ours
+            if let Some(toolbar) = nswindow.toolbar() {
+                if toolbar
+                    .identifier()
+                    .isEqualToString(ns_string!("cap-toolbar-shell"))
+                {
+                    nswindow.setToolbar(None);
+                }
+            }
+        }
+    })
+}
+
 pub trait WebviewWindowExt {
     fn with_nswindow_on_main<F: FnOnce(MainThreadMarker, &NSWindow) + Send + 'static>(
         &self,

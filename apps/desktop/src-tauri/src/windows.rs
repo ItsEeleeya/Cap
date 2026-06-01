@@ -709,7 +709,7 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
+    pub const fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
         match self {
             Self::Editor { .. } | Self::ScreenshotEditor { .. } => {
                 Some(Some(LogicalPosition::new(20.0, 24.0)))
@@ -725,12 +725,12 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn frame_autosaves(&self) -> bool {
+    pub const fn frame_autosaves(&self) -> bool {
         matches!(self, Self::Main)
     }
 
     #[cfg(target_os = "macos")]
-    pub fn appears_transparent(&self) -> bool {
+    pub const fn appears_transparent(&self) -> bool {
         matches!(
             self,
             Self::Camera
@@ -743,12 +743,12 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn needs_toolbar_shell(&self) -> bool {
+    pub const fn needs_toolbar_shell(&self) -> bool {
         matches!(self, Self::Settings)
     }
 
     #[cfg(target_os = "macos")]
-    pub fn disables_fullscreen(&self) -> bool {
+    pub const fn disables_fullscreen(&self) -> bool {
         matches!(self, Self::Settings)
     }
 
@@ -2067,10 +2067,10 @@ impl CapWindow {
                     app.run_on_main_thread({
                         let window = window.clone();
                         let app = app.clone();
-                        let panel_activation_guard = panel_activation_guard;
                         move || {
                             use objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask};
                             use tauri_nspanel::{CollectionBehavior, Panel, StyleMask};
+                            let _panel_activation_guard = panel_activation_guard;
 
                             #[link(name = "CoreGraphics", kind = "framework")]
                             unsafe extern "C" {
@@ -2200,21 +2200,28 @@ impl CapWindow {
             }
 
             let disables_fullscreen = id.disables_fullscreen();
-            let is_transparent = id.appears_transparent();
+            let appears_transparent = id.appears_transparent();
 
-            if disables_fullscreen || !is_transparent {
+            if disables_fullscreen || !appears_transparent {
                 window.with_nswindow_on_main(move |_, nswindow| {
-                    if !is_transparent {
+                    if !appears_transparent {
                         nswindow.setOpaque(true);
+                        nswindow.setBackgroundColor(Some(
+                            &objc2_app_kit::NSColor::underPageBackgroundColor(),
+                        ));
                     }
 
-                    // if disables_fullscreen {
-                    //     nswindow.setCollectionBehavior(
-                    //         nswindow.collectionBehavior()
-                    //             | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
-                    //     );
-                    // }
+                    if disables_fullscreen {
+                        nswindow.setCollectionBehavior(
+                            nswindow.collectionBehavior()
+                                | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
+                        );
+                    }
                 })?;
+            }
+
+            if id.needs_toolbar_shell() {
+                crate::platform::add_toolbar_shell(&window)?;
             }
 
             if id.frame_autosaves() {
@@ -2224,10 +2231,6 @@ impl CapWindow {
                     nswindow.setFrameAutosaveName(&autosave_name);
                     nswindow.setFrameUsingName_force(&autosave_name, true);
                 })?;
-            }
-
-            if objc2::available!(macos = 26.0) && id.needs_toolbar_shell() {
-                crate::platform::add_toolbar_shell(&window)?;
             }
         }
 
@@ -2282,10 +2285,12 @@ impl CapWindow {
         let appearance = settings.appearance;
 
         let mut builder = WebviewWindow::builder(app, label, WebviewUrl::App(url.into()))
-            .title(id.title())
             .visible(false)
+            .title(id.title())
             .resizable(id.resizable())
-            .transparent(true);
+            .transparent(true)
+            .accept_first_mouse(true)
+            .theme(appearance.into());
 
         if let Some(min) = id.min_size() {
             builder = builder
@@ -2295,16 +2300,20 @@ impl CapWindow {
 
         #[cfg(target_os = "macos")]
         {
-            // Use UnderWindowBackground on macOS. We set transparent here for the webview.
+            builder = builder.hidden_title(true);
+
+            // Use UnderPageBackground on macOS. We set transparent here for the webview.
             // When the window is built we set it to opaque.
             if id.appears_transparent() {
                 builder = builder.decorations(false);
             } else {
-                builder = builder.effects(
-                    tauri::window::EffectsBuilder::default()
-                        .effect(tauri::window::Effect::UnderWindowBackground)
-                        .build(),
-                );
+                builder = builder
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .effects(
+                        tauri::window::EffectsBuilder::default()
+                            .effect(tauri::window::Effect::UnderPageBackground)
+                            .build(),
+                    );
             }
 
             // Window does NOT conform to solarium
@@ -2336,12 +2345,6 @@ impl CapWindow {
                 ))
             });
         }
-
-        builder = builder
-            .accept_first_mouse(true)
-            .theme(appearance.into())
-            .hidden_title(true)
-            .title_bar_style(tauri::TitleBarStyle::Overlay);
 
         #[cfg(windows)]
         {
@@ -2543,6 +2546,36 @@ pub fn refresh_window_content_protection(app: AppHandle<Wry>) -> Result<(), Stri
     }
 
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+pub async fn add_toolbar_shell(window: WebviewWindow<Wry>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::add_toolbar_shell(&window).map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Platform toolbar shell is only supported on macOS.".to_string())
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+#[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+pub async fn remove_toolbar_shell(window: WebviewWindow<Wry>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::remove_toolbar_shell(&window).map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Platform toolbar shell is only supported on macOS.".to_string())
+    }
 }
 
 #[derive(Default, Clone)]

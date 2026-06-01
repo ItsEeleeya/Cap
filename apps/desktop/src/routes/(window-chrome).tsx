@@ -4,6 +4,8 @@ import { type } from "@tauri-apps/plugin-os";
 import { createMemo, type ParentProps, Show, Suspense } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
+import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/utils/material-hosting";
+import { commands } from "~/utils/tauri";
 import {
 	useWindowChromeContext,
 	WindowChromeContext,
@@ -12,7 +14,7 @@ import {
 export default function (props: RouteSectionProps) {
 	return (
 		<WindowChromeContext>
-			<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1">
+			<div class="flex overflow-hidden flex-col w-screen h-screen max-h-screen">
 				<div class="flex overflow-y-hidden flex-1 animate-in fade-in">
 					<Inner>{props.children}</Inner>
 				</div>
@@ -38,7 +40,7 @@ function Inner(props: ParentProps) {
 			when={newChrome()}
 			fallback={<LegacyChrome>{props.children}</LegacyChrome>}
 		>
-			<div class="relative flex overflow-hidden flex-col w-screen h-screen max-h-screen bg-gray-1">
+			<div class="relative flex overflow-hidden flex-col w-screen h-screen max-h-screen">
 				<Suspense>
 					<header
 						data-tauri-drag-region="deep"
@@ -55,7 +57,7 @@ function Inner(props: ParentProps) {
 						)}
 					</header>
 
-					<div class="cap-window-body flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
+					<div class="flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
 						{props.children}
 					</div>
 				</Suspense>
