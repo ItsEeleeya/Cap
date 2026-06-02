@@ -23,8 +23,6 @@ use objc2_web_kit::{WKProcessPool, WKWebViewConfiguration};
 pub use sc_shareable_content::*;
 use tauri::{WebviewWindow, WindowEvent};
 
-use crate::now_millis;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebviewProcessPoolPolicy {
     Shared,
@@ -41,7 +39,6 @@ unsafe impl<T> Send for MainThreadBound<T> {}
 pub fn create_wk_configuration(
     mtm: MainThreadMarker,
     policy: WebviewProcessPoolPolicy,
-    disable_throttling: bool,
 ) -> Retained<WKWebViewConfiguration> {
     use objc2_foundation::{NSObjectNSKeyValueCoding, ns_string};
     use objc2_web_kit::{WKPreferences, WKWebViewConfiguration};
@@ -61,7 +58,6 @@ pub fn create_wk_configuration(
 
     let preferences = unsafe { WKPreferences::new(mtm) };
     let yes = NSNumber::numberWithBool(true);
-    let no = NSNumber::numberWithBool(false);
 
     unsafe {
         // Enable Material Hosting on macOS 26+
@@ -69,36 +65,12 @@ pub fn create_wk_configuration(
             if preferences.respondsToSelector(sel!(_useSystemAppearance)) {
                 preferences.setValue_forKey(Some(&yes), ns_string!("useSystemAppearance"));
             } else {
-                tracing::error!("useSystemAppearance not available on WKWebviewConfiguration");
-            }
-        }
-
-        if disable_throttling {
-            if preferences.respondsToSelector(sel!(pageVisibilityBasedProcessSuppressionEnabled)) {
-                preferences.setValue_forKey(
-                    Some(&no),
-                    ns_string!("pageVisibilityBasedProcessSuppressionEnabled"),
-                );
-            } else {
-                tracing::error!(
-                    "pageVisibilityBasedProcessSuppressionEnabled not available on WKPreferences"
-                );
+                tracing::error!("[WKWebviewConfiguration _useSystemAppearance] not available");
             }
         }
 
         config.setPreferences(&preferences);
         tracing::debug!("Preferences configured on WKWebViewConfiguration");
-    }
-
-    // Disable delayed web process launch
-    if config.respondsToSelector(sel!(setDelaysWebProcessLaunchUntilFirstLoad:)) {
-        unsafe {
-            let _: () = msg_send![&*config, setDelaysWebProcessLaunchUntilFirstLoad: false];
-        }
-    } else {
-        tracing::error!(
-            "setDelaysWebProcessLaunchUntilFirstLoad not available on WKWebViewConfiguration"
-        );
     }
 
     config
@@ -161,27 +133,35 @@ fn create_shared_wk_pool(mtm: MainThreadMarker) -> Retained<WKProcessPool> {
         if pool.respondsToSelector(sel!(_configuration)) {
             let cfg: *const AnyObject = msg_send![&*pool, _configuration];
             tracing::debug!("Pool has _configuration getter, returns: {:p}", cfg);
+
             if !cfg.is_null() {
                 let cfg_obj: &AnyObject = &*cfg;
                 let cfg_class = cfg_obj.class();
+
                 tracing::debug!(
-                    "_configuration class: {}",
+                    "[[WKProcessPool _configuration] class] -> {}",
                     cfg_class.name().to_string_lossy()
                 );
+
                 if cfg_obj.class().responds_to(sel!(usesSingleWebProcess)) {
                     let uses_single: bool = msg_send![cfg_obj, usesSingleWebProcess];
-                    tracing::debug!("_configuration.usesSingleWebProcess = {}", uses_single);
+                    tracing::debug!(
+                        "[_WKProcessPoolConfiguration usesSingleWebProcess] = {}",
+                        uses_single
+                    );
                     if !uses_single {
                         tracing::error!(
                             "_WKProcessPoolConfiguration usesSingleWebProces was NOT enabled"
                         );
                     }
                 } else {
-                    tracing::error!("_configuration does not respond to usesSingleWebProcess");
+                    tracing::error!(
+                        "[WKProcessPool _configuration] does not respond to usesSingleWebProcess"
+                    );
                 }
             }
         } else {
-            tracing::error!("Pool does NOT have _configuration getter");
+            tracing::error!("WKProcessPool does NOT have _configuration getter");
         }
 
         pool

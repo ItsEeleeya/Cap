@@ -709,7 +709,7 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub const fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
+    pub fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
         match self {
             Self::Editor { .. } | Self::ScreenshotEditor { .. } => {
                 Some(Some(LogicalPosition::new(20.0, 24.0)))
@@ -725,12 +725,12 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub const fn frame_autosaves(&self) -> bool {
+    pub fn frame_autosaves(&self) -> bool {
         matches!(self, Self::Main)
     }
 
     #[cfg(target_os = "macos")]
-    pub const fn appears_transparent(&self) -> bool {
+    pub fn appears_transparent(&self) -> bool {
         matches!(
             self,
             Self::Camera
@@ -743,12 +743,12 @@ impl CapWindowId {
     }
 
     #[cfg(target_os = "macos")]
-    pub const fn needs_toolbar_shell(&self) -> bool {
+    pub fn needs_toolbar_shell(&self) -> bool {
         matches!(self, Self::Settings)
     }
 
     #[cfg(target_os = "macos")]
-    pub const fn disables_fullscreen(&self) -> bool {
+    pub fn disables_fullscreen(&self) -> bool {
         matches!(self, Self::Settings)
     }
 
@@ -2307,13 +2307,7 @@ impl CapWindow {
             if id.appears_transparent() {
                 builder = builder.decorations(false);
             } else {
-                builder = builder
-                    .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .effects(
-                        tauri::window::EffectsBuilder::default()
-                            .effect(tauri::window::Effect::UnderPageBackground)
-                            .build(),
-                    );
+                builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
             }
 
             // Window does NOT conform to solarium
@@ -2341,7 +2335,6 @@ impl CapWindow {
                 builder.with_webview_configuration(crate::platform::create_wk_configuration(
                     mtm,
                     pool_policy,
-                    true,
                 ))
             });
         }
