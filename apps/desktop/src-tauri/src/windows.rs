@@ -2556,6 +2556,44 @@ pub async fn add_toolbar_shell(window: WebviewWindow<Wry>) -> Result<(), String>
     }
 }
 
+#[derive(Debug, Clone, Copy, Type, Default)]
+enum WindowLayoutDirection {
+    #[default]
+    LTR,
+    RTL,
+}
+
+// #[tauri::command]
+// #[specta::specta]
+// #[instrument(skip(window))]
+// #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+// pub async fn force_window_layout_direction(
+//     window: WebviewWindow<Wry>,
+//     direction: WindowLayoutDirection,
+// ) -> Result<(), String> {
+//     #[cfg(target_os = "macos")]
+//     {
+//         window
+//             .with_nswindow_on_main(|_, nswindow| unsafe {
+//                 use objc2_app_kit::NSUserInterfaceLayoutDirection;
+//                 use objc2_foundation::NSObjectNSKeyValueCoding;
+
+//                 nswindow.setValue_forKey(
+//                     Some(match direction {
+//                         LTR => &NSUserInterfaceLayoutDirection::LeftToRight,
+//                         RTL => &NSUserInterfaceLayoutDirection::RightToLeft,
+//                     }),
+//                     objc2_foundation::ns_string!("windowTitlebarLayoutDirection"),
+//                 );
+//             })
+//             .map_err(|e| e.to_string())
+//     }
+//     #[cfg(not(target_os = "macos"))]
+//     {
+//         Err("Platform toolbar shell is only supported on macOS.".to_string())
+//     }
+// }
+
 #[tauri::command]
 #[specta::specta]
 #[instrument(skip(window))]

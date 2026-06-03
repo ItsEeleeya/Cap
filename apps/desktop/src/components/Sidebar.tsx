@@ -129,12 +129,12 @@ export function SidebarProvider(props: SidebarProviderProps) {
         return visualWidth();
     });
 
-    // Sync --sidebar-w on :root so CSS (toolbar grid columns, .cap-sidebar width)
+    // Sync --sidebar-width on :root so CSS (toolbar grid columns, .cap-sidebar width)
     // reacts without any extra JS. The @property registration in chrome.css makes
     // transitions on dependent calc()/max() expressions work automatically.
     createEffect(() => {
         document.documentElement.style.setProperty(
-            "--sidebar-w",
+            "--sidebar-width",
             `${currentWidth()}px`,
         );
     });
@@ -266,7 +266,6 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
         const next = clamp(rawWidth, minWidth(), effectiveMax());
         setWidth(next);
-        commands.log("resize");
         currentWindow.setCursorIcon(getResizeCursor(next));
     }
 
@@ -376,7 +375,7 @@ export function Sidebar(props: SidebarProps) {
             >
                 <Show when={resizable()}>
                     <div
-                        class="absolute top-0 bottom-0 w-1.5"
+                        class="absolute top-0 bottom-0 w-1.5 z-50"
                         style={{
                             [isLeft() ? "right" : "left"]: "-6px",
                             cursor: isDragging() ? undefined : "col-resize",
@@ -389,28 +388,26 @@ export function Sidebar(props: SidebarProps) {
             </div>
 
             <Show when={mounted()}>
-                <Portal mount={document.body}>
-                    <div
-                        ref={panelRef}
-                        class="cap-sidebar"
-                        style={{
-                            position: "fixed",
-                            top: "0",
-                            bottom: "0",
-                            [isLeft() ? "left" : "right"]: "0",
-                            width: `${visualWidth()}px`,
-                            transform: `translateX(${translateOffset()})`,
-                            transition: isDragging()
-                                ? "none"
-                                : `transform ${ANIMATION_DURATION_INNER}ms ease-out`,
-                        }}
-                        onMouseLeave={() => {
-                            if (isOverlay()) closeOverlay();
-                        }}
-                    >
-                        <div class="cap-sidebar__inner apple-glas rounded-[18px]">{resolvedChildren()}</div>
-                    </div>
-                </Portal>
+                <div
+                    ref={panelRef}
+                    class="cap-sidebar"
+                    style={{
+                        position: "fixed",
+                        top: "0",
+                        bottom: "0",
+                        [isLeft() ? "left" : "right"]: "0",
+                        width: `${visualWidth()}px`,
+                        transform: `translateX(${translateOffset()})`,
+                        transition: isDragging()
+                            ? "none"
+                            : `transform ${ANIMATION_DURATION_INNER}ms ease-out`,
+                    }}
+                    onMouseLeave={() => {
+                        if (isOverlay()) closeOverlay();
+                    }}
+                >
+                    <div class="cap-sidebar__inner apple-glas rounded-[18px]">{resolvedChildren()}</div>
+                </div>
             </Show>
         </>
     );

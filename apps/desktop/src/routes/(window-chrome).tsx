@@ -1,11 +1,8 @@
 import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type } from "@tauri-apps/plugin-os";
 import { createMemo, type ParentProps, Show, Suspense } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
-import { APPLE_SUPPORTS_HOSTED_MATERIALS } from "~/utils/material-hosting";
-import { commands } from "~/utils/tauri";
 import {
 	useWindowChromeContext,
 	WindowChromeContext,
@@ -44,10 +41,10 @@ function Inner(props: ParentProps) {
 				<Suspense>
 					<header
 						data-tauri-drag-region="deep"
-						class="fixed inset-x-0 top-0 flex items-center min-w-0 w-full h-[56px] select-none shrink-0 win:flex-row macos:flex-row-reverse"
+						class="h-titlebar fixed inset-x-0 top-0 flex items-center min-w-0 w-full shrink-0 border border-red-200 z-9999 win:flex-row macos:flex-row-reverse"
 					>
 						{type() === "windows" && (
-							<CaptionControlsWindows11 class="ml-auto! max-h-9 fixed top-0" />
+							<CaptionControlsWindows11 class="ml-auto! absolute top-0" />
 						)}
 						{type() === "macos" && (
 							<div
@@ -76,7 +73,6 @@ function LegacyChrome(props: ParentProps) {
 	return (
 		<div
 			class="cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1"
-			data-window-caption-side={type() === "windows" ? "right" : "left"}
 		>
 			<Suspense fallback={<AbsoluteInsetLoader />}>
 				<header

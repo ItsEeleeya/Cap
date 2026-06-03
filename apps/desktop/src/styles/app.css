@@ -4,22 +4,19 @@
 @import "./theme.css";
 @import "./window-chrome.css";
 
+@custom-variant win (&:where(html[data-platform="windows"] *));
+@custom-variant macos (&:where(html[data-platform="macos"] *));
+@custom-variant linux (&:where(html[data-platform="linux"] *));
+/* @custom-variant gtk (&:where(html[data-linux-de="GTK"] *)); */
+/* @custom-variant kde (&:where(html[data-linux-de="KDE"] *)); */
+
+@custom-variant solarium (&:where(html[data-solarium="true"] *));
+
 @plugin "@tailwindcss/typography";
 @plugin "tailwind-scrollbar";
 @plugin "tailwindcss-fade";
 
 @tailwind utilities;
-
-@custom-variant win (&:where(html[data-platform="windows"] *));
-
-@custom-variant macos (&:where(html[data-platform="macos"] *));
-
-@custom-variant linux (&:where(html[data-platform="linux"] *));
-
-/* @custom-variant gtk (&:where(html[data-linux-de="GTK"] *)); */
-/* @custom-variant kde (&:where(html[data-linux-de="KDE"] *)); */
-
-@custom-variant solarium (&:where(html[data-solarium="true"] *));
 
 @layer base {
 	:root {
@@ -253,4 +250,20 @@
 	--radius-md: var(--radius-md);
 	--radius-lg: var(--radius-lg);
 	--radius-xl: var(--radius-xl);
+}
+
+.cap-sidebar {
+	@apply size-full;
+
+	@variant solarium {
+		@apply p-2 pr-0;
+	}
+
+	& .cap-sidebar__inner {
+		@apply size-full;
+
+		@variant solarium {
+			@apply apple-glass rounded-[18px];
+		}
+	}
 }

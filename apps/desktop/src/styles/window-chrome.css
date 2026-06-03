@@ -1,45 +1,22 @@
-/* ─────────────────────────────────────────────────────────────────────────────
-   chrome.css
-   Titlebar, toolbar and sidebar layout tokens.
-
-   Depends on two data-attributes being set on <html> at startup:
-     data-platform="macos" | "windows" | "linux"
-     data-dir="ltr" | "rtl"
-
-   Sidebar width is controlled entirely from JS:
-     document.documentElement.style.setProperty("--sidebar-w", "220px");
-   Because --sidebar-w is registered as a <length>, all max() expressions
-   that reference it (toolbar columns, safe areas) animate automatically
-   when you transition --sidebar-w on :root.
-
-   Example sidebar open/close:
-     :root { transition: --sidebar-w 220ms var(--ease-out); }
-   ───────────────────────────────────────────────────────────────────────────── */
-
-/* ── Animatable custom properties ────────────────────────────────────────────
-   @property makes these <length> values instead of opaque tokens,
-   which is what allows max() / calc() expressions that reference them
-   to be interpolated by the browser during transitions.               */
-
-@property --sidebar-w {
+@property --sidebar-width {
 	syntax: "<length>";
 	inherits: true;
 	initial-value: 0px;
 }
 
-@property --titlebar-captions-width {
+@property --window-titlebar-captions-width {
 	syntax: "<length>";
 	inherits: true;
 	initial-value: 0px;
 }
 
-@property --titlebar-leading-safe {
+@property --window-titlebar-leading-safe {
 	syntax: "<length>";
 	inherits: true;
 	initial-value: 0px;
 }
 
-@property --titlebar-trailing-safe {
+@property --window-titlebar-trailing-safe {
 	syntax: "<length>";
 	inherits: true;
 	initial-value: 0px;
@@ -47,185 +24,78 @@
 
 @layer base {
 	:root {
-		/* Heights */
-		--titlebar-h: 36px;
-		--toolbar-h: 40px;
-
-		/* Set per-platform below. Override here for custom chrome. */
-		--titlebar-captions-width: 0px;
-
-		/* Sidebar — set from JS. Starts collapsed. */
-		--sidebar-w: 0px;
-
-		/* Logical safe areas — resolved by platform × direction rules below.
-       --titlebar-leading-safe:  space occupied by captions on the leading edge.
-       --titlebar-trailing-safe: space occupied by captions on the trailing edge.
-       Both default to 0; the platform rules below set the correct one.   */
-		--titlebar-leading-safe: 0px;
-		--titlebar-trailing-safe: 0px;
-
-		/* Derived toolbar layout vars — consumed by .cap-toolbar grid.
-       --toolbar-sidebar-slot-w: width of the sidebar-aligned toolbar column.
-         Grows with the sidebar, but is always at least as wide as the captions
-         area (so the slot covers the traffic lights / caption buttons on the
-         same side as the sidebar).
-       --toolbar-trailing-w: width of the trailing toolbar column.
-         Reserves space for Windows caption buttons.                        */
-		--toolbar-sidebar-slot-w: max(
-			var(--sidebar-w),
-			var(--titlebar-leading-safe)
-		);
-		--toolbar-trailing-w: var(--titlebar-trailing-safe);
-
-		/* Sidebar transition — uncomment to animate open/close automatically.
-       Works because --sidebar-w is a registered <length>.
-       You can also set this on .cap-sidebar instead for component-scoped anim. */
-		/* transition: --sidebar-w 220ms var(--ease-out); */
+		--window-titlebar-height: 52px;
+		--window-titlebar-captions-width: 0px;
+		--window-titlebar-leading-safe: 0px;
+		--window-titlebar-trailing-safe: 0px;
 	}
-
-	/* ── Platform: caption button widths ──────────────────────────────────────
-     macOS:   68px  (traffic light cluster: close + minimise + full-screen)
-     Windows: 138px (minimise + maximise/restore + close)
-     Linux:   0     (most WMs draw their own chrome outside the webview)    */
 
 	html[data-platform="macos"] {
-		--titlebar-captions-width: 68px;
+		--window-titlebar-captions-width: 90px;
+		--window-titlebar-height: 52px;
 	}
-
 	html[data-platform="windows"] {
-		--titlebar-captions-width: 138px;
+		--window-titlebar-captions-width: 144px;
+		--window-titlebar-height: 48px;
+		--winui-caption-width: 46px;
 	}
 
-	/* ── Platform × Direction → logical safe areas ───────────────────────────
-     Physical positions:
-       macOS traffic lights   → always physical LEFT
-       Windows caption buttons → always physical RIGHT
-
-     Logical mapping:
-       LTR: leading = left,  trailing = right
-       RTL: leading = right, trailing = left
-
-     Therefore:
-       macOS   + LTR → captions on leading
-       macOS   + RTL → captions on trailing  (traffic lights = physical left = logical trailing in RTL)
-       Windows + LTR → captions on trailing
-       Windows + RTL → captions on leading   (caption buttons = physical right = logical leading in RTL)
-  */
-
-	/* Captions on the LEADING edge */
-	html[data-platform="macos"][data-dir="ltr"],
-	html[data-platform="windows"][data-dir="rtl"] {
-		--titlebar-leading-safe: var(--titlebar-captions-width);
-		--titlebar-trailing-safe: 0px;
+	html[data-platform="macos"] {
+		--window-titlebar-leading-safe: var(--window-titlebar-captions-width);
+		--window-titlebar-trailing-safe: 0px;
 	}
-
-	/* Captions on the TRAILING edge */
-	html[data-platform="macos"][data-dir="rtl"],
-	html[data-platform="windows"][data-dir="ltr"] {
-		--titlebar-leading-safe: 0px;
-		--titlebar-trailing-safe: var(--titlebar-captions-width);
+	html[data-platform="windows"] {
+		--window-titlebar-trailing-safe: var(--window-titlebar-captions-width);
 	}
 }
 
-/* ── Toolbar layout ───────────────────────────────────────────────────────────
-
-   Grid anatomy (LTR, macOS, sidebar open):
-
-   |←68px→|←——— sidebar ———→|←— leading —→|←—— center ——→|← trailing →|
-   | 🔴🟡🟢 | sidebar-slot content  |  breadcrumb  |    search    |   actions   |
-   |←————————————— toolbar-sidebar-slot-w ——————————→|             |             |
-
-   The sidebar-slot column is max(sidebar-w, captions-w).
-   When the sidebar is closed (--sidebar-w: 0px), it collapses to just
-   the captions width (68px on macOS) — enough to keep items clear of
-   the traffic lights. When open, it grows to match the sidebar.
-
-   On Windows LTR:
-   --titlebar-leading-safe = 0  → sidebar-slot-w = sidebar-w
-   --toolbar-trailing-w = 138px → trailing column reserves caption space.
-
-   ┌─────────────────────────────────────────────────────────────────────────┐
-   │  .cap-toolbar (position: relative; padding-top: --titlebar-h)           │
-   │  ┌──────────────────┬──────────┬──────────────────┬────────────────┐   │
-   │  │ .cap-toolbar-    │ .cap-    │ .cap-toolbar-    │ .cap-toolbar-  │   │
-   │  │  sidebar-slot    │ toolbar- │  center          │  trailing      │   │
-   │  │                  │  leading │                  │                │   │
-   │  └──────────────────┴──────────┴──────────────────┴────────────────┘   │
-   └─────────────────────────────────────────────────────────────────────────┘
-*/
+@layer utilities {
+	.h-titlebar {
+		height: var(--window-titlebar-height);
+	}
+}
 
 .cap-toolbar {
-	display: grid;
-	grid-template-columns:
-		[sidebar-slot-start] var(--toolbar-sidebar-slot-w) [sidebar-slot-end leading-start]
-		auto [leading-end center-start]
-		1fr [center-end trailing-start]
-		var(--toolbar-trailing-w) [trailing-end];
-	grid-template-rows: var(--toolbar-h);
+	display: flex;
 	align-items: center;
+	height: var(--window-titlebar-height);
 	width: 100%;
-	/* Sit underneath the fixed titlebar overlay */
-	padding-block-start: var(--titlebar-h);
 }
 
 .cap-toolbar-sidebar-slot {
-	grid-column: sidebar-slot;
+	--toolbar-min-w: 300px;
+	flex-shrink: 0;
+	/* Width follows the sidebar. Captions width is only a floor (spacer),
+	   not a sizing target — content inside starts after the captions area. */
+	width: max(var(--sidebar-width), var(--toolbar-min-w));
+	/* min-width: var(--window-titlebar-captions-width); */
+	padding-inline-start: var(--window-titlebar-leading-safe);
 	display: flex;
 	align-items: center;
 	height: 100%;
-	/* Content starts after the captions area on the leading side.
-     On Windows / RTL macOS, --titlebar-leading-safe is 0, so no padding. */
-	padding-inline-start: var(--titlebar-leading-safe);
 	overflow: hidden;
 }
 
-.cap-toolbar-leading {
-	grid-column: leading;
+.cap-toolbar-content {
+	flex: 1;
+	min-width: 0;
 	display: flex;
 	align-items: center;
-	gap: 4px;
 	height: 100%;
-	padding-inline: 4px;
+	gap: 4px;
+	padding-inline-start: 4px;
+	/* Push content away from Windows caption buttons on the trailing edge. */
+	padding-inline-end: max(4px, var(--window-titlebar-trailing-safe));
 }
 
-.cap-toolbar-center {
-	grid-column: center;
+.cap-toolbar-item-group {
+	display: flex;
+	align-items: center;
+	gap: var(--toolbar-group-gap, 2px);
+}
+
+.cap-toolbar-item {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	height: 100%;
-}
-
-.cap-toolbar-trailing {
-	grid-column: trailing;
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 4px;
-	height: 100%;
-	padding-inline: 4px;
-}
-
-/* ── Sidebar ──────────────────────────────────────────────────────────────── */
-
-.cap-sidebar {
-	@apply size-full;
-	/* Width is driven entirely by --sidebar-w, set from JS.
-     The sidebar itself doesn't need to know about --sidebar-w;
-     it just sizes to its parent's allocated column.
-     Alternatively, for a fixed-position sidebar:                  */
-	width: var(--sidebar-w);
-	flex-shrink: 0;
-
-	@variant solarium {
-		@apply p-2 pr-0;
-	}
-
-	& .cap-sidebar__inner {
-		@apply size-full;
-
-		@variant solarium {
-			@apply apple-glass rounded-[18px];
-		}
-	}
 }

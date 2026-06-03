@@ -13,11 +13,12 @@ use objc2::{
     sel,
 };
 use objc2_app_kit::{
-    NSToolbar, NSWindow, NSWindowDidExitFullScreenNotification,
+    NSToolbar, NSUserInterfaceLayoutDirection, NSWindow, NSWindowDidExitFullScreenNotification,
     NSWindowWillEnterFullScreenNotification,
 };
 use objc2_foundation::{
-    NSNotificationCenter, NSNumber, NSObjectProtocol, NSOperationQueue, ns_string,
+    NSNotificationCenter, NSNumber, NSObjectNSKeyValueCoding, NSObjectProtocol, NSOperationQueue,
+    ns_string,
 };
 use objc2_web_kit::{WKProcessPool, WKWebViewConfiguration};
 pub use sc_shareable_content::*;

@@ -216,7 +216,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	const scrollToSection = (section: string) => {
 		try {
 			localStorage.removeItem("cap.settings.scrollToSection");
-		} catch {}
+		} catch { }
 		const attempt = (remaining: number) => {
 			const target = document.getElementById(`settings-section-${section}`);
 			const container = scrollContainerRef;
@@ -243,7 +243,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 		let pending: string | null = null;
 		try {
 			pending = localStorage.getItem("cap.settings.scrollToSection");
-		} catch {}
+		} catch { }
 		if (pending) {
 			scrollToSection(pending);
 		}
@@ -252,7 +252,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 			scrollToSection(event.payload.section);
 		});
 		onCleanup(() => {
-			unlisten.then((cb) => cb()).catch(() => {});
+			unlisten.then((cb) => cb()).catch(() => { });
 		});
 	});
 
@@ -403,11 +403,11 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	// Helper function to render select dropdown for recording behaviors
 	const SelectSettingItem = <
 		T extends
-			| MainWindowRecordingStartBehaviour
-			| PostStudioRecordingBehaviour
-			| PostDeletionBehaviour
-			| StudioRecordingQuality
-			| number,
+		| MainWindowRecordingStartBehaviour
+		| PostStudioRecordingBehaviour
+		| PostDeletionBehaviour
+		| StudioRecordingQuality
+		| number,
 	>(props: {
 		label: string;
 		description: string;
@@ -452,7 +452,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	return (
 		<div
 			ref={scrollContainerRef}
-			class="cap-settings-page flex flex-col h-full custom-scroll"
+			class="flex flex-col h-full"
 		>
 			<SettingsPageContent>
 				<AppearanceSection
