@@ -1,6 +1,1 @@
-module.exports = {
-	plugins: {
-		"@tailwindcss/postcss": {},
-		autoprefixer: {},
-	},
-};
+module.exports = require("@cap/ui-solid/postcss");

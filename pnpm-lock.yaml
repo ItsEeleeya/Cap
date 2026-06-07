@@ -179,6 +179,9 @@ importers:
       mp4box:
         specifier: ^0.5.2
         version: 0.5.4
+      overlayscrollbars:
+        specifier: ^2.16.0
+        version: 2.16.0
       overlayscrollbars-solid:
         specifier: ^0.5.6
         version: 0.5.6(overlayscrollbars@2.16.0)(solid-js@1.9.6)
@@ -225,12 +228,6 @@ importers:
       '@iconify/json':
         specifier: ^2.2.239
         version: 2.2.336
-      '@tailwindcss/postcss':
-        specifier: ^4.2.2
-        version: 4.3.0
-      '@tailwindcss/typography':
-        specifier: ^0.5.9
-        version: 0.5.16(tailwindcss@4.3.0)
       '@tauri-apps/cli':
         specifier: '>=2.1.0'
         version: 2.11.0
@@ -249,12 +246,6 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
-      tailwind-scrollbar:
-        specifier: ^3.1.0
-        version: 3.1.0(tailwindcss@3.4.17(ts-node@10.9.2(@swc/core@1.15.5(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3)))
-      tailwindcss-fade:
-        specifier: ^0.1.2
-        version: 0.1.2
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -1261,12 +1252,36 @@ importers:
       '@kobalte/core':
         specifier: ^0.13.7
         version: 0.13.9(solid-js@1.9.6)
+      '@tailwindcss/postcss':
+        specifier: ^4.2.2
+        version: 4.3.0
+      '@tailwindcss/typography':
+        specifier: ^0.5.9
+        version: 0.5.16(tailwindcss@4.3.0)
+      autoprefixer:
+        specifier: ^10.4.21
+        version: 10.4.21(postcss@8.5.14)
       cva:
         specifier: npm:class-variance-authority@^0.7.0
         version: class-variance-authority@0.7.1
+      postcss:
+        specifier: ^8.5.10
+        version: 8.5.14
       solid-js:
         specifier: ^1.9.3
         version: 1.9.6
+      tailwind-scrollbar:
+        specifier: ^4.0.2
+        version: 4.0.2(react@19.2.4)(tailwindcss@4.3.0)
+      tailwindcss:
+        specifier: ^4.3
+        version: 4.3.0
+      tailwindcss-fade:
+        specifier: ^0.1.2
+        version: 0.1.2(tailwindcss@4.3.0)
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
       zod:
         specifier: ^3
         version: 3.25.76
@@ -1277,27 +1292,9 @@ importers:
       '@iconify/json':
         specifier: ^2.2.239
         version: 2.2.336
-      '@tailwindcss/typography':
-        specifier: ^0.5.9
-        version: 0.5.16(tailwindcss@4.3.0)
-      autoprefixer:
-        specifier: ^10.4.21
-        version: 10.4.21(postcss@8.5.14)
-      postcss:
-        specifier: ^8.5.10
-        version: 8.5.14
       storybook-solidjs:
         specifier: ^1.0.0-beta.2
         version: 1.0.0-beta.7(@storybook/test@8.6.12(storybook@8.6.12(prettier@3.7.4)))(solid-js@1.9.6)(storybook@8.6.12(prettier@3.7.4))
-      tailwind-scrollbar:
-        specifier: ^4.0.2
-        version: 4.0.2(react@19.2.4)(tailwindcss@4.3.0)
-      tailwindcss:
-        specifier: ^4.3
-        version: 4.3.0
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
       unplugin-auto-import:
         specifier: ^0.18.2
         version: 0.18.6(rollup@4.40.2)
@@ -2363,9 +2360,6 @@ packages:
 
   '@emnapi/runtime@1.10.0':
     resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
-
-  '@emnapi/runtime@1.4.3':
-    resolution: {integrity: sha512-pBPWdu6MLKROBX05wSNKcNb++m5Er+KQ9QkB+WVM+pW2Kx9hoSrVTnu3BdkI5eBLZoKu/J6mW/B6i6bJB2ytXQ==}
 
   '@emnapi/runtime@1.5.0':
     resolution: {integrity: sha512-97/BJ3iXHww3djw6hYIfErCZFee7qCtrneuLa20UXFCOTCfBM2cvQHjWJ2EG0s0MtdNwInarqCTz35i4wWXHsQ==}
@@ -18367,11 +18361,6 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@emnapi/runtime@1.4.3':
-    dependencies:
-      tslib: 2.8.1
-    optional: true
-
   '@emnapi/runtime@1.5.0':
     dependencies:
       tslib: 2.8.1
@@ -19364,7 +19353,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.33.5':
     dependencies:
-      '@emnapi/runtime': 1.4.3
+      '@emnapi/runtime': 1.10.0
     optional: true
 
   '@img/sharp-wasm32@0.34.5':
@@ -33076,7 +33065,9 @@ snapshots:
     dependencies:
       tailwindcss: 3.4.17(ts-node@10.9.2(@swc/core@1.15.5(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3))
 
-  tailwindcss-fade@0.1.2: {}
+  tailwindcss-fade@0.1.2(tailwindcss@4.3.0):
+    dependencies:
+      tailwindcss: 4.3.0
 
   tailwindcss@3.4.17(ts-node@10.9.2(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3)):
     dependencies:
