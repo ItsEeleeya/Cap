@@ -310,7 +310,9 @@ pub(crate) async fn restore_main_window_inputs(app: &AppHandle) {
             let _ = camera_feed
                 .ask(feeds::camera::RemoveSender(camera_ws_sender))
                 .await;
-            let _ = camera_feed.ask(feeds::camera::AddSender(sender)).await;
+            if let Err(err) = sender.attach(&camera_feed).await {
+                warn!(error = %err, "Failed to add native preview camera sender");
+            }
         } else {
             #[allow(deprecated)]
             let _ = camera_feed
@@ -943,10 +945,8 @@ impl CapWindow {
                         };
                         let mut app_state = state.write().await;
 
-                        let enable_native_camera_preview = GeneralSettingsStore::get(app)
-                            .ok()
-                            .and_then(|v| v.map(|v| v.enable_native_camera_preview))
-                            .unwrap_or_default();
+                        let enable_native_camera_preview =
+                            GeneralSettingsStore::native_camera_preview_enabled(app);
 
                         let shutdown_preview = if !enable_native_camera_preview {
                             app_state.camera_preview.begin_shutdown()
@@ -1024,10 +1024,8 @@ impl CapWindow {
                     };
                     let mut app_state = state.write().await;
 
-                    let enable_native_camera_preview = GeneralSettingsStore::get(app)
-                        .ok()
-                        .and_then(|v| v.map(|v| v.enable_native_camera_preview))
-                        .unwrap_or_default();
+                    let enable_native_camera_preview =
+                        GeneralSettingsStore::native_camera_preview_enabled(app);
 
                     let shutdown_preview = if !enable_native_camera_preview {
                         app_state.camera_preview.begin_shutdown()
@@ -1660,10 +1658,8 @@ impl CapWindow {
                     return Err(tauri::Error::WindowNotFound);
                 };
 
-                let enable_native_camera_preview = GeneralSettingsStore::get(app)
-                    .ok()
-                    .and_then(|v| v.map(|v| v.enable_native_camera_preview))
-                    .unwrap_or_default();
+                let enable_native_camera_preview =
+                    GeneralSettingsStore::native_camera_preview_enabled(app);
 
                 {
                     let Some(state) = app.try_state::<ArcLock<App>>() else {
