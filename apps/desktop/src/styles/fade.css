@@ -1,0 +1,329 @@
+.cap-fade-mask {
+	--fade-top-length: 0px;
+	--fade-top-start: 0px; /* where the easing begins */
+	--fade-bottom-length: 0px;
+	--fade-bottom-start: 0px;
+	--fade-left-length: 0px;
+	--fade-right-length: 0px;
+	--fade-top-intensity: 0.5;
+	--fade-bottom-intensity: 1;
+	--fade-left-intensity: 1;
+	--fade-right-intensity: 1;
+	--fade-rotate: 0deg;
+
+	mask-image:
+		linear-gradient(
+			calc(180deg + var(--fade-rotate, 0deg)),
+			/* --- top: flat region (0 -> start) --- */
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity))) 0,
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity)))
+				var(--fade-top-start, 0px),
+			/* --- top: eased region (start -> length) --- */
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.83907))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.1
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.69957))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.193
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.57926))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.2794
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.47611))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.3594
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.38821))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.4332
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.3138))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.5012
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.25126))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.5634
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.19912))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.6202
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.15601))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.672
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.12072))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.7188
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.09212))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.7608
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.06922))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.7986
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.05112))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.832
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.03702))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.8616
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.02622))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.8874
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.0181))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.91
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.01213))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.9292
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.00785))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.9454
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.00488))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.959
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.00288))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.9702
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.0016))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.979
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-top-intensity) * 0.00082))
+				calc(
+					var(--fade-top-start, 0px) +
+					(var(--fade-top-length, 0px) - var(--fade-top-start, 0px)) *
+					0.986
+				),
+			rgba(0, 0, 0, 1) var(--fade-top-length, 0px),
+			/* --- middle: solid --- */
+			rgba(0, 0, 0, 1) calc(100% - var(--fade-bottom-length, 0px)),
+			/* --- bottom: eased region (mirrored), length -> start --- */
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.00082))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.986
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.0016))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.979
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.00288))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.9702
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.00488))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.959
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.00785))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.9454
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.01213))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.9292
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.0181))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.91
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.02622))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.8874
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.03702))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.8616
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.05112))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.832
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.06922))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.7986
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.09212))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.7608
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.12072))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.7188
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.15601))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.672
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.19912))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.6202
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.25126))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.5634
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.3138))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.5012
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.38821))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.4332
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.47611))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.3594
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.57926))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.2794
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.69957))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.193
+				),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity) * 0.83907))
+				calc(
+					100% -
+					var(--fade-bottom-start, 0px) -
+					(var(--fade-bottom-length, 0px) - var(--fade-bottom-start, 0px)) *
+					0.1
+				),
+			/* --- bottom: flat region (start -> 100%) --- */
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity)))
+				calc(100% - var(--fade-bottom-start, 0px)),
+			rgba(0, 0, 0, calc(1 - var(--fade-bottom-intensity))) 100%
+		),
+		linear-gradient(
+			calc(90deg + var(--fade-rotate, 0deg)),
+			rgba(0, 0, 0, calc(1 - var(--fade-left-intensity, 1))) 0,
+			rgba(0, 0, 0, 1) var(--fade-left-length, 0px),
+			rgba(0, 0, 0, 1) calc(100% - var(--fade-right-length, 0px)),
+			rgba(0, 0, 0, calc(1 - var(--fade-right-intensity, 1))) 100%
+		);
+	mask-composite: intersect;
+	mask-repeat: no-repeat;
+	mask-size:
+		100% 100%,
+		100% 100%;
+}

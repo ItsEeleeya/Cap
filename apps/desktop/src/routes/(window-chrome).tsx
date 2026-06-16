@@ -41,7 +41,7 @@ function Inner(props: ParentProps) {
 				<Suspense>
 					<header
 						data-tauri-drag-region="deep"
-						class="h-titlebar fixed inset-x-0 top-0 flex items-center min-w-0 w-full shrink-0 border border-red-200 z-9999 win:flex-row macos:flex-row-reverse"
+						class="h-titlebar fixed inset-x-0 top-0 flex items-center min-w-0 w-full shrink-0 win:flex-row macos:flex-row-reverse"
 					>
 						{type() === "windows" && (
 							<CaptionControlsWindows11 class="ml-auto! absolute top-0" />

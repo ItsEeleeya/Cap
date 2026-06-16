@@ -5,7 +5,7 @@ import { Toggle } from "~/components/Toggle";
 
 export function SettingsPageContent(props: ParentProps<{ class?: string }>) {
 	return (
-		<div class={cx("px-6 py-6 space-y-7 max-w-[42rem]", props.class)}>
+		<div class={cx("w-full min-w-0 space-y-7 pb-4", props.class)}>
 			{props.children}
 		</div>
 	);
@@ -54,7 +54,7 @@ export function SectionCard(
 	return (
 		<div
 			class={cx(
-				"cap-settings-card overflow-hidden rounded-2xl bg-gray-2",
+				"cap-settings-card overflow-hidden rounded-lg bg-gray-11/10 smoothed",
 				props.padded && "px-4 py-4",
 				props.class,
 			)}
@@ -66,7 +66,7 @@ export function SectionCard(
 
 export function SectionRows(props: ParentProps) {
 	return (
-		<SectionCard class="divide-y divide-gray-3">{props.children}</SectionCard>
+		<SectionCard class="divide-y divide-black/10">{props.children}</SectionCard>
 	);
 }
 

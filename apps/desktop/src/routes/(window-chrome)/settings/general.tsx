@@ -171,7 +171,7 @@ function AppearanceSection(props: {
 								>
 									<div
 										class={cx(
-											"w-full aspect-[5/3] rounded-lg overflow-hidden border-2 transition-[border-color,box-shadow] duration-150",
+											"w-full aspect-[5/3] rounded-md overflow-hidden border-2 transition-[border-color,box-shadow] duration-150",
 											isSelected()
 												? "border-blue-9"
 												: "border-gray-4 group-hover:border-gray-6",
@@ -180,7 +180,7 @@ function AppearanceSection(props: {
 										<Show when={previews[theme.id]} keyed>
 											{(preview) => (
 												<img
-													class="object-cover w-full h-full animate-in fade-in duration-200"
+													class="object-cover w-full h-full animate-in fade-in duration-200 smoothed"
 													draggable={false}
 													src={preview}
 													alt={`Preview of ${theme.name} theme`}
@@ -469,10 +469,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	};
 
 	return (
-		<div
-			ref={scrollContainerRef}
-			class="flex flex-col h-full"
-		>
+		<div ref={scrollContainerRef}>
 			<SettingsPageContent>
 				<AppearanceSection
 					currentTheme={settings.appearance ?? "system"}
@@ -756,7 +753,7 @@ function SegmentedControl<T extends string | number>(props: {
 	options: { value: T; label: string }[];
 }) {
 	return (
-		<div class="inline-flex p-0.5 rounded-lg border border-gray-3 bg-gray-3">
+		<div class="inline-flex p-0.5 rounded-full border border-gray-3 bg-gray-3 smoothed">
 			<For each={props.options}>
 				{(option) => {
 					const isSelected = () => props.value === option.value;
@@ -765,9 +762,9 @@ function SegmentedControl<T extends string | number>(props: {
 							type="button"
 							onClick={() => props.onChange(option.value)}
 							class={cx(
-								"px-3 py-1 text-xs font-medium rounded-md transition-[background-color,color,box-shadow]",
+								"px-3 py-1 text-xs font-medium rounded-full smoothed transition-[background-color,color,box-shadow]",
 								isSelected()
-									? "bg-gray-1 text-gray-12 shadow-sm"
+									? "bg-blue-8 text-gray-12 shadow-sm"
 									: "text-gray-10 hover:text-gray-12",
 							)}
 						>

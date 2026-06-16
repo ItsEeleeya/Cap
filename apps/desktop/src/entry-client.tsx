@@ -1,4 +1,5 @@
 // @refresh reload
+
 import { mount, StartClient } from "@solidjs/start/client";
 
 function initApp() {
@@ -7,15 +8,28 @@ function initApp() {
 
 	mount(() => <StartClient />, app);
 
-	import("@tauri-apps/plugin-os")
+	const pluginOs = import("@tauri-apps/plugin-os");
+	pluginOs
 		.then(({ type }) =>
-			document.documentElement.setAttribute("data-platform", type()),
+			document.documentElement.setAttribute(
+				"data-platform",
+				type(),
+			),
 		)
 		.catch((error) => console.error("Failed to get OS type:", error));
 
 	if (import.meta.env.TAURI_ENV_PLATFORM === "darwin") {
 		import("~/utils/material-hosting")
 			.then(({ APPLE_SUPPORTS_HOSTED_MATERIALS }) => {
+				pluginOs.then(({ version }) => {
+					const v = version().split(".");
+					const majorVersion = parseInt(v[0], 10);
+
+					if (majorVersion === 26) {
+						document.documentElement.setAttribute("data-macos-window-has-extended-radius", "");
+					}
+				});
+
 				if (APPLE_SUPPORTS_HOSTED_MATERIALS) {
 					document.documentElement.setAttribute("data-solarium", "true");
 				} else {
@@ -25,6 +39,8 @@ function initApp() {
 			.catch((error) =>
 				console.error("Failed to check Material Hosting support:", error),
 			);
+
+
 	}
 }
 

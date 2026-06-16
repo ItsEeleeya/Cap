@@ -24,7 +24,7 @@ import "./styles/app.css";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
-import SettingsLayout from "./routes/(window-chrome)/settings";
+import SettingsLayout from "./routes/(window-chrome)/new-settings";
 import { initAnonymousUser } from "./utils/analytics";
 import titlebar from "./utils/titlebar-state";
 
@@ -175,7 +175,6 @@ function Inner() {
 								macosMaterial: "settings",
 							}}
 						>
-							<Route path="/" component={SettingsGeneralPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
 							<Route path="/recordings" component={SettingsRecordingsPage} />
 							<Route

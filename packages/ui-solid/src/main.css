@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@plugin "@tailwindcss/typography";
+@plugin "tailwind-scrollbar";
+@plugin "tailwindcss-fade";
+
 @source "../../../apps/*/src/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../../*/src/**/*.{ts,tsx,html,stories.tsx}";
 
@@ -221,6 +225,7 @@ body {
 	/* font-family: "Geist Sans", sans-serif; */
 	font-family: system-ui, -apple-system, "Segoe UI";
 
+	font-weight: 450;
 	text-size-adjust: 100%;
 	-webkit-text-size-adjust: 100%;
 }

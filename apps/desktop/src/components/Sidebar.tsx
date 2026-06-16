@@ -1,6 +1,8 @@
-import { createEventListenerMap, makeEventListener } from "@solid-primitives/event-listener";
+import {
+    createEventListenerMap,
+    makeEventListener,
+} from "@solid-primitives/event-listener";
 import { makePersisted } from "@solid-primitives/storage";
-import { type CursorIcon, getCurrentWindow } from "@tauri-apps/api/window";
 import {
     children,
     createContext,
@@ -16,20 +18,16 @@ import {
     useContext,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Portal } from "solid-js/web";
-import { commands } from "~/utils/tauri";
 
 const COLLAPSE_OVERSHOOT = 48;
-const ANIMATION_DURATION = 200;
-const ANIMATION_DURATION_INNER = 250;
+const ANIMATION_DURATION = 450;
+const ANIMATION_DURATION_INNER = 550;
 
 type Side = "left" | "right";
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
-
-// ── Context ───────────────────────────────────────────────────────────────────
 
 interface SidebarContextValue {
     side: () => Side;
@@ -60,8 +58,6 @@ export function useSidebar() {
     return ctx;
 }
 
-// ── Ephemeral state ───────────────────────────────────────────────────────────
-
 interface SidebarState {
     isDragging: boolean;
     dragStartX: number;
@@ -69,8 +65,6 @@ interface SidebarState {
     autoCollapsed: boolean;
     overlayOpen: boolean;
 }
-
-// ── Provider ──────────────────────────────────────────────────────────────────
 
 interface SidebarProviderProps extends ParentProps {
     side?: Side;
@@ -91,21 +85,42 @@ export function SidebarProvider(props: SidebarProviderProps) {
     const resizable = () => props.resizable ?? false;
     const storageKey = () => props.storageKey ?? "sidebar";
 
-    const currentWindow = getCurrentWindow();
     const [windowWidth, setWindowWidth] = createSignal(window.innerWidth);
 
-    // Only two fields are worth persisting — each gets a plain persisted signal.
-    // Conditional: no storage touch if the feature isn't enabled.
-    const [width, setWidth] = resizable()
-        ? makePersisted(
-            createSignal(clamp(defaultWidth(), minWidth(), maxWidth())),
-            { name: `${storageKey()}-width` },
-        )
-        : createSignal(clamp(defaultWidth(), minWidth(), maxWidth()));
+    // Prevent initial CSS transition: add a temporary class and remove it after first paint.
+    document.documentElement.classList.add("sidebar-initializing");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.documentElement.classList.remove("sidebar-initializing");
+    }));
 
-    const [collapsed, setCollapsed] = collapsible()
-        ? makePersisted(createSignal(false), { name: `${storageKey()}-collapsed` })
-        : createSignal(false);
+    // Persist a single object with all sidebar fields we care about.
+    // Conditional: don't touch storage if neither feature is enabled.
+    const shouldPersist = () => resizable() || collapsible();
+
+    const initialPersist = {
+        width: clamp(defaultWidth(), minWidth(), maxWidth()),
+        collapsed: false,
+    };
+
+    const [persisted, setPersisted] = shouldPersist()
+        ? makePersisted(createSignal(initialPersist), { name: `${storageKey()}-state` })
+        : createSignal(initialPersist);
+
+    function width() {
+        return persisted().width as number;
+    }
+
+    function setWidth(v: number) {
+        setPersisted((p) => ({ ...(p as typeof initialPersist), width: v }));
+    }
+
+    function collapsed() {
+        return (persisted().collapsed as boolean) ?? false;
+    }
+
+    function setCollapsed(v: boolean) {
+        setPersisted((p) => ({ ...(p as typeof initialPersist), collapsed: v }));
+    }
 
     // Everything else is ephemeral — never persisted.
     const [state, setState] = createStore<SidebarState>({
@@ -130,7 +145,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
     });
 
     // Sync --sidebar-width on :root so CSS (toolbar grid columns, .cap-sidebar width)
-    // reacts without any extra JS. The @property registration in chrome.css makes
+    // reacts without any extra JS. The @property registration in window-chrome.css makes
     // transitions on dependent calc()/max() expressions work automatically.
     createEffect(() => {
         document.documentElement.style.setProperty(
@@ -152,16 +167,17 @@ export function SidebarProvider(props: SidebarProviderProps) {
         }
     });
 
-    function getResizeCursor(w: number): CursorIcon {
+    function getResizeCursor(w: number) {
         const max = effectiveMax();
         if (side() === "left") {
-            if (w <= minWidth()) return "eResize";
-            if (w >= max) return "wResize";
+            if (w <= minWidth()) return collapsible() ? "ew-resize" : "e-resize";
+            if (w >= max) return "w-resize";
+            return "ew-resize";
         } else {
-            if (w <= minWidth()) return "wResize";
-            if (w >= max) return "eResize";
+            if (w <= minWidth()) return collapsible() ? "ew-resize" : "w-resize";
+            if (w >= max) return "e-resize";
+            return "ew-resize";
         }
-        return "colResize";
     }
 
     function openOverlay() {
@@ -174,6 +190,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
     function toggle() {
         if (!collapsible()) return;
+
         if (collapsed()) {
             if (state.autoCollapsed) {
                 setState("overlayOpen", (v) => !v);
@@ -186,20 +203,25 @@ export function SidebarProvider(props: SidebarProviderProps) {
         }
     }
 
+    function setCursorIcon(icon: string) {
+        document.body.style.cursor = icon;
+    }
+
+
     function onHandleMouseEnter() {
         if (!resizable() || state.isDragging) return;
-        currentWindow.setCursorIcon(
+        setCursorIcon(
             collapsed()
                 ? side() === "left"
-                    ? "eResize"
-                    : "wResize"
+                    ? "e-resize"
+                    : "w-resize"
                 : getResizeCursor(visualWidth()),
         );
     }
 
     function onHandleMouseLeave() {
         if (!resizable() || state.isDragging) return;
-        currentWindow.setCursorIcon("default");
+        setCursorIcon("");
     }
 
     function onHandleMouseDown(e: MouseEvent) {
@@ -216,7 +238,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
             });
             setCollapsed(false);
             setWidth(minWidth());
-            currentWindow.setCursorIcon(getResizeCursor(minWidth()));
+            setCursorIcon(getResizeCursor(minWidth()));
             return;
         }
 
@@ -225,7 +247,8 @@ export function SidebarProvider(props: SidebarProviderProps) {
             dragStartX: e.clientX,
             dragStartWidth: visualWidth(),
         });
-        currentWindow.setCursorIcon(getResizeCursor(visualWidth()));
+
+        setCursorIcon(getResizeCursor(visualWidth()));
 
         createRoot((dispose) =>
             createEventListenerMap(window, {
@@ -239,7 +262,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
     function cancelMove(dispose: () => void) {
         if (!state.isDragging) return;
         setState("isDragging", false);
-        currentWindow.setCursorIcon("default");
+        setCursorIcon("");
         dispose();
     }
 
@@ -258,7 +281,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
                 setState("autoCollapsed", false);
                 setCollapsed(true);
             }
-            currentWindow.setCursorIcon("default");
+            setCursorIcon("");
             return;
         }
 
@@ -266,11 +289,23 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
         const next = clamp(rawWidth, minWidth(), effectiveMax());
         setWidth(next);
-        currentWindow.setCursorIcon(getResizeCursor(next));
+        setCursorIcon(getResizeCursor(next));
     }
 
     makeEventListener(window, "resize", () => setWindowWidth(window.innerWidth));
-    onCleanup(() => currentWindow.setCursorIcon("default"));
+
+    createEffect(() => {
+        if (state.isDragging)
+            document.documentElement.classList.add("sidebar-resizing");
+        else
+            document.documentElement.classList.remove("sidebar-resizing");
+    });
+
+    onCleanup(() => {
+        setCursorIcon("");
+        document.documentElement.classList.remove("sidebar-resizing");
+        document.documentElement.classList.remove("sidebar-initializing");
+    });
 
     return (
         <SidebarContext.Provider
@@ -300,10 +335,9 @@ export function SidebarProvider(props: SidebarProviderProps) {
     );
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-
 interface SidebarProps {
     children?: JSX.Element;
+    class?: string;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -370,10 +404,10 @@ export function Sidebar(props: SidebarProps) {
                     width: `${currentWidth()}px`,
                     transition: isDragging()
                         ? "none"
-                        : `width ${ANIMATION_DURATION}ms ease-out`,
+                        : `width ${ANIMATION_DURATION}ms var(--ease-sidebar)`,
                 }}
             >
-                <Show when={resizable()}>
+                <Show when={resizable() && !collapsed()}>
                     <div
                         class="absolute top-0 bottom-0 w-1.5 z-50"
                         style={{
@@ -400,20 +434,20 @@ export function Sidebar(props: SidebarProps) {
                         transform: `translateX(${translateOffset()})`,
                         transition: isDragging()
                             ? "none"
-                            : `transform ${ANIMATION_DURATION_INNER}ms ease-out`,
+                            : `transform ${ANIMATION_DURATION_INNER}ms var(--ease-sidebar)`,
                     }}
                     onMouseLeave={() => {
                         if (isOverlay()) closeOverlay();
                     }}
                 >
-                    <div class="cap-sidebar__inner apple-glas rounded-[18px]">{resolvedChildren()}</div>
+                    <div class={`cap-sidebar__inner ${props.class}`}>
+                        {resolvedChildren()}
+                    </div>
                 </div>
             </Show>
         </>
     );
 }
-
-// ── SidebarTrigger ────────────────────────────────────────────────────────────
 
 interface SidebarTriggerProps {
     class?: string;

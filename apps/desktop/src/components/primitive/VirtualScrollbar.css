@@ -1,0 +1,27 @@
+/* @reference "~/styles/app.css"; */
+
+@layer components {
+  .vscroll-shell {
+    transition-property: opacity;
+  }
+
+  .vscroll-track {
+    transition-property: width, height, background-color;
+    transition-duration: 150ms;
+  }
+
+  .vscroll-btn {
+    @apply pointer-events-auto flex shrink-0 items-center justify-center opacity-0 transition-all duration-150;
+  }
+
+  .vscroll-shell[data-expanded="true"] .vscroll-btn,
+  .vscroll-shell[data-visible="true"] .vscroll-btn {
+    @apply opacity-100;
+  }
+
+  @variant windows {
+    .vscroll-btn {
+      @apply size-5;
+    }
+  }
+}

@@ -716,6 +716,7 @@ impl CapWindowId {
             Self::Editor { .. } | Self::ScreenshotEditor { .. } => {
                 Some(Some(LogicalPosition::new(20.0, 24.0)))
             }
+            Self::Settings => Some(Some(LogicalPosition::new(20.0, 28.0))),
             Self::Camera
             | Self::WindowCaptureOccluder { .. }
             | Self::CaptureArea
@@ -746,7 +747,8 @@ impl CapWindowId {
 
     #[cfg(target_os = "macos")]
     pub fn needs_toolbar_shell(&self) -> bool {
-        matches!(self, Self::Settings)
+        // matches!(self, Self::Settings)
+        false
     }
 
     #[cfg(target_os = "macos")]
@@ -2205,7 +2207,7 @@ impl CapWindow {
                     if !appears_transparent {
                         nswindow.setOpaque(true);
                         nswindow.setBackgroundColor(Some(
-                            &objc2_app_kit::NSColor::underPageBackgroundColor(),
+                            &objc2_app_kit::NSColor::windowBackgroundColor(),
                         ));
                     }
 
@@ -2219,7 +2221,7 @@ impl CapWindow {
             }
 
             if id.needs_toolbar_shell() {
-                crate::platform::add_toolbar_shell(&window)?;
+                // crate::platform::add_toolbar_shell(&window)?;
             }
 
             if id.frame_autosaves() {
@@ -2311,7 +2313,7 @@ impl CapWindow {
             // Window does NOT conform to solarium
             if let Some(pos) = id.traffic_lights_position() {
                 if !id.needs_toolbar_shell()
-                    && !(settings.experimental_use_solarium && objc2::available!(macos = 26.0))
+                // && !(settings.experimental_use_solarium && objc2::available!(macos = 26.0))
                 {
                     const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> =
                         LogicalPosition::new(13.0, 16.0);

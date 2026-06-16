@@ -30,6 +30,10 @@
 		--window-titlebar-trailing-safe: 0px;
 	}
 
+	:root:not(.sidebar-resizing):not(.sidebar-initializing) {
+		transition: --sidebar-width 550ms var(--ease-sidebar);
+	}
+
 	html[data-platform="macos"] {
 		--window-titlebar-captions-width: 90px;
 		--window-titlebar-height: 52px;
@@ -60,19 +64,37 @@
 	align-items: center;
 	height: var(--window-titlebar-height);
 	width: 100%;
+	/* Default: provide the leading safe area so the toolbar content doesn't
+	   sit inside the unsafe region when there's no sidebar slot. */
+	padding-inline-start: var(--window-titlebar-leading-safe);
+}
+
+/* When a sidebar slot is present, let the slot provide the safe-area padding
+   instead of the whole toolbar to avoid double-counting. Uses :has(), which
+   is supported in modern Chromium used by the app. */
+.cap-toolbar:has(.cap-toolbar-sidebar-slot),
+.cap-toolbar.has-sidebar-slot {
+	padding-inline-start: 0;
 }
 
 .cap-toolbar-sidebar-slot {
-	--toolbar-min-w: 300px;
-	flex-shrink: 0;
-	/* Width follows the sidebar. Captions width is only a floor (spacer),
-	   not a sizing target — content inside starts after the captions area. */
-	width: max(var(--sidebar-width), var(--toolbar-min-w));
-	/* min-width: var(--window-titlebar-captions-width); */
+	--toolbar-sidebar-slot-min-content-width: 110px;
+	/* When the slot exists it should include the leading safe area so items
+	   inside it align with toolbar content. Use box-sizing so padding doesn't
+	   inflate the visible width unexpectedly. */
 	padding-inline-start: var(--window-titlebar-leading-safe);
+	box-sizing: border-box;
+	--toolbar-sidebar-slot-collapsed-width: calc(
+		var(--toolbar-sidebar-slot-min-content-width) +
+		var(--window-titlebar-leading-safe)
+	);
+
+	flex-shrink: 0;
+	width: max(var(--sidebar-width), var(--toolbar-sidebar-slot-collapsed-width));
+	min-width: var(--toolbar-sidebar-slot-collapsed-width);
 	display: flex;
 	align-items: center;
-	height: 100%;
+	/* height: 100%; */
 	overflow: hidden;
 }
 
