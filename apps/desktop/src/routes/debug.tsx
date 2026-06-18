@@ -23,7 +23,7 @@ export default function Debug() {
 			const win = getCurrentWindow();
 			const rect = mainContent.getBoundingClientRect();
 			const size = new LogicalSize(rect.width, rect.height);
-			win.setSize(size);
+			await win.setSize(size);
 		}
 	});
 
