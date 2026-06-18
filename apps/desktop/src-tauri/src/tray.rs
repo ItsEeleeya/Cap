@@ -724,9 +724,11 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                             Display::get_containing_cursor().unwrap_or_else(Display::primary);
                         let target = ScreenCaptureTarget::Display { id: display.id() };
 
-                        match recording::take_screenshot(app.clone(), target).await {
+                        match recording::take_screenshot(app.clone(), target.clone()).await {
                             Ok(path) => {
-                                let _ = CapWindow::ScreenshotEditor { path }.show(&app).await;
+                                if crate::automation::should_open_screenshot_editor(&app, &target) {
+                                    let _ = CapWindow::ScreenshotEditor { path }.show(&app).await;
+                                }
                             }
                             Err(e) => {
                                 tracing::error!("Failed to take screenshot: {e}");
