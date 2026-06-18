@@ -17,13 +17,12 @@ import {
 	Show,
 	Suspense,
 } from "solid-js";
-import { RevealWindowWithSuspense } from "~/App";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { SignInButton } from "~/components/SignInButton";
-
 import { authStore, userProfileStore } from "~/store";
 import { trackEvent } from "~/utils/analytics";
 import { createSignInMutation } from "~/utils/auth";
+import { RevealWindowWithSuspense } from "~/utils/RevealWindow";
 import {
 	apiClient,
 	getConfiguredServerUrl,
