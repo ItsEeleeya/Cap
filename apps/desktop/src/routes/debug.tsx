@@ -154,7 +154,7 @@ export default function Debug() {
 export async function showCapDebugWindow() {
 	const previous = await WebviewWindow.getByLabel("debug");
 	if (previous) {
-		previous.setFocus();
+		await previous.setFocus();
 		return;
 	}
 
