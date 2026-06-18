@@ -1,8 +1,8 @@
 import { Button } from "@cap/ui-solid";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ErrorBoundary, type ParentProps } from "solid-js";
-import { maybeShowWindow } from "~/App";
-import { commands } from "~/utils/tauri";
+import { maybeShowWindow } from "~/utils/RevealWindow";
 
 export function CapErrorBoundary(props: ParentProps) {
 	return (
@@ -22,7 +22,7 @@ export function CapErrorBoundary(props: ParentProps) {
 						<div class="flex flex-row gap-4 max-sm:flex-col max-sm:gap-2">
 							<Button
 								onClick={() =>
-									commands.writeClipboardString(`${e.toString()}\n\n${e.stack}`)
+									writeText((`${e.toString()}\n\n${e.stack}`))
 								}
 							>
 								Copy Error to Clipboard
