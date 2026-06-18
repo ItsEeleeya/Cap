@@ -2914,14 +2914,14 @@ async fn apply_post_studio_editor_behaviour(
         default,
     ) {
         Some(PostStudioRecordingBehaviour::OpenEditor) => {
-            let _ = ShowCapWindow::Editor {
+            let _ = CapWindow::Editor {
                 project_path: recording_dir,
             }
             .show(app)
             .await;
         }
         Some(PostStudioRecordingBehaviour::ShowOverlay) => {
-            let _ = ShowCapWindow::RecordingsOverlay.show(app).await;
+            let _ = CapWindow::RecordingsOverlay.show(app).await;
 
             let app = AppHandle::clone(app);
             tokio::spawn(async move {
@@ -3212,14 +3212,14 @@ async fn handle_recording_finish(
             .unwrap_or(PostStudioRecordingBehaviour::OpenEditor)
         {
             PostStudioRecordingBehaviour::OpenEditor => {
-                let _ = ShowCapWindow::Editor {
+                let _ = CapWindow::Editor {
                     project_path: recording_dir,
                 }
                 .show(app)
                 .await;
             }
             PostStudioRecordingBehaviour::ShowOverlay => {
-                let _ = ShowCapWindow::RecordingsOverlay.show(app).await;
+                let _ = CapWindow::RecordingsOverlay.show(app).await;
 
                 let app = AppHandle::clone(app);
                 tokio::spawn(async move {
