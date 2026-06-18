@@ -23,7 +23,7 @@ export default function Debug() {
 			const win = getCurrentWindow();
 			const rect = mainContent.getBoundingClientRect();
 			const size = new LogicalSize(rect.width, rect.height);
-			win.setSize(size);
+			await win.setSize(size);
 		}
 	});
 
@@ -154,7 +154,7 @@ export default function Debug() {
 export async function showCapDebugWindow() {
 	const previous = await WebviewWindow.getByLabel("debug");
 	if (previous) {
-		previous.setFocus();
+		await previous.setFocus();
 		return;
 	}
 
