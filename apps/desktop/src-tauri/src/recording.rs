@@ -83,6 +83,8 @@ fn recording_stopped_share_url(link: &str) -> String {
 const CURRENT_DESKTOP_BACKGROUND_BASENAME: &str = "current-desktop-background";
 const CURRENT_DESKTOP_BACKGROUND_FILENAME: &str = "current-desktop-background.jpg";
 const CURRENT_DESKTOP_BACKGROUND_PENDING_FILENAME: &str = "current-desktop-background.pending.jpg";
+const DESKTOP_BACKGROUND_MAX_DIMENSION: u32 = 2560;
+const DESKTOP_BACKGROUND_JPEG_QUALITY: u8 = 82;
 
 fn current_desktop_background_snapshot_path(recording_dir: &Path) -> PathBuf {
     recording_dir
@@ -368,11 +370,60 @@ fn desktop_background_source_requires_user_prompt_for_home(
 }
 
 #[cfg(target_os = "macos")]
+fn macos_image_pixel_dimensions(path: &Path) -> Option<(u32, u32)> {
+    let output = std::process::Command::new("sips")
+        .arg("-g")
+        .arg("pixelWidth")
+        .arg("-g")
+        .arg("pixelHeight")
+        .arg(path)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut width = None;
+    let mut height = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(value) = line.strip_prefix("pixelWidth:") {
+            width = value.trim().parse::<u32>().ok();
+        } else if let Some(value) = line.strip_prefix("pixelHeight:") {
+            height = value.trim().parse::<u32>().ok();
+        }
+    }
+
+    Some((width?, height?))
+}
+
+#[cfg(target_os = "macos")]
 fn write_desktop_background_snapshot(source_path: &Path, output_path: &Path) -> Result<(), String> {
-    let sips_result = std::process::Command::new("sips")
+    // `sips -Z` resizes in both directions, so it upscales sources smaller than the
+    // target. Only cap dimensions when the source actually exceeds the limit.
+    let needs_downscale =
+        macos_image_pixel_dimensions(source_path).is_none_or(|(width, height)| {
+            width > DESKTOP_BACKGROUND_MAX_DIMENSION || height > DESKTOP_BACKGROUND_MAX_DIMENSION
+        });
+
+    let mut command = std::process::Command::new("sips");
+    command
         .arg("-s")
         .arg("format")
         .arg("jpeg")
+        .arg("-s")
+        .arg("formatOptions")
+        .arg(DESKTOP_BACKGROUND_JPEG_QUALITY.to_string());
+
+    if needs_downscale {
+        command
+            .arg("-Z")
+            .arg(DESKTOP_BACKGROUND_MAX_DIMENSION.to_string());
+    }
+
+    let sips_result = command
         .arg(source_path)
         .arg("--out")
         .arg(output_path)
@@ -396,12 +447,103 @@ fn write_desktop_background_snapshot_with_image_crate(
     source_path: &Path,
     output_path: &Path,
 ) -> Result<(), String> {
+    use image::ImageEncoder;
+    use std::io::Write;
+
     let image = image::open(source_path)
         .map_err(|err| format!("Failed to decode current desktop background: {err}"))?;
-    image
-        .to_rgb8()
-        .save_with_format(output_path, image::ImageFormat::Jpeg)
-        .map_err(|err| format!("Failed to save current desktop background: {err}"))
+
+    let image = if image.width() > DESKTOP_BACKGROUND_MAX_DIMENSION
+        || image.height() > DESKTOP_BACKGROUND_MAX_DIMENSION
+    {
+        image.resize(
+            DESKTOP_BACKGROUND_MAX_DIMENSION,
+            DESKTOP_BACKGROUND_MAX_DIMENSION,
+            image::imageops::FilterType::Triangle,
+        )
+    } else {
+        image
+    };
+
+    let rgb = image.to_rgb8();
+    let file = std::fs::File::create(output_path)
+        .map_err(|err| format!("Failed to create current desktop background: {err}"))?;
+    let mut writer = std::io::BufWriter::new(file);
+
+    image::codecs::jpeg::JpegEncoder::new_with_quality(
+        &mut writer,
+        DESKTOP_BACKGROUND_JPEG_QUALITY,
+    )
+    .write_image(
+        rgb.as_raw(),
+        rgb.width(),
+        rgb.height(),
+        image::ExtendedColorType::Rgb8,
+    )
+    .map_err(|err| format!("Failed to save current desktop background: {err}"))?;
+
+    writer
+        .flush()
+        .map_err(|err| format!("Failed to finalize current desktop background: {err}"))
+}
+
+pub fn spawn_heal_oversized_desktop_background_snapshots(recording_dir: PathBuf) {
+    tokio::task::spawn_blocking(move || {
+        heal_oversized_desktop_background_snapshots(&recording_dir);
+    });
+}
+
+fn heal_oversized_desktop_background_snapshots(recording_dir: &Path) {
+    let assets_dir = recording_dir.join("assets");
+    let Ok(entries) = std::fs::read_dir(&assets_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+
+        if !name.starts_with(CURRENT_DESKTOP_BACKGROUND_BASENAME)
+            || name.contains(".pending.")
+            || !name.ends_with(".jpg")
+        {
+            continue;
+        }
+
+        match downscale_background_snapshot_in_place(&path) {
+            Ok(true) => {
+                info!(path = %path.display(), "Recompressed oversized desktop background snapshot")
+            }
+            Ok(false) => {}
+            Err(error) => {
+                debug!(%error, path = %path.display(), "Failed to recompress desktop background snapshot")
+            }
+        }
+    }
+}
+
+fn downscale_background_snapshot_in_place(path: &Path) -> Result<bool, String> {
+    let (width, height) = image::image_dimensions(path)
+        .map_err(|err| format!("Failed to read background dimensions: {err}"))?;
+
+    if width <= DESKTOP_BACKGROUND_MAX_DIMENSION && height <= DESKTOP_BACKGROUND_MAX_DIMENSION {
+        return Ok(false);
+    }
+
+    let pending_path = path.with_extension("pending.jpg");
+    let _ = std::fs::remove_file(&pending_path);
+
+    if let Err(error) = write_desktop_background_snapshot_with_image_crate(path, &pending_path) {
+        let _ = std::fs::remove_file(&pending_path);
+        return Err(error);
+    }
+
+    std::fs::rename(&pending_path, path)
+        .map_err(|err| format!("Failed to replace desktop background snapshot: {err}"))?;
+
+    Ok(true)
 }
 
 #[derive(Clone)]
@@ -1458,6 +1600,8 @@ pub async fn start_recording(
             .perform(&window);
     }
 
+    crate::windows::apply_content_protection(&app, true);
+
     if let Some(countdown) = countdown {
         for t in 0..countdown {
             let _ = RecordingEvent::Countdown {
@@ -2507,7 +2651,13 @@ pub async fn take_screenshot(
     meta.save_for_project()
         .map_err(|e| format!("Failed to save recording meta: {e}"))?;
 
-    cap_project::ProjectConfiguration::default()
+    let mut screenshot_config = cap_project::ProjectConfiguration::default();
+    screenshot_config.background.source = cap_project::BackgroundSource::Color {
+        value: [255, 255, 255],
+        alpha: 0,
+    };
+    screenshot_config.background.shadow = 0.0;
+    screenshot_config
         .write(&project_file_path)
         .map_err(|e| format!("Failed to save project config: {e}"))?;
 
