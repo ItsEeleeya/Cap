@@ -4,6 +4,7 @@ mod api;
 mod audio;
 mod audio_meter;
 mod auth;
+mod automation;
 mod camera;
 mod camera_legacy;
 #[cfg(target_os = "macos")]
@@ -77,8 +78,8 @@ use recording::{InProgressRecording, RecordingEvent, RecordingInputKind};
 use scap_targets::{Display, DisplayId, WindowId, bounds::LogicalBounds};
 use screenshot_editor::{
     PendingScreenshotEditorInstances, ScreenshotEditorInstances, WindowScreenshotEditorInstance,
-    create_screenshot_editor_instance, recognize_screenshot_text, render_screenshot_for_export,
-    render_screenshot_png, update_screenshot_config,
+    create_screenshot_editor_instance, prewarm_screenshot_background, recognize_screenshot_text,
+    render_screenshot_for_export, render_screenshot_png, update_screenshot_config,
 };
 
 mod gpu_context;
@@ -536,15 +537,12 @@ impl App {
     }
 
     pub fn clear_current_recording(&mut self) -> Option<InProgressRecording> {
-        match std::mem::replace(&mut self.recording_state, RecordingState::None) {
-            RecordingState::Active(recording) => {
-                self.close_occluder_windows();
-                Some(recording)
-            }
-            _ => {
-                self.close_occluder_windows();
-                None
-            }
+        let previous = std::mem::replace(&mut self.recording_state, RecordingState::None);
+        self.close_occluder_windows();
+        crate::windows::apply_content_protection(&self.handle, false);
+        match previous {
+            RecordingState::Active(recording) => Some(recording),
+            _ => None,
         }
     }
 
@@ -1963,9 +1961,8 @@ pub struct NewStudioRecordingAdded {
     path: PathBuf,
 }
 
-#[derive(specta::Type, tauri_specta::Event, Debug, Clone, Serialize)]
+#[derive(Deserialize, specta::Type, tauri_specta::Event, Debug, Clone, Serialize)]
 pub struct RecordingDeleted {
-    #[allow(unused)]
     path: PathBuf,
 }
 
@@ -3543,7 +3540,7 @@ async fn get_display_frame_for_cropping(
 ) -> Result<Vec<u8>, String> {
     use cap_project::ClipOffsets;
     use cap_rendering::{PixelFormat, cpu_yuv};
-    use image::{ImageEncoder, codecs::png::PngEncoder};
+    use image::{ImageEncoder, codecs::jpeg::JpegEncoder};
     use std::io::Cursor;
     use std::time::Instant;
 
@@ -3625,11 +3622,44 @@ async fn get_display_frame_for_cropping(
     let convert_elapsed_ms = convert_started_at.elapsed().as_secs_f64() * 1000.0;
 
     let encode_started_at = Instant::now();
-    let mut png_data = Cursor::new(Vec::new());
-    let encoder = PngEncoder::new(&mut png_data);
-    encoder
-        .write_image(&rgba_data, width, height, image::ExtendedColorType::Rgba8)
-        .map_err(|e| format!("Failed to encode PNG: {e}"))?;
+
+    // The cropper maps interactions back to full display dimensions, so the
+    // reference image only needs to be sharp enough to position the crop. A
+    // downscaled JPEG keeps decode + IPC transfer near-instant even when the
+    // playhead is deep into a long recording.
+    const MAX_PREVIEW_DIM: u32 = 1440;
+
+    let rgba_image = image::RgbaImage::from_raw(width, height, rgba_data)
+        .ok_or_else(|| "Failed to build image buffer from frame".to_string())?;
+
+    let longest_side = width.max(height);
+    let resized = if longest_side > MAX_PREVIEW_DIM {
+        let scale = MAX_PREVIEW_DIM as f32 / longest_side as f32;
+        let target_w = ((width as f32 * scale).round() as u32).max(1);
+        let target_h = ((height as f32 * scale).round() as u32).max(1);
+        image::imageops::resize(
+            &rgba_image,
+            target_w,
+            target_h,
+            image::imageops::FilterType::Triangle,
+        )
+    } else {
+        rgba_image
+    };
+
+    let rgb_image = image::DynamicImage::ImageRgba8(resized).into_rgb8();
+    let out_width = rgb_image.width();
+    let out_height = rgb_image.height();
+
+    let mut jpeg_data = Cursor::new(Vec::new());
+    JpegEncoder::new_with_quality(&mut jpeg_data, 82)
+        .write_image(
+            rgb_image.as_raw(),
+            out_width,
+            out_height,
+            image::ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| format!("Failed to encode JPEG: {e}"))?;
     let encode_elapsed_ms = encode_started_at.elapsed().as_secs_f64() * 1000.0;
     let total_elapsed_ms = total_started_at.elapsed().as_secs_f64() * 1000.0;
 
@@ -3640,6 +3670,8 @@ async fn get_display_frame_for_cropping(
         segment_time = segment_time,
         width = width,
         height = height,
+        out_width = out_width,
+        out_height = out_height,
         lookup_ms = lookup_elapsed_ms,
         decode_ms = decode_elapsed_ms,
         convert_ms = convert_elapsed_ms,
@@ -3648,7 +3680,7 @@ async fn get_display_frame_for_cropping(
         "crop frame profile"
     );
 
-    Ok(png_data.into_inner())
+    Ok(jpeg_data.into_inner())
 }
 
 #[tauri::command]
@@ -4081,6 +4113,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             upload_screenshot,
             create_screenshot_editor_instance,
             update_screenshot_config,
+            prewarm_screenshot_background,
             recognize_screenshot_text,
             get_recording_meta,
             save_file_dialog,
@@ -4137,6 +4170,11 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             recovery::recover_recording,
             recovery::discard_incomplete_recording,
             set_appearance,
+            automation::get_automations,
+            automation::set_automations,
+            automation::test_automation,
+            automation::automation_should_open_screenshot_editor,
+            automation::list_automation_capabilities,
         ])
         .events(tauri_specta::collect_events![
             RecordingOptionsChanged,
@@ -4173,7 +4211,20 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
         .typ::<general_settings::GeneralSettingsStore>()
         .typ::<recording_settings::RecordingSettingsStore>()
         .typ::<cap_flags::Flags>()
-        .typ::<crate::window_exclusion::WindowExclusion>();
+        .typ::<crate::window_exclusion::WindowExclusion>()
+        .typ::<cap_automation::AutomationsStore>()
+        .typ::<cap_automation::AutomationRule>()
+        .typ::<cap_automation::Trigger>()
+        .typ::<cap_automation::Condition>()
+        .typ::<cap_automation::Action>()
+        .typ::<cap_automation::ExportProfile>()
+        .typ::<cap_automation::MatchMode>()
+        .typ::<cap_automation::CaptureTargetKind>()
+        .typ::<cap_automation::AutomationRecordingMode>()
+        .typ::<cap_automation::ClipboardSource>()
+        .typ::<cap_automation::ExportFormat>()
+        .typ::<cap_automation::AutomationExportCompression>()
+        .typ::<cap_automation::ExportDestination>();
 
     #[cfg(debug_assertions)]
     if let Err(err) = specta_builder.export(
@@ -4448,6 +4499,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                 move |_| {
                     app.state::<MainWindowReadyState>().set_ready(true);
                     gpu_context::prewarm_gpu();
+                    tokio::task::spawn_blocking(cap_rendering::prewarm_fonts);
+                    tokio::spawn(screenshot_editor::prewarm_screenshot_renderer());
 
                     #[cfg(target_os = "macos")]
                     {
@@ -4562,6 +4615,23 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                     prewarmer.request(event.force).await;
                 } else {
                     warn!("ScreenCapturePrewarmer state unavailable during prewarm request");
+                }
+            });
+
+            RecordingStarted::listen_any_spawn(&app, async |_event, app| {
+                crate::automation::run_recording_started_automations(app);
+            });
+
+            RecordingDeleted::listen_any_spawn(&app, async |event, app| {
+                crate::automation::run_recording_deleted_automations(app, event.path);
+            });
+
+            import::VideoImportProgress::listen_any_spawn(&app, async |event, app| {
+                if matches!(event.stage, import::ImportStage::Complete) {
+                    crate::automation::run_video_imported_automations(
+                        app,
+                        std::path::PathBuf::from(event.project_path),
+                    );
                 }
             });
 
@@ -5477,6 +5547,8 @@ async fn create_editor_instance_impl(
     let app = app.clone();
 
     wait_for_recording_ready(&app, &path).await?;
+
+    recording::spawn_heal_oversized_desktop_background_snapshots(path.clone());
 
     let shared_device =
         gpu_context::get_shared_gpu()
