@@ -250,6 +250,7 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
         setCursorIcon(getResizeCursor(visualWidth()));
 
+        // TODO: Use pointer capture
         createRoot((dispose) =>
             createEventListenerMap(window, {
                 pointermove: onPointerMove,
