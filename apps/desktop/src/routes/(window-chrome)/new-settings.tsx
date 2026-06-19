@@ -1,8 +1,6 @@
 import { A, type RouteSectionProps } from "@solidjs/router";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { Effect } from "@tauri-apps/api/window";
 import { capitalize } from "effect/String";
-import { createEffect, createMemo, type ParentProps } from "solid-js";
+import type { ParentProps } from "solid-js";
 import { Dynamic, For, Show } from "solid-js/web";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { Scroller } from "~/components/ScrollView";
@@ -14,7 +12,6 @@ import {
 } from "~/components/Toolbar";
 import { createLicenseQuery } from "~/utils/queries";
 import { RevealWindowWithSuspense } from "~/utils/RevealWindow";
-import { commands } from "~/utils/tauri";
 import {
 	UserAccountContextProvider,
 	useUserAccount,
@@ -187,7 +184,10 @@ function Inner(props: ParentProps) {
 				<main class="flex-1 flex items-start justify-center">
 					<CapErrorBoundary>
 						<Scroller.Root class="w-full flex-1">
-							<Scroller.Viewport class="w-full mx-auto flex-1 pt-(--window-titlebar-height) px-6 max-w-[750px]" overscroll="contain">
+							<Scroller.Viewport
+								class="w-full mx-auto flex-1 pt-(--window-titlebar-height) px-6 max-w-[750px]"
+								overscroll="contain"
+							>
 								<RevealWindowWithSuspense>
 									{props.children}
 								</RevealWindowWithSuspense>
@@ -211,9 +211,10 @@ function ProfileButton() {
 			type="button"
 			activeClass="bg-gray-10/30 pointer-events-none font-bold text-gray-12"
 			class="rounded-full hover:bg-gray-3/50 duration-50 hover:duration-0 px-2 py-1.5 flex flex-row items-center gap-2.5 transition-colors ease-out smoothed cursor-default"
-		// onClick={handleProfileClick}
+			// onClick={handleProfileClick}
 		>
-			<Show when={user.signedIn() && user.profile()}
+			<Show
+				when={user.signedIn() && user.profile()}
 				fallback={
 					<div class="flex gap-2.5 items-center">
 						<IconLucideUserRound class="size-9 rounded-full apple-glass-subdued not-solarium:border p-2 opacity-80" />
@@ -225,10 +226,16 @@ function ProfileButton() {
 			>
 				{(p) => (
 					<div class="flex gap-2.5 items-center">
-						<img draggable={false} class="size-9 rounded-full apple-glass not-solarium:border p-0.5" src={user.avatarDataUrl() ?? ""} />
+						<img
+							draggable={false}
+							class="size-9 rounded-full apple-glass not-solarium:border p-0.5"
+							src={user.avatarDataUrl() ?? ""}
+						/>
 						<span class="inline-flex flex-col text-sm font-semibold">
 							{p().name}
-							<small class="font-medium opacity-80">{capitalize(license.data?.type ?? "")}</small>
+							<small class="font-medium opacity-80">
+								{capitalize(license.data?.type ?? "")}
+							</small>
 						</span>
 					</div>
 				)}

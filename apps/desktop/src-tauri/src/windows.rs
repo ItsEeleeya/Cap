@@ -2151,7 +2151,6 @@ impl CapWindow {
 
                 lock_window_text_scale(&window);
 
-
                 lock_window_text_scale(&window);
 
                 #[cfg(target_os = "windows")]

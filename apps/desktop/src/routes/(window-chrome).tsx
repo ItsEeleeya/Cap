@@ -72,9 +72,7 @@ function LegacyChrome(props: ParentProps) {
 		);
 
 	return (
-		<div
-			class="cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1"
-		>
+		<div class="cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1">
 			<Suspense fallback={<AbsoluteInsetLoader />}>
 				<header
 					data-tauri-drag-region="deep"

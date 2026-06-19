@@ -23,10 +23,7 @@ async function initApp() {
 	const pluginOs = import("@tauri-apps/plugin-os");
 	pluginOs
 		.then(({ type }) =>
-			document.documentElement.setAttribute(
-				"data-platform",
-				type(),
-			),
+			document.documentElement.setAttribute("data-platform", type()),
 		)
 		.catch((error) => console.error("Failed to get OS type:", error));
 
@@ -38,7 +35,10 @@ async function initApp() {
 					const majorVersion = parseInt(v[0], 10);
 
 					if (majorVersion === 26) {
-						document.documentElement.setAttribute("data-macos-window-has-extended-radius", "");
+						document.documentElement.setAttribute(
+							"data-macos-window-has-extended-radius",
+							"",
+						);
 					}
 				});
 
@@ -50,8 +50,7 @@ async function initApp() {
 			})
 			.catch((error) =>
 				console.error("Failed to check Material Hosting support:", error),
-			)
-
+			);
 	}
 }
 

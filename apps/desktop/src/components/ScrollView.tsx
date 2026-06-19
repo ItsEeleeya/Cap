@@ -41,7 +41,7 @@ type ScrollerContextValue = {
 
 type _ScrollerContextValueWithSetter = ScrollerContextValue & {
 	_setViewportEl: (el: HTMLElement | null) => void;
-}
+};
 
 const ScrollerContext = createContext<_ScrollerContextValueWithSetter>();
 
@@ -135,7 +135,10 @@ function Root(props: RootProps) {
 	return (
 		<ScrollerContext.Provider value={ctx}>
 			<div
-				class={cx("relative h-full min-h-0 min-w-0 overflow-hidden", props.class)}
+				class={cx(
+					"relative h-full min-h-0 min-w-0 overflow-hidden",
+					props.class,
+				)}
 				style={props.style}
 			>
 				{props.children}
@@ -160,7 +163,8 @@ type ViewportProps = ParentProps<{
 }>;
 
 function Viewport(props: ViewportProps) {
-	const { _setViewportEl } = useScrollerContext() as _ScrollerContextValueWithSetter;
+	const { _setViewportEl } =
+		useScrollerContext() as _ScrollerContextValueWithSetter;
 	if (!_setViewportEl)
 		throw new Error("<Scroller.Viewport> must be inside <Scroller.Root>");
 

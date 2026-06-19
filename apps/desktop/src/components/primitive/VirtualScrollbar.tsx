@@ -209,7 +209,10 @@ export default function VirtualScrollbarPrimitive(props: Props) {
 			24,
 		);
 
-		if (nextThumbSize !== state.thumbSize || nextScrollable !== state.scrollable) {
+		if (
+			nextThumbSize !== state.thumbSize ||
+			nextScrollable !== state.scrollable
+		) {
 			setState({ scrollable: nextScrollable, thumbSize: nextThumbSize });
 		}
 
@@ -290,7 +293,9 @@ export default function VirtualScrollbarPrimitive(props: Props) {
 		if (!el || !trackRef || state.scrollable <= 0) return;
 
 		const rect = trackRef.getBoundingClientRect();
-		const clickPos = isVertical() ? e.clientY - rect.top : e.clientX - rect.left;
+		const clickPos = isVertical()
+			? e.clientY - rect.top
+			: e.clientX - rect.left;
 		const trackLen = isVertical() ? rect.height : rect.width;
 
 		writeScrollPos(el, (clickPos / Math.max(trackLen, 1)) * state.scrollable);
@@ -385,7 +390,11 @@ export default function VirtualScrollbarPrimitive(props: Props) {
 	function shellClass() {
 		const a = align();
 		const alignClass =
-			a === "start" ? "items-start" : a === "end" ? "items-end" : "items-center";
+			a === "start"
+				? "items-start"
+				: a === "end"
+					? "items-end"
+					: "items-center";
 		return cx(
 			"pointer-events-none select-none flex",
 			"opacity-0 transition-opacity duration-200 data-[visible=true]:opacity-100",
@@ -402,7 +411,9 @@ export default function VirtualScrollbarPrimitive(props: Props) {
 		const dim = isVertical() ? "width" : "height";
 		return {
 			[dim]: `${trackThickness()}px`,
-			"background-color": isExpanded() ? "rgba(128,128,128,0.15)" : "transparent",
+			"background-color": isExpanded()
+				? "rgba(128,128,128,0.15)"
+				: "transparent",
 			transition: `${dim} 200ms ease, background-color 200ms ease`,
 		};
 	}

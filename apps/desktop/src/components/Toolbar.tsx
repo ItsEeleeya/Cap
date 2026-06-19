@@ -8,7 +8,11 @@ interface SlotProps {
 export function Toolbar(props: SlotProps) {
 	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
-		<div data-tauri-drag-region="deep" class={["cap-toolbar", local.class].filter(Boolean).join(" ")} {...rest}>
+		<div
+			data-tauri-drag-region="deep"
+			class={["cap-toolbar", local.class].filter(Boolean).join(" ")}
+			{...rest}
+		>
 			{local.children}
 		</div>
 	);
@@ -18,7 +22,9 @@ export function ToolbarSidebarSlot(props: SlotProps) {
 	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
 		<div
-			class={["cap-toolbar-sidebar-slot", local.class].filter(Boolean).join(" ")}
+			class={["cap-toolbar-sidebar-slot", local.class]
+				.filter(Boolean)
+				.join(" ")}
 			{...rest}
 		>
 			{local.children}

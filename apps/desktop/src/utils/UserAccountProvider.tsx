@@ -62,7 +62,9 @@ function isCachedProfileForUser(
 	return cachedProfile?.userId === (userId ?? null);
 }
 
-async function loaduserAccountAvatarDataUrl(signal: AbortSignal): Promise<string> {
+async function loaduserAccountAvatarDataUrl(
+	signal: AbortSignal,
+): Promise<string> {
 	const imageUrl = new URL(
 		"/api/desktop/user/profile/image",
 		await getConfiguredServerUrl(),
@@ -109,7 +111,9 @@ function createUserContext() {
 	const [failedAvatarImage, setFailedAvatarImage] = createSignal<string | null>(
 		null,
 	);
-	const [avatarDataUrl, setAvatarDataUrl] = createSignal(localStorage.getItem("userAccountAvatarDataUrl"));
+	const [avatarDataUrl, setAvatarDataUrl] = createSignal(
+		localStorage.getItem("userAccountAvatarDataUrl"),
+	);
 
 	function updateAvatarDataUrl(value: string | null) {
 		if (value) localStorage.setItem("userAccountAvatarDataUrl", value);

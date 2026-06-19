@@ -58,7 +58,6 @@ function isCachedProfileForUser(
 
 async function loadProfileImageObjectUrl(signal: AbortSignal) {
 	const imageUrl = new URL(
-
 		"/api/desktop/user/profile/image",
 		await getConfiguredServerUrl(),
 	).toString();
@@ -305,7 +304,9 @@ export default function Settings(props: RouteSectionProps) {
 	};
 
 	createEffect(async () => {
-		commands.log(`fetch ${auth()?.user_id} ${JSON.stringify(userProfile.data)} ${await getConfiguredServerUrl()}`);
+		commands.log(
+			`fetch ${auth()?.user_id} ${JSON.stringify(userProfile.data)} ${await getConfiguredServerUrl()}`,
+		);
 	});
 
 	createEffect(
