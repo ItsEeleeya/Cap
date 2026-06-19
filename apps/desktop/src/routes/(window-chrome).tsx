@@ -12,6 +12,7 @@ import {
 } from "solid-js";
 
 import { AbsoluteInsetLoader } from "~/components/Loader";
+import CaptionControlsTrafficLights from "~/components/titlebar/controls/CaptionControlsTrafficLights";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { initializeTitlebar } from "~/utils/titlebar-state";
@@ -101,6 +102,7 @@ function Header() {
 
 	const isWindows = ostype() === "windows";
 	const isMacOS = ostype() === "macos";
+	const isLinux = ostype() === "linux";
 	const isSettings = () => location.pathname.startsWith("/settings");
 
 	if (isMacOS && isSettings()) return null;
@@ -115,7 +117,14 @@ function Header() {
 		>
 			{ctx.state()?.items}
 			{isWindows && <CaptionControlsWindows11 class="ml-auto!" />}
-			{isMacOS && <div class="h-full w-[64px]" />}
+			{isMacOS && !isSettings() && <div class="h-full w-[64px]" />}
+			{isLinux && (
+				<CaptionControlsTrafficLights
+					class="mr-auto! ml-3"
+					showMinimize={false}
+					showZoom={false}
+				/>
+			)}
 		</header>
 	);
 }

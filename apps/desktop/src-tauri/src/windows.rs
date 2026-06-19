@@ -50,7 +50,49 @@ use crate::{
 use cap_recording::{feeds, sources::screen_capture::ScreenCaptureTarget};
 
 #[cfg(target_os = "macos")]
-const DEFAULT_TRAFFIC_LIGHTS_POS: LogicalPosition<f64> = LogicalPosition::new(13.0, 16.0);
+const DEFAULT_TRAFFIC_LIGHTS_INSET: LogicalPosition<f64> = LogicalPosition::new(12.0, 12.0);
+
+const DEFAULT_FALLBACK_DISPLAY_WIDTH: f64 = 1920.0;
+const DEFAULT_FALLBACK_DISPLAY_HEIGHT: f64 = 1080.0;
+
+#[cfg(target_os = "macos")]
+fn is_system_dark_mode() -> bool {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+    use objc::{class, msg_send, sel, sel_impl};
+
+    unsafe {
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let appearance: id = msg_send![app, effectiveAppearance];
+        if appearance == nil {
+            return false;
+        }
+        let name: id = msg_send![appearance, name];
+        if name == nil {
+            return false;
+        }
+        let dark_appearance = NSString::alloc(nil).init_str("NSAppearanceNameDarkAqua");
+        let vibrant_dark = NSString::alloc(nil).init_str("NSAppearanceNameVibrantDark");
+        let is_dark: bool = msg_send![name, isEqualToString: dark_appearance];
+        let is_vibrant_dark: bool = msg_send![name, isEqualToString: vibrant_dark];
+        is_dark || is_vibrant_dark
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_system_dark_mode() -> bool {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) =
+        hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
+        && let Ok(value) = key.get_value::<u32, _>("AppsUseLightTheme")
+    {
+        return value == 0;
+    }
+    false
+}
 
 pub fn hide_overlay(window: &WebviewWindow) {
     let _ = window.set_ignore_cursor_events(true);
@@ -1389,7 +1431,26 @@ impl CapWindow {
                     window_builder = window_builder.inner_size(100.0, 100.0).position(0.0, 0.0);
                 }
 
+                #[cfg(target_os = "linux")]
+                {
+                    let position = display.raw_handle().physical_position().unwrap();
+                    let size = display.physical_size().unwrap();
+                    window_builder = window_builder
+                        .inner_size(size.width(), size.height())
+                        .position(position.x(), position.y());
+                }
+
                 let window = window_builder.build()?;
+                lock_window_text_scale(&window);
+
+                #[cfg(target_os = "linux")]
+                {
+                    use tauri::{LogicalSize, PhysicalPosition};
+                    let position = display.raw_handle().physical_position().unwrap();
+                    let size = display.physical_size().unwrap();
+                    let _ = window.set_position(PhysicalPosition::new(position.x(), position.y()));
+                    let _ = window.set_size(LogicalSize::new(size.width(), size.height()));
+                }
 
                 #[cfg(windows)]
                 {
@@ -1941,6 +2002,9 @@ impl CapWindow {
                 #[cfg(windows)]
                 let position = display.raw_handle().physical_position().unwrap();
 
+                #[cfg(target_os = "linux")]
+                let position = display.raw_handle().physical_position().unwrap();
+
                 let bounds = display.physical_size().unwrap();
 
                 let mut window_builder = self
@@ -2006,7 +2070,28 @@ impl CapWindow {
                         .position(bounds.position().x(), bounds.position().y());
                 }
 
+                #[cfg(target_os = "linux")]
+                if let Some(bounds) = display.raw_handle().physical_bounds() {
+                    window_builder = window_builder
+                        .inner_size(bounds.size().width(), bounds.size().height())
+                        .position(bounds.position().x(), bounds.position().y());
+                }
+
                 let window = window_builder.build()?;
+                lock_window_text_scale(&window);
+
+                #[cfg(target_os = "linux")]
+                if let Some(bounds) = display.raw_handle().physical_bounds() {
+                    use tauri::{LogicalSize, PhysicalPosition};
+                    let _ = window.set_position(PhysicalPosition::new(
+                        bounds.position().x(),
+                        bounds.position().y(),
+                    ));
+                    let _ = window.set_size(LogicalSize::new(
+                        bounds.size().width(),
+                        bounds.size().height(),
+                    ));
+                }
 
                 #[cfg(target_os = "macos")]
                 window.with_nswindow_on_main(|_, nswindow| {
@@ -2069,6 +2154,27 @@ impl CapWindow {
                         countdown.unwrap_or_default()
                     ))
                     .build()?;
+
+                #[cfg(target_os = "linux")]
+                let window = self
+                    .window_builder(app, "/in-progress-recording")
+                    .maximized(false)
+                    .resizable(false)
+                    .fullscreen(false)
+                    .shadow(false)
+                    .always_on_top(true)
+                    .transparent(true)
+                    .visible_on_all_workspaces(true)
+                    .content_protected(should_protect)
+                    .inner_size(width, height)
+                    .skip_taskbar(false)
+                    .initialization_script(format!(
+                        "window.COUNTDOWN = {};",
+                        countdown.unwrap_or_default()
+                    ))
+                    .build()?;
+
+                lock_window_text_scale(&window);
 
                 #[cfg(target_os = "windows")]
                 log_window_content_protection(&window, should_protect, &title);
@@ -2320,6 +2426,13 @@ impl CapWindow {
         #[cfg(windows)]
         {
             builder = builder.decorations(false).zoom_hotkeys_enabled(false);
+        }
+
+        // Linux has no native macOS-style traffic lights, so we drop the window
+        // manager decorations and draw our own chrome (matching the macOS layout).
+        #[cfg(target_os = "linux")]
+        {
+            builder = builder.decorations(false);
         }
 
         builder
@@ -2608,4 +2721,34 @@ impl ScreenshotEditorWindowIds {
     pub fn get(app: &AppHandle) -> Self {
         app.state::<ScreenshotEditorWindowIds>().deref().clone()
     }
+}
+
+#[derive(Default, Clone)]
+pub struct EditorRecordingTarget(pub Arc<Mutex<Option<PathBuf>>>);
+
+impl EditorRecordingTarget {
+    pub fn get(app: &AppHandle) -> Self {
+        app.state::<EditorRecordingTarget>().deref().clone()
+    }
+
+    pub fn set(app: &AppHandle, path: Option<PathBuf>) {
+        *Self::get(app).0.lock().unwrap() = path;
+    }
+
+    pub fn current(app: &AppHandle) -> Option<PathBuf> {
+        Self::get(app).0.lock().unwrap().clone()
+    }
+
+    pub fn take(app: &AppHandle) -> Option<PathBuf> {
+        Self::get(app).0.lock().unwrap().take()
+    }
+}
+
+pub fn editor_window_for_path(app: &AppHandle, path: &std::path::Path) -> Option<WebviewWindow> {
+    let ids = EditorWindowIds::get(app);
+    let id = {
+        let guard = ids.ids.lock().unwrap();
+        guard.iter().find(|(p, _)| p == path).map(|(_, id)| *id)?
+    };
+    CapWindowId::Editor { id }.get(app)
 }

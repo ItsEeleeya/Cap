@@ -275,6 +275,9 @@ async seekTo(frameNumber: number) : Promise<null> {
 async getDisplayFrameForCropping(fps: number) : Promise<number[]> {
     return await TAURI_INVOKE("get_display_frame_for_cropping", { fps });
 },
+async getClipThumbnail(recordingSegment: number, time: number) : Promise<string> {
+    return await TAURI_INVOKE("get_clip_thumbnail", { recordingSegment, time });
+},
 async applyMacosLiquidGlassBackground(enabled: boolean, radius: number) : Promise<boolean> {
     return await TAURI_INVOKE("apply_macos_liquid_glass_background", { enabled, radius });
 },
@@ -312,6 +315,12 @@ async getEditorMeta() : Promise<RecordingMeta> {
 },
 async getRecordingMetaByPath(projectPath: string) : Promise<RecordingMeta> {
     return await TAURI_INVOKE("get_recording_meta_by_path", { projectPath });
+},
+async setEditorRecordingTarget(projectPath: string | null) : Promise<null> {
+    return await TAURI_INVOKE("set_editor_recording_target", { projectPath });
+},
+async deleteRecordingDirectory(path: string) : Promise<null> {
+    return await TAURI_INVOKE("delete_recording_directory", { path });
 },
 async setPrettyName(prettyName: string) : Promise<null> {
     return await TAURI_INVOKE("set_pretty_name", { prettyName });
@@ -434,6 +443,7 @@ audioInputLevelChange: AudioInputLevelChange,
 currentRecordingChanged: CurrentRecordingChanged,
 devicesUpdated: DevicesUpdated,
 downloadProgress: DownloadProgress,
+editorRecordingAdded: EditorRecordingAdded,
 editorStateChanged: EditorStateChanged,
 newNotification: NewNotification,
 newScreenshotAdded: NewScreenshotAdded,
@@ -460,6 +470,7 @@ audioInputLevelChange: "audio-input-level-change",
 currentRecordingChanged: "current-recording-changed",
 devicesUpdated: "devices-updated",
 downloadProgress: "download-progress",
+editorRecordingAdded: "editor-recording-added",
 editorStateChanged: "editor-state-changed",
 newNotification: "new-notification",
 newScreenshotAdded: "new-screenshot-added",
@@ -551,7 +562,16 @@ export type CaptionSegment = { id: string; start: number; end: number; text: str
 export type CaptionSettings = { enabled: boolean; font: string; size: number; color: string; backgroundColor: string; backgroundOpacity: number; position: string; italic: boolean; fontWeight: number; outline: boolean; outlineColor: string; exportWithSubtitles: boolean; highlightColor: string; fadeDuration: number; lingerDuration: number; wordTransitionDuration: number; activeWordHighlight: boolean; manualPosition: XY<number> | null }
 export type CaptionTrackSegment = { id: string; start: number; end: number; text: string; words?: CaptionWord[]; fadeDurationOverride?: number | null; lingerDurationOverride?: number | null; positionOverride?: string | null; colorOverride?: string | null; backgroundColorOverride?: string | null; fontSizeOverride?: number | null }
 export type CaptionWord = { text: string; start: number; end: number }
-export type CaptionsData = { segments: CaptionSegment[]; settings: CaptionSettings }
+export type CaptionsData = { segments: CaptionSegment[]; settings: CaptionSettings; 
+/**
+ * When true, `segments` are stored in source/recording time and the
+ * rendered `timeline.caption_segments` are derived by projecting them
+ * through the current edit list, so captions stay aligned to their spoken
+ * content as clips are trimmed, deleted, reordered, or inserted. Legacy
+ * projects (false) stored segments in already-edited output time and are
+ * migrated to source time on first load.
+ */
+sourceTimed?: boolean }
 export type CaptureDisplay = { id: DisplayId; name: string; refresh_rate: number }
 export type CaptureDisplayWithThumbnail = { id: DisplayId; name: string; refresh_rate: number; thumbnail: string | null }
 export type CaptureTargetKind = "display" | "window" | "area"
@@ -585,6 +605,7 @@ export type DisplayId = string
 export type DisplayInformation = { name: string | null; physical_size: PhysicalSize | null; logical_size: LogicalSize | null; logical_bounds: LogicalBounds | null; refresh_rate: string }
 export type DownloadProgress = { progress: number; message: string }
 export type EditorPreviewQuality = "quarter" | "half" | "full"
+export type EditorRecordingAdded = { editor_path: string; recording_path: string }
 export type EditorStateChanged = { playhead_position: number }
 export type ExportCompression = "Maximum" | "Social" | "Web" | "Potato"
 export type ExportDestination = "projectFolder" | { customPath: { dir: string } }
@@ -666,7 +687,7 @@ export type RecordingDeleted = { path: string }
 export type RecordingEvent = { variant: "Countdown"; value: number } | { variant: "Started" } | { variant: "Stopped" } | { variant: "Paused" } | { variant: "Resumed" } | { variant: "Failed"; error: string } | { variant: "InputLost"; input: RecordingInputKind } | { variant: "InputRestored"; input: RecordingInputKind } | { variant: "Degraded"; reason: string } | { variant: "Recovered" }
 export type RecordingInputKind = "microphone" | "camera"
 export type RecordingMeta = (StudioRecordingMeta | InstantRecordingMeta) & { platform?: Platform | null; pretty_name: string; sharing?: SharingMeta | null; upload?: UploadMeta | null }
-export type RecordingMetaWithMetadata = ((StudioRecordingMeta | InstantRecordingMeta) & { platform?: Platform | null; pretty_name: string; sharing?: SharingMeta | null; upload?: UploadMeta | null }) & { mode: RecordingMode; status: StudioRecordingStatus }
+export type RecordingMetaWithMetadata = ((StudioRecordingMeta | InstantRecordingMeta) & { platform?: Platform | null; pretty_name: string; sharing?: SharingMeta | null; upload?: UploadMeta | null }) & { mode: RecordingMode; status: StudioRecordingStatus; clip_count: number }
 export type RecordingMode = "studio" | "instant" | "screenshot"
 export type RecordingOptionsChanged = null
 export type RecordingSettingsStore = { target: ScreenCaptureTarget | null; micName: string | null; cameraId: DeviceOrModelID | null; mode: RecordingMode | null; systemAudio: boolean; organizationId: string | null; cameraDeviceSettings: { [key in string]: CameraDeviceSettings }; microphoneDeviceSettings: { [key in string]: MicrophoneDeviceSettings } }
@@ -706,7 +727,7 @@ export type SystemDiagnostics = { macosVersion: MacOSVersionInfo | null; availab
 export type TargetUnderCursor = { display_id: DisplayId | null; window: WindowUnderCursor | null }
 export type TextSegment = { start: number; end: number; track?: number; enabled?: boolean; content?: string; center?: XY<number>; size?: XY<number>; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; color?: string; fadeDuration?: number }
 export type TimelineConfiguration = { segments: TimelineSegment[]; zoomSegments: ZoomSegment[]; sceneSegments?: SceneSegment[]; maskSegments?: MaskSegment[]; textSegments?: TextSegment[]; captionSegments?: CaptionTrackSegment[]; keyboardSegments?: KeyboardTrackSegment[] }
-export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number }
+export type TimelineSegment = { recordingSegment?: number; timescale: number; start: number; end: number; name?: string | null }
 export type TranscriptionEngine = "Whisper" | "Parakeet"
 export type Trigger = "screenshotTaken" | "studioRecordingFinished" | "instantRecordingFinished" | "recordingStarted" | "uploadCompleted" | "videoImported" | "recordingDeleted"
 export type UploadMeta = { state: "MultipartUpload"; video_id: string; file_path: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "SinglePartUpload"; video_id: string; recording_dir: string; file_path: string; screenshot_path: string } | { state: "SegmentUpload"; video_id: string; pre_created_video: VideoUploadInfo; recording_dir: string } | { state: "Failed"; error: string } | { state: "Complete" }
