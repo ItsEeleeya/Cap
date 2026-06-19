@@ -1,11 +1,11 @@
 import { useCurrentMatches, useIsRouting } from "@solidjs/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-    children,
-    createEffect,
-    type JSX,
-    type ParentProps,
-    Suspense,
+	children,
+	createEffect,
+	type JSX,
+	type ParentProps,
+	Suspense,
 } from "solid-js";
 
 let windowShown = false;
@@ -27,20 +27,20 @@ let windowShown = false;
  * `windowShown` guard.
  */
 export function AutoRevealWindowOnReady() {
-    const matches = useCurrentMatches();
-    const isRouting = useIsRouting();
+	const matches = useCurrentMatches();
+	const isRouting = useIsRouting();
 
-    createEffect(() => {
-        if (isRouting() || windowShown) return;
-        const shouldDefer = matches().some(
-            (match) => match.route.info?.autoShow === false,
-        );
-        if (shouldDefer) return;
-        windowShown = true;
-        getCurrentWindow().show();
-    });
+	createEffect(() => {
+		if (isRouting() || windowShown) return;
+		const shouldDefer = matches().some(
+			(match) => match.route.info?.autoShow === false,
+		);
+		if (shouldDefer) return;
+		windowShown = true;
+		getCurrentWindow().show();
+	});
 
-    return null;
+	return null;
 }
 
 /**
@@ -58,22 +58,22 @@ export function AutoRevealWindowOnReady() {
  * window reveal if the subtree suspends again.
  */
 export function RevealWindowWithSuspense(
-    props: ParentProps<{ fallback?: JSX.Element }>,
+	props: ParentProps<{ fallback?: JSX.Element }>,
 ) {
-    const resolved = children(() => props.children);
-    const isRouting = useIsRouting();
+	const resolved = children(() => props.children);
+	const isRouting = useIsRouting();
 
-    createEffect(() => {
-        if (windowShown || !resolved() || isRouting()) return;
-        windowShown = true;
-        getCurrentWindow().show();
-    });
+	createEffect(() => {
+		if (windowShown || !resolved() || isRouting()) return;
+		windowShown = true;
+		getCurrentWindow().show();
+	});
 
-    return <Suspense fallback={props.fallback}>{resolved()}</Suspense>;
+	return <Suspense fallback={props.fallback}>{resolved()}</Suspense>;
 }
 
 export function maybeShowWindow() {
-    if (windowShown) return;
-    windowShown = true;
-    getCurrentWindow().show();
+	if (windowShown) return;
+	windowShown = true;
+	getCurrentWindow().show();
 }

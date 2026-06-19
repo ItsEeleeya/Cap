@@ -116,7 +116,7 @@ use upload::{create_or_get_video, upload_image, upload_video};
 use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
-    CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds, CapWindow,
+    CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
     hide_overlay, set_window_transparent, show_overlay,
 };
 
