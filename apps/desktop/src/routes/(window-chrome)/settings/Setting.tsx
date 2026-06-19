@@ -54,7 +54,7 @@ export function SectionCard(
 	return (
 		<div
 			class={cx(
-				"cap-settings-card overflow-hidden rounded-lg bg-gray-11/10 smoothed",
+				"cap-settings-card overflow-hidden rounded-lg bg-gray-11/5 smoothed",
 				props.padded && "px-4 py-4",
 				props.class,
 			)}

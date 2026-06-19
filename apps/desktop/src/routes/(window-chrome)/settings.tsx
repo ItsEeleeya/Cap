@@ -23,6 +23,7 @@ import { authStore, userProfileStore } from "~/store";
 import { trackEvent } from "~/utils/analytics";
 import { createSignInMutation } from "~/utils/auth";
 import { RevealWindowWithSuspense } from "~/utils/RevealWindow";
+import { commands } from "~/utils/tauri";
 import {
 	apiClient,
 	getConfiguredServerUrl,
@@ -57,6 +58,7 @@ function isCachedProfileForUser(
 
 async function loadProfileImageObjectUrl(signal: AbortSignal) {
 	const imageUrl = new URL(
+
 		"/api/desktop/user/profile/image",
 		await getConfiguredServerUrl(),
 	).toString();
@@ -170,9 +172,13 @@ export default function Settings(props: RouteSectionProps) {
 				return null;
 			}
 
+			commands.log("before response");
+
 			const response = await apiClient.desktop.getUserProfile({
 				headers: await protectedHeaders(),
 			});
+
+			commands.log("before clear");
 
 			if (response.status === 401) {
 				await clearLocalAuth();
@@ -297,6 +303,10 @@ export default function Settings(props: RouteSectionProps) {
 		setFailedProfileImageUrl(imageUrl);
 		void userProfile.refetch();
 	};
+
+	createEffect(async () => {
+		commands.log(`fetch ${auth()?.user_id} ${JSON.stringify(userProfile.data)} ${await getConfiguredServerUrl()}`);
+	});
 
 	createEffect(
 		on(accountRemoteImageUrl, (imageUrl) => {

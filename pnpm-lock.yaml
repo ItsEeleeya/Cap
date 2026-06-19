@@ -120,6 +120,9 @@ importers:
       '@cap/web-api-contract':
         specifier: workspace:*
         version: link:../../packages/web-api-contract
+      '@corvu/resizable':
+        specifier: ^0.2.5
+        version: 0.2.5(solid-js@1.9.6)
       '@corvu/tooltip':
         specifier: ^0.2.1
         version: 0.2.2(solid-js@1.9.6)
@@ -205,8 +208,8 @@ importers:
         specifier: ^2.5.1
         version: 2.5.1
       '@tauri-apps/plugin-http':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.9
+        version: 2.5.9
       '@tauri-apps/plugin-notification':
         specifier: ^2.3.0
         version: 2.3.0
@@ -246,6 +249,12 @@ importers:
       mp4box:
         specifier: ^0.5.2
         version: 0.5.4
+      overlayscrollbars:
+        specifier: ^2.16.0
+        version: 2.16.0
+      overlayscrollbars-solid:
+        specifier: ^0.5.6
+        version: 0.5.6(overlayscrollbars@2.16.0)(solid-js@1.9.6)
       posthog-js:
         specifier: ^1.215.3
         version: 1.240.0
@@ -292,12 +301,6 @@ importers:
       '@solid-devtools/overlay':
         specifier: ^0.33.5
         version: 0.33.5(solid-js@1.9.6)
-      '@tailwindcss/postcss':
-        specifier: ^4.2.2
-        version: 4.3.0
-      '@tailwindcss/typography':
-        specifier: ^0.5.9
-        version: 0.5.16(tailwindcss@4.3.0)
       '@tauri-apps/cli':
         specifier: '>=2.1.0'
         version: 2.11.0
@@ -319,9 +322,6 @@ importers:
       solid-devtools:
         specifier: ^0.34.5
         version: 0.34.5(solid-js@1.9.6)(vite@6.3.5(@types/node@22.15.17)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.44.0)(yaml@2.8.1))
-      tailwind-scrollbar:
-        specifier: ^3.1.0
-        version: 3.1.0(tailwindcss@3.4.17(ts-node@10.9.2(@swc/core@1.15.5(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3)))
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -669,7 +669,7 @@ importers:
         version: 2.0.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@workos-inc/node':
         specifier: ^7.34.0
-        version: 7.50.0(express@5.1.0)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+        version: 7.50.0(express@5.1.0)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       aws-sdk:
         specifier: ^2.1530.0
         version: 2.1692.0
@@ -717,7 +717,7 @@ importers:
         version: 11.18.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       geist:
         specifier: ^1.3.1
-        version: 1.4.2(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+        version: 1.4.2(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       gif.js:
         specifier: 0.2.0
         version: 0.2.0
@@ -756,10 +756,10 @@ importers:
         version: 12.20.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next:
         specifier: 16.2.1
-        version: 16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next-auth:
         specifier: ^4.24.5
-        version: 4.24.11(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nodemailer@6.10.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 4.24.11(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nodemailer@6.10.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next-mdx-remote:
         specifier: ^6.0.0
         version: 6.0.0(@types/react@19.2.14)(acorn@8.16.0)(react@19.2.4)
@@ -849,7 +849,7 @@ importers:
         version: 9.0.1
       workflow:
         specifier: 4.2.0-beta.73
-        version: 4.2.0-beta.73(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@opentelemetry/api@1.9.0)(@swc/cli@0.8.0(@swc/core@1.15.3(@swc/helpers@0.5.17))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/helpers@0.5.17)(magicast@0.3.5)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(typescript@5.8.3)
+        version: 4.2.0-beta.73(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@opentelemetry/api@1.9.0)(@swc/cli@0.8.0(@swc/core@1.15.3(@swc/helpers@0.5.17))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/helpers@0.5.17)(magicast@0.3.5)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(typescript@5.8.3)
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -1360,8 +1360,11 @@ importers:
         specifier: ^5.0.3
         version: 5.2.5
       '@iconify/json':
-        specifier: ^2.2.239
-        version: 2.2.336
+        specifier: ^2.2.486
+        version: 2.2.487
+      '@tailwindcss/postcss':
+        specifier: ^4.2.2
+        version: 4.3.0
       '@tailwindcss/typography':
         specifier: ^0.5.9
         version: 0.5.16(tailwindcss@4.3.0)
@@ -1380,6 +1383,9 @@ importers:
       tailwindcss:
         specifier: ^4.3
         version: 4.3.0
+      tailwindcss-fade:
+        specifier: ^0.1.2
+        version: 0.1.2(tailwindcss@4.3.0)
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -2309,6 +2315,11 @@ packages:
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
     engines: {node: '>=0.1.90'}
+
+  '@corvu/resizable@0.2.5':
+    resolution: {integrity: sha512-psax38DraM9SXtaNh/sfvizGO6xLCL4sqT4rWYlMZP5ZsUM05Q30tvXgnTo2roQFNOz2e06WofhDsBXTjY6g4A==}
+    peerDependencies:
+      solid-js: ^1.8
 
   '@corvu/tooltip@0.2.2':
     resolution: {integrity: sha512-gyOBJ43GNAecDtmWc68A5YJvifXWwK0VZZdTOcFbX0rVQUA2ihBMltRE4oj7/lKidg2gXALjmFr71Blt5s3YuQ==}
@@ -3907,6 +3918,9 @@ packages:
 
   '@iconify/json@2.2.336':
     resolution: {integrity: sha512-VzFz+9EUrIojmO7d0351W72/7uB9KR3ma4cP411SAMb//WzShK4l3nHWf0mKw2p4wAjTIF11W6+JfDoaJCXWpQ==}
+
+  '@iconify/json@2.2.487':
+    resolution: {integrity: sha512-tcsAA/F7CKdRT8CHOCaH1vv3FL0l8PgdzMh3FhVS5yCzAp9lxWqUh05kHnjACTcISHCEkpupY3/UpVWTmPruzg==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -8095,8 +8109,8 @@ packages:
   '@tauri-apps/plugin-fs@2.5.1':
     resolution: {integrity: sha512-9Lz+Jopp6QyeEWhlpkMx4R/+P9HgR+AVAI4vOZhlT8Xaymtz8iVI/Ov984/XTqgJz/5gz5NretqPB/XEMS3NhQ==}
 
-  '@tauri-apps/plugin-http@2.5.1':
-    resolution: {integrity: sha512-SpQ1azXEdQI0UB2NZTIPljJTDEe0bIaKzHYR/k4UQp6yzRYGLC/ktmIgEfQ2RvKAWus8GcYgGr5K6LJPbo/NZw==}
+  '@tauri-apps/plugin-http@2.5.9':
+    resolution: {integrity: sha512-lCiY0+vs4HvIUSvZrBs8TC3TiCB0MOPRmiUjTq4prW7SlcJE2jdLeT6KBsJrT9Tlplufl7W1pY6SFAO3gCWxDA==}
 
   '@tauri-apps/plugin-notification@2.3.0':
     resolution: {integrity: sha512-QDwXo9VzAlH97c0veuf19TZI6cRBPfJDl2O6hNEDvI66j60lOO9z+PL6MJrj8A6Y+t55r7mGhe3rQWLmOre2HA==}
@@ -13717,6 +13731,15 @@ packages:
     resolution: {integrity: sha512-wrAwOeXp1RRMFfQY8Sy7VaGVmPocaLwSFOYCGKSyo8qmJ+/yaafCl5BCA1IQZWqFSRBrKDYFeR9d/VyQzfH/jg==}
     engines: {node: '>= 6.0'}
 
+  overlayscrollbars-solid@0.5.6:
+    resolution: {integrity: sha512-n1iaIT5vLxT7TSum9f80BDfIpXX53CcCxWyqWid9doJDDPPPzEMv+QbDM8I5sctbeExUqc9WAgNnu3W9/M2Q3g==}
+    peerDependencies:
+      overlayscrollbars: ^2.0.0
+      solid-js: ^1.7.0
+
+  overlayscrollbars@2.16.0:
+    resolution: {integrity: sha512-N03oje/q7j93D0aLZtoCdsDSYLmhheSsv8H7oSLE7HhdV9P/bmCURtLV/KbPye7P/bpfyt/obSfDpGUYoJ0OWg==}
+
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
     engines: {node: '>= 0.4'}
@@ -15415,6 +15438,11 @@ packages:
     resolution: {integrity: sha512-bl6mpH3T7I3UFxuvDEXLxy/VuFxBk5bbzplh7tXI68mwMokNYd1t9qPBHlnyTwfa4JGC4zP516I1hYYtQ/vspA==}
     peerDependencies:
       tailwindcss: '>=3.0.0 || insiders'
+
+  tailwindcss-fade@0.1.2:
+    resolution: {integrity: sha512-Y1vD543pwV1eR+DyzdhEzwKVnvTVY0u5EFHN/Y/FvSRibHzir+Z7nwrkpoEpNjzKvhxvduCjLtj1lEC8Qy6FwQ==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0'
 
   tailwindcss@3.4.17:
     resolution: {integrity: sha512-w33E2aCvSDP0tW9RZuNXadXlkHXqFzSkQew/aIa2i/Sj8fThxwovwlXHSPXTbAHwEIhBFXAedUhP2tueAKP8Og==}
@@ -18507,6 +18535,11 @@ snapshots:
 
   '@colors/colors@1.6.0': {}
 
+  '@corvu/resizable@0.2.5(solid-js@1.9.6)':
+    dependencies:
+      '@corvu/utils': 0.4.2(solid-js@1.9.6)
+      solid-js: 1.9.6
+
   '@corvu/tooltip@0.2.2(solid-js@1.9.6)':
     dependencies:
       '@corvu/utils': 0.4.2(solid-js@1.9.6)
@@ -19580,6 +19613,11 @@ snapshots:
     dependencies:
       '@iconify/types': 2.0.0
       pathe: 1.1.2
+
+  '@iconify/json@2.2.487':
+    dependencies:
+      '@iconify/types': 2.0.0
+      pathe: 2.0.3
 
   '@iconify/types@2.0.0': {}
 
@@ -24383,7 +24421,7 @@ snapshots:
     dependencies:
       '@tauri-apps/api': 2.11.0
 
-  '@tauri-apps/plugin-http@2.5.1':
+  '@tauri-apps/plugin-http@2.5.9':
     dependencies:
       '@tauri-apps/api': 2.11.0
 
@@ -25643,7 +25681,7 @@ snapshots:
       - aws-crt
       - supports-color
 
-  '@workflow/next@4.0.1-beta.69(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))':
+  '@workflow/next@4.0.1-beta.69(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))':
     dependencies:
       '@swc/core': 1.15.3(@swc/helpers@0.5.17)
       '@workflow/builders': 4.0.1-beta.64(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)
@@ -25652,7 +25690,7 @@ snapshots:
       semver: 7.7.4
       watchpack: 2.5.1
     optionalDependencies:
-      next: 16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
     transitivePeerDependencies:
       - '@opentelemetry/api'
       - '@swc/helpers'
@@ -25773,9 +25811,9 @@ snapshots:
       ulid: 3.0.1
       zod: 4.3.6
 
-  '@workos-inc/node@7.50.0(express@5.1.0)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))':
+  '@workos-inc/node@7.50.0(express@5.1.0)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))':
     dependencies:
-      iron-session: 6.3.1(express@5.1.0)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+      iron-session: 6.3.1(express@5.1.0)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       jose: 5.6.3
       leb: 1.0.0
       pluralize: 8.0.0
@@ -28916,9 +28954,9 @@ snapshots:
       strip-ansi: 6.0.1
       wide-align: 1.1.5
 
-  geist@1.4.2(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
+  geist@1.4.2(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
-      next: 16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
   generate-function@2.3.1:
     dependencies:
@@ -29528,7 +29566,7 @@ snapshots:
 
   ipaddr.js@1.9.1: {}
 
-  iron-session@6.3.1(express@5.1.0)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
+  iron-session@6.3.1(express@5.1.0)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
       '@peculiar/webcrypto': 1.5.0
       '@types/cookie': 0.5.4
@@ -29539,7 +29577,7 @@ snapshots:
       iron-webcrypto: 0.2.8
     optionalDependencies:
       express: 5.1.0
-      next: 16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
   iron-webcrypto@0.2.8:
     dependencies:
@@ -31023,13 +31061,13 @@ snapshots:
     optionalDependencies:
       nodemailer: 6.10.1
 
-  next-auth@4.24.11(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nodemailer@6.10.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next-auth@4.24.11(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(nodemailer@6.10.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@babel/runtime': 7.27.1
       '@panva/hkdf': 1.2.1
       cookie: 0.7.2
       jose: 4.15.9
-      next: 16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       oauth: 0.9.15
       openid-client: 5.7.1
       preact: 10.26.6
@@ -31088,7 +31126,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.4)
+      styled-jsx: 5.1.6(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.7
       '@next/swc-darwin-x64': 15.5.7
@@ -31105,7 +31143,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.2.1
       '@swc/helpers': 0.5.15
@@ -31114,7 +31152,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.4)
+      styled-jsx: 5.1.6(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.1
       '@next/swc-darwin-x64': 16.2.1
@@ -31593,6 +31631,13 @@ snapshots:
       strip-ansi: 7.1.0
 
   os-paths@4.4.0: {}
+
+  overlayscrollbars-solid@0.5.6(overlayscrollbars@2.16.0)(solid-js@1.9.6):
+    dependencies:
+      overlayscrollbars: 2.16.0
+      solid-js: 1.9.6
+
+  overlayscrollbars@2.16.0: {}
 
   own-keys@1.0.1:
     dependencies:
@@ -33565,17 +33610,15 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.4
 
-  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.4):
-    dependencies:
-      client-only: 0.0.1
-      react: 19.2.4
-    optionalDependencies:
-      '@babel/core': 7.29.7
-
   styled-jsx@5.1.6(react@19.1.1):
     dependencies:
       client-only: 0.0.1
       react: 19.1.1
+
+  styled-jsx@5.1.6(react@19.2.4):
+    dependencies:
+      client-only: 0.0.1
+      react: 19.2.4
 
   subtitles-parser-vtt@0.1.0: {}
 
@@ -33644,6 +33687,10 @@ snapshots:
   tailwindcss-animate@1.0.7(tailwindcss@3.4.17(ts-node@10.9.2(@swc/core@1.15.5(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3))):
     dependencies:
       tailwindcss: 3.4.17(ts-node@10.9.2(@swc/core@1.15.5(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3))
+
+  tailwindcss-fade@0.1.2(tailwindcss@4.3.0):
+    dependencies:
+      tailwindcss: 4.3.0
 
   tailwindcss@3.4.17(ts-node@10.9.2(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/wasm@1.15.5)(@types/node@20.17.43)(typescript@5.8.3)):
     dependencies:
@@ -35349,14 +35396,14 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20250408.0
       '@cloudflare/workerd-windows-64': 1.20250408.0
 
-  workflow@4.2.0-beta.73(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@opentelemetry/api@1.9.0)(@swc/cli@0.8.0(@swc/core@1.15.3(@swc/helpers@0.5.17))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/helpers@0.5.17)(magicast@0.3.5)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(typescript@5.8.3):
+  workflow@4.2.0-beta.73(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@opentelemetry/api@1.9.0)(@swc/cli@0.8.0(@swc/core@1.15.3(@swc/helpers@0.5.17))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/helpers@0.5.17)(magicast@0.3.5)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(typescript@5.8.3):
     dependencies:
       '@workflow/astro': 4.0.0-beta.47(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)
       '@workflow/cli': 4.2.0-beta.73(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)
       '@workflow/core': 4.2.0-beta.73(@opentelemetry/api@1.9.0)
       '@workflow/errors': 4.1.0-beta.19
       '@workflow/nest': 0.0.0-beta.22(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@opentelemetry/api@1.9.0)(@swc/cli@0.8.0(@swc/core@1.15.3(@swc/helpers@0.5.17))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@swc/helpers@0.5.17)
-      '@workflow/next': 4.0.1-beta.69(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)(next@16.2.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+      '@workflow/next': 4.0.1-beta.69(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)(next@16.2.1(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       '@workflow/nitro': 4.0.1-beta.68(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)
       '@workflow/nuxt': 4.0.1-beta.57(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)(magicast@0.3.5)
       '@workflow/rollup': 4.0.0-beta.30(@opentelemetry/api@1.9.0)(@swc/helpers@0.5.17)

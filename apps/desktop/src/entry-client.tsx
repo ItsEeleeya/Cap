@@ -1,6 +1,7 @@
 // @refresh reload
 
 import { mount, StartClient } from "@solidjs/start/client";
+import { commands } from "./utils/tauri";
 
 async function initApp() {
 	if (
@@ -16,6 +17,8 @@ async function initApp() {
 	if (!app) throw new Error("App root element not found");
 
 	mount(() => <StartClient />, app);
+
+	commands.log("mounted");
 
 	const pluginOs = import("@tauri-apps/plugin-os");
 	pluginOs
@@ -47,8 +50,7 @@ async function initApp() {
 			})
 			.catch((error) =>
 				console.error("Failed to check Material Hosting support:", error),
-			);
-
+			)
 
 	}
 }

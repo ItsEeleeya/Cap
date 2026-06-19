@@ -1,4 +1,10 @@
-import { Route, Router } from "@solidjs/router";
+import {
+	Navigate,
+	Route,
+	Router,
+	useCurrentMatches,
+	useIsRouting,
+} from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { message } from "@tauri-apps/plugin-dialog";
 import { lazy, onMount, Suspense } from "solid-js";
@@ -24,6 +30,9 @@ const WindowChromeLayout = lazy(() => import("./routes/(window-chrome)"));
 const NewMainPage = lazy(() => import("./routes/(window-chrome)/new-main"));
 const SettingsGeneralPage = lazy(
 	() => import("./routes/(window-chrome)/settings/general"),
+);
+const SettingsAccountPage = lazy(
+	() => import("./routes/(window-chrome)/settings/account"),
 );
 const SettingsRecordingsPage = lazy(
 	() => import("./routes/(window-chrome)/settings/recordings"),
@@ -165,6 +174,8 @@ function Inner() {
 								macosMaterial: "settings",
 							}}
 						>
+							<Route path="/" component={() => <Navigate href="general" />} />
+							<Route path="/account" component={SettingsAccountPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
 							<Route path="/recordings" component={SettingsRecordingsPage} />
 							<Route
