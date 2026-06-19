@@ -156,22 +156,16 @@ function Inner(props: ParentProps) {
 												class="rounded-full h-9.5 hover:bg-gray-3/50 duration-50 hover:duration-0 text-[13px] px-3 flex flex-row items-center gap-2.5 transition-colors ease-out smoothed cursor-default"
 											>
 												<span
-													class="inline-flex items-center justify-center size-5.5 rounded-md smoothed shrink-0 borde border-gray-6 bg-gray-1/80 apple-glass text-white"
+													class="inline-flex items-center justify-center size-5.5 rounded-md shrink-0 not-solarium:border not-solarium:border-gray-6 apple-glass text-white"
 													style={{
 														color: item.color,
+														background: `color-mix(in srgb, ${item.color} 10%, var(--color-gray-1) 80%)`,
 													}}
 												>
-													<div
-														class="size-full"
-														style={{
-															background: `color-mix(in srgb, ${item.color} 10%, transparent)`,
-														}}
-													>
-														<Dynamic
-															component={item.icon}
-															class="size-full p-0.5"
-														/>
-													</div>
+													<Dynamic
+														component={item.icon}
+														class="size-full p-0.5"
+													/>
 												</span>
 												<span class="truncate">{item.name}</span>
 											</A>
