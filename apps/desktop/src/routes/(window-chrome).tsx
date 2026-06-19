@@ -2,6 +2,7 @@ import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
 import { type } from "@tauri-apps/plugin-os";
 import { createMemo, type ParentProps, Show, Suspense } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
+import CaptionControlsTrafficLights from "~/components/titlebar/controls/CaptionControlsTrafficLights";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import {
 	useWindowChromeContext,
