@@ -14,7 +14,7 @@ import {
 	Show,
 } from "solid-js";
 import Tooltip from "~/components/Tooltip";
-import CaptionControlsMacOS from "~/components/titlebar/controls/CaptionControlsMacOS";
+import CaptionControlsTrafficLights from "~/components/titlebar/controls/CaptionControlsTrafficLights";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { trackEvent } from "~/utils/analytics";
 import { commands } from "~/utils/tauri";
@@ -93,7 +93,7 @@ export function Header() {
 		>
 			<div class={cx("flex flex-row flex-1 gap-2 items-center px-4 h-full")}>
 				{ostype() === "macos" && <div class="h-full w-16" />}
-				{ostype() === "linux" && <CaptionControlsMacOS class="mr-1" />}
+				{ostype() === "linux" && <CaptionControlsTrafficLights class="mr-1" />}
 				<EditorButton
 					onClick={async () => {
 						clearTimelineSelection();
@@ -267,8 +267,8 @@ const UploadIcon = (props: ComponentProps<"svg">) => {
 				stroke-linejoin="round"
 				class={cx(
 					exportState.type !== "idle" &&
-						exportState.type !== "done" &&
-						"bounce",
+					exportState.type !== "done" &&
+					"bounce",
 				)}
 			/>
 		</svg>
@@ -300,7 +300,7 @@ function NameEditor(props: { name: string }) {
 						"absolute inset-0 px-px m-0 opacity-0 overflow-hidden focus:opacity-100 bg-transparent border-b border-transparent focus:border-gray-7 focus:outline-hidden peer whitespace-pre",
 						truncated() && "truncate",
 						(prettyName().length < 5 || prettyName().length > 100) &&
-							"focus:border-red-500",
+						"focus:border-red-500",
 					)}
 					value={prettyName()}
 					onInput={(e) => setPrettyName(e.currentTarget.value)}
