@@ -117,7 +117,7 @@ use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
     CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
-    hide_overlay, set_window_transparent, show_overlay,
+    hide_overlay, show_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
