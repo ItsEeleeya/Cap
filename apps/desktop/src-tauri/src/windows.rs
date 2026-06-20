@@ -1418,7 +1418,6 @@ impl CapWindow {
                 }
 
                 let window = window_builder.build()?;
-                lock_window_text_scale(&window);
 
                 #[cfg(target_os = "linux")]
                 {
@@ -2037,7 +2036,6 @@ impl CapWindow {
                 }
 
                 let window = window_builder.build()?;
-                lock_window_text_scale(&window);
 
                 #[cfg(target_os = "linux")]
                 if let Some(bounds) = display.raw_handle().physical_bounds() {
@@ -2148,10 +2146,6 @@ impl CapWindow {
                         countdown.unwrap_or_default()
                     ))
                     .build()?;
-
-                lock_window_text_scale(&window);
-
-                lock_window_text_scale(&window);
 
                 #[cfg(target_os = "windows")]
                 log_window_content_protection(&window, should_protect, &title);
