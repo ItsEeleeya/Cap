@@ -117,7 +117,7 @@ use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
     CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
-    hide_overlay, show_overlay,
+    hide_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
@@ -4213,8 +4213,6 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             is_camera_window_open,
             seek_to,
             get_display_frame_for_cropping,
-            windows::position_traffic_lights,
-            windows::set_theme,
             windows::apply_macos_liquid_glass_background,
             global_message_dialog,
             show_window,

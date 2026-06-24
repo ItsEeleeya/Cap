@@ -2413,7 +2413,7 @@ impl CapWindow {
                 builder = builder
                     .hidden_title(true)
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_POS));
+                    .traffic_light_position(pos.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_INSET));
             } else {
                 builder = builder.decorations(false)
             }
