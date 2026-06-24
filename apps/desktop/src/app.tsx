@@ -200,7 +200,7 @@ function Inner() {
 					<Route path="/debug" component={DebugPage} />
 					<Route
 						path="/editor"
-						info={{ AUTO_SHOW_WINDOW: false }}
+						info={{ autoShow: false }}
 						component={EditorPage}
 					/>
 					<Route
@@ -210,7 +210,11 @@ function Inner() {
 					<Route path="/mode-select" component={ModeSelectPage} />
 					<Route path="/notifications" component={NotificationsPage} />
 					<Route path="/recordings-overlay" component={RecordingsOverlayPage} />
-					<Route path="/screenshot-editor" component={ScreenshotEditorPage} />
+					<Route
+						path="/screenshot-editor"
+						info={{ autoShow: false }}
+						component={ScreenshotEditorPage}
+					/>
 					<Route
 						path="/target-select-overlay"
 						component={TargetSelectOverlayPage}

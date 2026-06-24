@@ -36,8 +36,7 @@ export function AutoRevealWindowOnReady() {
 			(match) => match.route.info?.autoShow === false,
 		);
 		if (shouldDefer) return;
-		windowShown = true;
-		getCurrentWindow().show();
+		maybeShowWindow();
 	});
 
 	return null;
@@ -64,9 +63,7 @@ export function RevealWindowWithSuspense(
 	const isRouting = useIsRouting();
 
 	createEffect(() => {
-		if (windowShown || !resolved() || isRouting()) return;
-		windowShown = true;
-		getCurrentWindow().show();
+		if (resolved() || !isRouting()) maybeShowWindow();
 	});
 
 	return <Suspense fallback={props.fallback}>{resolved()}</Suspense>;
