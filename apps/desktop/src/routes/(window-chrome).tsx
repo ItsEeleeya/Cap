@@ -1,3 +1,4 @@
+import { createEventListener } from "@solid-primitives/event-listener";
 import { type RouteSectionProps, useLocation } from "@solidjs/router";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,9 +11,7 @@ import {
 	type ParentProps,
 	Suspense,
 } from "solid-js";
-
 import { AbsoluteInsetLoader } from "~/components/Loader";
-import CaptionControlsTrafficLights from "~/components/titlebar/controls/CaptionControlsTrafficLights";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { initializeTitlebar } from "~/utils/titlebar-state";
@@ -23,7 +22,7 @@ import {
 
 export default function (props: RouteSectionProps) {
 	let unlistenResize: UnlistenFn | undefined;
-	const location = useLocation();
+	onCleanup(() => unlistenResize?.());
 
 	onMount(async () => {
 		console.log("window chrome mounted");
@@ -32,28 +31,16 @@ export default function (props: RouteSectionProps) {
 		});
 	});
 
-	const handleKeyDown = (e: KeyboardEvent) => {
-		const isMac = ostype() === "macos";
-		const closeShortcut = isMac
-			? e.metaKey && e.key === "w"
-			: e.ctrlKey && e.key === "w";
+	if (ostype() !== "macos") {
+		createEventListener(window, "keydown", (e) => {
+			if (e.ctrlKey && e.key === "w") {
+				e.preventDefault();
+				getCurrentWindow().close();
+			}
+		});
+	}
 
-		if (closeShortcut) {
-			e.preventDefault();
-			getCurrentWindow().close();
-		}
-	};
-
-	onMount(() => {
-		window.addEventListener("keydown", handleKeyDown);
-	});
-
-	onCleanup(() => {
-		unlistenResize?.();
-		window.removeEventListener("keydown", handleKeyDown);
-	});
-
-	const isMacOS = ostype() === "macos";
+	const location = useLocation();
 
 	createEffect(() => {
 		void applyMacOSWindowMaterial(
@@ -68,7 +55,7 @@ export default function (props: RouteSectionProps) {
 			<div
 				class={cx(
 					"cap-window-shell flex overflow-hidden flex-col w-screen h-screen max-h-screen divide-y divide-gray-5 bg-gray-1",
-					isMacOS && "rounded-[16px]",
+					ostype() === "macos" && "rounded-[16px]",
 				)}
 			>
 				<Header />
@@ -118,13 +105,7 @@ function Header() {
 			{ctx.state()?.items}
 			{isWindows && <CaptionControlsWindows11 class="ml-auto!" />}
 			{isMacOS && !isSettings() && <div class="h-full w-[64px]" />}
-			{isLinux && (
-				<CaptionControlsTrafficLights
-					class="mr-auto! ml-3"
-					showMinimize={false}
-					showZoom={false}
-				/>
-			)}
+			{isLinux && <CaptionControlsWindows11 class="mr-auto! ml-3" />}
 		</header>
 	);
 }
