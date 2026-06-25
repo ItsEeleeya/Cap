@@ -15,7 +15,6 @@ import {
 	onCleanup,
 	onMount,
 	Show,
-	Suspense,
 } from "solid-js";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { SignInButton } from "~/components/SignInButton";

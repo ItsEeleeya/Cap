@@ -217,7 +217,11 @@ function Inner() {
 					/>
 					<Route path="/capture-area" component={CaptureAreaPage} />
 					<Route path="/debug" component={DebugPage} />
-					<Route path="/editor" component={EditorPage} />
+					<Route
+						path="/editor"
+						info={{ autoShow: false }}
+						component={EditorPage}
+					/>
 					<Route
 						path="/in-progress-recording"
 						component={InProgressRecordingPage}
@@ -225,7 +229,11 @@ function Inner() {
 					<Route path="/mode-select" component={ModeSelectPage} />
 					<Route path="/notifications" component={NotificationsPage} />
 					<Route path="/recordings-overlay" component={RecordingsOverlayPage} />
-					<Route path="/screenshot-editor" component={ScreenshotEditorPage} />
+					<Route
+						path="/screenshot-editor"
+						info={{ autoShow: false }}
+						component={ScreenshotEditorPage}
+					/>
 					<Route
 						path="/target-select-overlay"
 						component={TargetSelectOverlayPage}

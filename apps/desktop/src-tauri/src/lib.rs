@@ -117,7 +117,7 @@ use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
     CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
-    hide_overlay, set_window_transparent, show_overlay,
+    hide_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
@@ -4101,6 +4101,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             error!("Failed to initialize ffmpeg: {e}");
         })
         .ok();
+
+    // Detect the camera-preview quality profile once from total RAM. On low-RAM
+    // machines (<= 8GB) this opts the preview into a cheaper profile (smaller
+    // textures, 30fps, no background blur); higher-spec machines keep the exact
+    // current behaviour. Only the preview is affected — recording is untouched.
+    {
+        let mut system = sysinfo::System::new();
+        system.refresh_memory();
+        camera::init_preview_profile(system.total_memory());
+    }
 
     posthog::init();
 
