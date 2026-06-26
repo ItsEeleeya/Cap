@@ -23,6 +23,7 @@ import { trackEvent } from "~/utils/analytics";
 import { createSignInMutation } from "~/utils/auth";
 import { RevealWindowWithSuspense } from "~/utils/RevealWindow";
 import { commands } from "~/utils/tauri";
+import { getUpdaterCheckOptions } from "~/utils/updater";
 import {
 	apiClient,
 	getConfiguredServerUrl,
@@ -420,7 +421,7 @@ export default function Settings(props: RouteSectionProps) {
 		setIsCheckingForUpdates(true);
 
 		try {
-			const update = await check();
+			const update = await check(getUpdaterCheckOptions());
 
 			if (!update) {
 				await dialog.message(

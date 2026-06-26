@@ -303,7 +303,7 @@ function Inner() {
 			}
 			await commands.setProjectConfig(serializeProjectConfiguration(project));
 			await commands.addExistingRecordingToEditor(recordingPath);
-			await commands.deleteRecordingDirectory(recordingPath).catch(() => {});
+			await commands.deleteRecordingDirectory(recordingPath).catch(() => { });
 			toast.success("Clip added", { id: toastId });
 			window.location.reload();
 		} catch (error) {
@@ -642,7 +642,7 @@ function Inner() {
 		<Show when={!fullscreenMode()} fallback={<ExportPage />}>
 			<div class="flex flex-col flex-1 min-h-0 animate-in fade-in duration-300">
 				<Header />
-				<div class="flex overflow-y-hidden flex-col flex-1 gap-2 pb-4 w-full min-h-0 leading-5">
+				<div class="flex overflow-y-hidden flex-col flex-1 gap-2 w-full min-h-0 leading-5">
 					<div
 						ref={setLayoutRef}
 						class="flex overflow-hidden flex-col flex-1 min-h-0"
@@ -741,7 +741,7 @@ function Inner() {
 							</Show>
 						</div>
 						<div
-							class="flex-none min-h-0 px-2 pb-0.5 overflow-hidden relative"
+							class="flex-none min-h-0 px-2 overflow-hidden relative"
 							style={{ height: `${timelineHeight()}px` }}
 						>
 							<div class="h-full">
@@ -992,7 +992,7 @@ function Dialogs() {
 									Math.max(
 										Math.floor(
 											(editorState.previewTime ?? editorState.playbackTime) *
-												FPS,
+											FPS,
 										),
 										0,
 									);
