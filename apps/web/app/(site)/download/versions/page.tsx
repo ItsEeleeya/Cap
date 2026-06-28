@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 		"Download previous versions of Cap for macOS, Windows, and Linux.",
 };
 
-export const revalidate = 3600;
+export const revalidate = 60;
 
 function DownloadLinks({
 	downloads,
