@@ -581,7 +581,8 @@ async function AuthorizedContent({
 		video.transcriptionStatus !== "COMPLETE" &&
 		video.transcriptionStatus !== "PROCESSING" &&
 		video.transcriptionStatus !== "SKIPPED" &&
-		video.transcriptionStatus !== "NO_AUDIO"
+		video.transcriptionStatus !== "NO_AUDIO" &&
+		video.transcriptionStatus !== "ERROR"
 	) {
 		console.log("[ShareVideoPage] Starting transcription for video:", videoId);
 		transcribeVideo(videoId, video.owner.id, aiGenerationEnabled).catch(
@@ -843,14 +844,18 @@ async function AuthorizedContent({
 		video.orgSettings?.defaultPlaybackSpeed,
 	);
 
-	const canDownloadVideo = userId
-		? await canUserDownloadVideo({
-				userId,
-				ownerId: video.owner.id,
-				videoId,
-				orgId: video.orgId,
-			})
-		: false;
+	const isVideoDownloadReady =
+		!hasActiveUpload && video.source?.type !== "desktopSegments";
+
+	const canDownloadVideo =
+		userId && isVideoDownloadReady
+			? await canUserDownloadVideo({
+					userId,
+					ownerId: video.owner.id,
+					videoId,
+					orgId: video.orgId,
+				})
+			: false;
 
 	let videoHasEdits = false;
 	if (canDownloadVideo) {
