@@ -303,7 +303,7 @@ function Inner() {
 			}
 			await commands.setProjectConfig(serializeProjectConfiguration(project));
 			await commands.addExistingRecordingToEditor(recordingPath);
-			await commands.deleteRecordingDirectory(recordingPath).catch(() => { });
+			await commands.deleteRecordingDirectory(recordingPath).catch(() => {});
 			toast.success("Clip added", { id: toastId });
 			window.location.reload();
 		} catch (error) {
@@ -716,7 +716,7 @@ function Inner() {
 									class="flex-none flex items-center justify-center cursor-col-resize select-none group z-10"
 									style={{ width: "12px" }}
 									onMouseDown={handleSplitResizeStart}
-									aria-label="Resize transcript panel"
+									aria-label="Resize captions panel"
 									role="separator"
 									aria-orientation="vertical"
 								>
@@ -992,7 +992,7 @@ function Dialogs() {
 									Math.max(
 										Math.floor(
 											(editorState.previewTime ?? editorState.playbackTime) *
-											FPS,
+												FPS,
 										),
 										0,
 									);

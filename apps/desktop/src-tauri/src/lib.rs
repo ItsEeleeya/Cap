@@ -81,7 +81,8 @@ use scap_targets::{Display, DisplayId, WindowId, bounds::LogicalBounds};
 use screenshot_editor::{
     PendingScreenshotEditorInstances, ScreenshotEditorInstances, WindowScreenshotEditorInstance,
     create_screenshot_editor_instance, prewarm_screenshot_background, recognize_screenshot_text,
-    render_screenshot_for_export, render_screenshot_png, update_screenshot_config,
+    render_screenshot_for_export, render_screenshot_png, render_screenshot_project_for_export,
+    update_screenshot_config,
 };
 
 mod gpu_context;
@@ -113,12 +114,12 @@ use tauri_plugin_shell::ShellExt;
 use tauri_specta::Event;
 use tokio::sync::{Mutex, RwLock, oneshot, watch};
 use tracing::*;
-use upload::{create_or_get_video, upload_image, upload_video};
+use upload::{create_or_get_video, upload_screenshot_bytes, upload_screenshot_file, upload_video};
 use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
     CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
-    hide_overlay,
+    hide_overlay, show_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
@@ -531,9 +532,19 @@ async fn sync_camera_preview_sender(
 }
 
 impl App {
-    pub fn set_pending_recording(&mut self, mode: RecordingMode, target: ScreenCaptureTarget) {
+    pub fn set_pending_recording(
+        &mut self,
+        mode: RecordingMode,
+        target: ScreenCaptureTarget,
+    ) -> Result<(), String> {
+        if !matches!(self.recording_state, RecordingState::None) {
+            return Err("Recording already in progress".to_string());
+        }
+
         self.recording_state = RecordingState::Pending { mode, target };
         CurrentRecordingChanged.emit(&self.handle).ok();
+
+        Ok(())
     }
 
     pub fn set_current_recording(&mut self, actor: InProgressRecording) {
@@ -541,7 +552,39 @@ impl App {
         CurrentRecordingChanged.emit(&self.handle).ok();
     }
 
+    pub fn clear_pending_recording(&mut self) -> bool {
+        if !matches!(self.recording_state, RecordingState::Pending { .. }) {
+            return false;
+        }
+
+        self.recording_state = RecordingState::None;
+        self.was_camera_only_recording = false;
+        self.close_occluder_windows();
+        crate::windows::apply_content_protection(&self.handle, false);
+        if let Some(camera) = CapWindowId::Camera.get(&self.handle) {
+            let _ = camera.set_content_protected(false);
+        }
+        CurrentRecordingChanged.emit(&self.handle).ok();
+
+        true
+    }
+
     pub fn clear_current_recording(&mut self) -> Option<InProgressRecording> {
+        let previous = std::mem::replace(&mut self.recording_state, RecordingState::None);
+        match previous {
+            RecordingState::Active(recording) => {
+                self.close_occluder_windows();
+                crate::windows::apply_content_protection(&self.handle, false);
+                Some(recording)
+            }
+            state => {
+                self.recording_state = state;
+                None
+            }
+        }
+    }
+
+    pub fn clear_recording_state(&mut self) -> Option<InProgressRecording> {
         let previous = std::mem::replace(&mut self.recording_state, RecordingState::None);
         self.close_occluder_windows();
         crate::windows::apply_content_protection(&self.handle, false);
@@ -1033,7 +1076,7 @@ async fn set_camera_input(
                                 "Failed to initialize camera after {attempts} attempts: {e}"
                             ));
                         }
-                        warn!(
+                        debug!(
                             "Failed to set camera input (attempt {}): {}. Retrying...",
                             attempts, e
                         );
@@ -1313,7 +1356,7 @@ async fn get_devices_snapshot() -> DevicesUpdated {
         Vec::new()
     };
     let microphones = if permissions.microphone.permitted() {
-        MicrophoneFeed::list().keys().cloned().collect()
+        MicrophoneFeed::list_names()
     } else {
         Vec::new()
     };
@@ -1346,7 +1389,7 @@ fn spawn_devices_snapshot_emitter(app_handle: AppHandle) {
                 permissions.camera.permitted(),
                 permissions.microphone.permitted(),
                 || cap_camera::list_cameras().collect::<Vec<_>>(),
-                || MicrophoneFeed::list().keys().cloned().collect::<Vec<_>>(),
+                MicrophoneFeed::list_names,
             ) else {
                 break;
             };
@@ -1781,18 +1824,15 @@ pub async fn request_app_exit(app: AppHandle) {
     finalize_app_exit(&app, 0);
 }
 
-fn find_mic_by_label_or_fuzzy(
-    devices: &microphone::MicrophonesMap,
-    selected_label: &str,
-) -> Option<String> {
-    if devices.contains_key(selected_label) {
+fn find_mic_by_label_or_fuzzy(devices: &[String], selected_label: &str) -> Option<String> {
+    if devices.iter().any(|name| name == selected_label) {
         return Some(selected_label.to_string());
     }
 
     let selected_lower = selected_label.to_lowercase();
 
     devices
-        .keys()
+        .iter()
         .find(|name| {
             let name_lower = name.to_lowercase();
             name_lower.contains(&selected_lower) || selected_lower.contains(&name_lower)
@@ -1829,7 +1869,7 @@ fn spawn_microphone_watcher(app_handle: AppHandle) {
             if should_check && let Some(selected_label) = label {
                 let Some(devices) = run_while_active(
                     || app_is_exiting(&app_handle),
-                    microphone::MicrophoneFeed::list,
+                    microphone::MicrophoneFeed::list_names,
                 ) else {
                     break;
                 };
@@ -2983,7 +3023,7 @@ async fn list_audio_devices() -> Result<Vec<String>, ()> {
         return Ok(vec![]);
     }
 
-    Ok(MicrophoneFeed::list().keys().cloned().collect())
+    Ok(MicrophoneFeed::list_names())
 }
 
 #[derive(Serialize, Type, Debug, Clone)]
@@ -3094,6 +3134,7 @@ async fn upload_exported_video(
             meta.sharing = Some(SharingMeta {
                 link: uploaded_video.link.clone(),
                 id: uploaded_video.id.clone(),
+                content_hash: None,
             });
             meta.save_for_project()
                 .map_err(|e| error!("Failed to save recording meta: {e}"))
@@ -3126,6 +3167,111 @@ async fn upload_exported_video(
     }
 }
 
+fn screenshot_project_path_from_path(path: &std::path::Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|ancestor| ancestor.extension().and_then(|s| s.to_str()) == Some("cap"))
+        .map(std::path::Path::to_path_buf)
+}
+
+fn load_screenshot_project_meta(
+    path: &std::path::Path,
+) -> Result<(PathBuf, RecordingMeta), String> {
+    let project_path = screenshot_project_path_from_path(path)
+        .ok_or_else(|| format!("Could not find screenshot project for {}", path.display()))?;
+    let meta = RecordingMeta::load_for_project(&project_path)
+        .map_err(|err| format!("Failed to load screenshot metadata: {err}"))?;
+    Ok((project_path, meta))
+}
+
+fn save_screenshot_sharing(
+    project_path: &std::path::Path,
+    mut meta: RecordingMeta,
+    uploaded: &upload::UploadedItem,
+    content_hash: Option<String>,
+) -> Result<(), String> {
+    meta.sharing = Some(SharingMeta {
+        link: uploaded.link.clone(),
+        id: uploaded.id.clone(),
+        content_hash,
+    });
+    meta.save_for_project()
+        .map_err(|err| format!("Error saving project {}: {err}", project_path.display()))
+}
+
+#[derive(Serialize, Type, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ScreenshotSharingState {
+    link: String,
+    content_hash: Option<String>,
+}
+
+#[derive(Serialize, Type, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ScreenshotProjectShareState {
+    config: ProjectConfiguration,
+    sharing: Option<ScreenshotSharingState>,
+}
+
+async fn copy_screenshot_share_link(
+    clipboard: &MutableState<'_, ClipboardContext>,
+    link: String,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let _ = clipboard.write().await.set_text(link);
+    notifications::send_notification(app, notifications::NotificationType::ShareableLinkCopied);
+    Ok(())
+}
+
+fn screenshot_share_link_for_hash(
+    sharing: Option<&SharingMeta>,
+    content_hash: &str,
+) -> Option<String> {
+    let sharing = sharing?;
+    if sharing.content_hash.as_deref() == Some(content_hash) {
+        return Some(sharing.link.clone());
+    }
+    None
+}
+
+async fn upgrade_required_result(app: &AppHandle) -> UploadResult {
+    let _ = CapWindow::Upgrade.show(app).await;
+    UploadResult::UpgradeRequired
+}
+
+#[tauri::command]
+#[specta::specta]
+fn get_screenshot_project_share_state(
+    path: PathBuf,
+) -> Result<ScreenshotProjectShareState, String> {
+    let (project_path, meta) = load_screenshot_project_meta(&path)?;
+    let config = ProjectConfiguration::load(&project_path)
+        .map_err(|err| format!("Failed to load screenshot config: {err}"))?;
+    let sharing = meta.sharing.map(|sharing| ScreenshotSharingState {
+        link: sharing.link,
+        content_hash: sharing.content_hash,
+    });
+
+    Ok(ScreenshotProjectShareState { config, sharing })
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(app, clipboard))]
+async fn copy_current_screenshot_share_link(
+    app: AppHandle,
+    clipboard: MutableState<'_, ClipboardContext>,
+    project_path: PathBuf,
+    content_hash: String,
+) -> Result<Option<UploadResult>, String> {
+    let (_, meta) = load_screenshot_project_meta(&project_path)?;
+    let Some(link) = screenshot_share_link_for_hash(meta.sharing.as_ref(), &content_hash) else {
+        return Ok(None);
+    };
+
+    copy_screenshot_share_link(&clipboard, link.clone(), &app).await?;
+    Ok(Some(UploadResult::Success(link)))
+}
+
 #[tauri::command]
 #[specta::specta]
 #[instrument(skip(app, clipboard))]
@@ -3140,40 +3286,70 @@ async fn upload_screenshot(
     };
 
     if !auth.is_upgraded() {
-        CapWindow::Upgrade.show(&app).await.ok();
-        return Ok(UploadResult::UpgradeRequired);
+        return Ok(upgrade_required_result(&app).await);
     }
 
     println!("Uploading screenshot: {screenshot_path:?}");
 
-    let screenshot_dir = screenshot_path.parent().unwrap().to_path_buf();
-    let mut meta = RecordingMeta::load_for_project(&screenshot_dir).unwrap();
+    let (project_path, meta) = load_screenshot_project_meta(&screenshot_path)?;
+    if let Some(sharing) = meta.sharing.as_ref() {
+        copy_screenshot_share_link(&clipboard, sharing.link.clone(), &app).await?;
+        return Ok(UploadResult::Success(sharing.link.clone()));
+    }
 
-    let share_link = if let Some(sharing) = meta.sharing.as_ref() {
-        println!("Screenshot already uploaded, using existing link");
-        sharing.link.clone()
-    } else {
-        let uploaded = upload_image(&app, screenshot_path.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+    let uploaded = match upload_screenshot_file(&app, screenshot_path.clone(), None, None).await {
+        Ok(uploaded) => uploaded,
+        Err(AuthedApiError::InvalidAuthentication) => return Ok(UploadResult::NotAuthenticated),
+        Err(AuthedApiError::UpgradeRequired) => return Ok(upgrade_required_result(&app).await),
+        Err(e) => return Err(e.to_string()),
+    };
+    save_screenshot_sharing(&project_path, meta, &uploaded, None)?;
 
-        meta.sharing = Some(SharingMeta {
-            link: uploaded.link.clone(),
-            id: uploaded.id.clone(),
-        });
-        meta.save_for_project()
-            .map_err(|err| format!("Error saving project: {err}"))?;
+    println!("Copying to clipboard: {:?}", uploaded.link);
 
-        uploaded.link
+    copy_screenshot_share_link(&clipboard, uploaded.link.clone(), &app).await?;
+
+    Ok(UploadResult::Success(uploaded.link))
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(app, clipboard, image_bytes))]
+async fn upload_rendered_screenshot(
+    app: AppHandle,
+    clipboard: MutableState<'_, ClipboardContext>,
+    image_bytes: Vec<u8>,
+    content_type: String,
+    project_path: PathBuf,
+    content_hash: Option<String>,
+) -> Result<UploadResult, String> {
+    let Ok(Some(auth)) = AuthStore::get(&app) else {
+        AuthStore::set(&app, None).map_err(|e| e.to_string())?;
+        return Ok(UploadResult::NotAuthenticated);
     };
 
-    println!("Copying to clipboard: {share_link:?}");
+    if !auth.is_upgraded() {
+        return Ok(upgrade_required_result(&app).await);
+    }
 
-    let _ = clipboard.write().await.set_text(share_link.clone());
+    let (project_path, meta) = load_screenshot_project_meta(&project_path)?;
+    let existing_video_id = meta.sharing.as_ref().map(|sharing| sharing.id.clone());
+    let uploaded =
+        match upload_screenshot_bytes(&app, image_bytes, &content_type, existing_video_id, None)
+            .await
+        {
+            Ok(uploaded) => uploaded,
+            Err(AuthedApiError::InvalidAuthentication) => {
+                return Ok(UploadResult::NotAuthenticated);
+            }
+            Err(AuthedApiError::UpgradeRequired) => return Ok(upgrade_required_result(&app).await),
+            Err(e) => return Err(e.to_string()),
+        };
+    save_screenshot_sharing(&project_path, meta, &uploaded, content_hash)?;
 
-    notifications::send_notification(&app, notifications::NotificationType::ShareableLinkCopied);
+    copy_screenshot_share_link(&clipboard, uploaded.link.clone(), &app).await?;
 
-    Ok(UploadResult::Success(share_link))
+    Ok(UploadResult::Success(uploaded.link))
 }
 
 #[tauri::command]
@@ -4091,11 +4267,26 @@ type FilteredRegistry = tracing_subscriber::layer::Layered<
 pub type DynLoggingLayer = Box<dyn tracing_subscriber::Layer<FilteredRegistry> + Send + Sync>;
 type LoggingHandle = tracing_subscriber::reload::Handle<Option<DynLoggingLayer>, FilteredRegistry>;
 
+#[cfg(target_os = "windows")]
+fn configure_windows_graphics_recovery(previous_session_terminated_unexpectedly: bool) {
+    if previous_session_terminated_unexpectedly {
+        cap_rendering::set_force_software_wgpu_adapter(true);
+        warn!(
+            "Previous Cap session terminated unexpectedly; using Windows software graphics recovery mode for this launch"
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_windows_graphics_recovery(_previous_session_terminated_unexpectedly: bool) {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
     // Arm the unexpected-termination sentinel before anything else can crash, and
     // report any previous session that died without a clean shutdown.
-    crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
+    let previous_session_terminated_unexpectedly =
+        crash_sentinel::init(&logs_dir, env!("CARGO_PKG_VERSION"));
+    configure_windows_graphics_recovery(previous_session_terminated_unexpectedly);
 
     ffmpeg::init()
         .map_err(|e| {
@@ -4191,12 +4382,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             generate_zoom_segments_from_clicks,
             generate_keyboard_segments,
             render_screenshot_for_export,
+            render_screenshot_project_for_export,
+            get_screenshot_project_share_state,
             permissions::open_permission_settings,
             permissions::do_permissions_check,
             permissions::request_permission,
             get_devices_snapshot,
             upload_exported_video,
+            copy_current_screenshot_share_link,
             upload_screenshot,
+            upload_rendered_screenshot,
             create_screenshot_editor_instance,
             update_screenshot_config,
             prewarm_screenshot_background,
@@ -4239,6 +4434,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             captions::transcribe_audio,
             captions::save_captions,
             captions::load_captions,
+            captions::get_model_download_status,
             captions::download_whisper_model,
             captions::check_model_exists,
             captions::delete_whisper_model,
@@ -4316,11 +4512,17 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
         .typ::<cap_automation::ExportDestination>();
 
     #[cfg(debug_assertions)]
-    if let Err(err) = specta_builder.export(
-        specta_typescript::Typescript::default(),
-        "../src/utils/tauri.ts",
-    ) {
-        warn!(error = %err, "Failed to export TypeScript bindings");
+    {
+        let bindings_path = std::path::Path::new("../src/utils/tauri.ts");
+        if bindings_path.parent().is_some_and(|parent| parent.exists()) {
+            if let Err(err) =
+                specta_builder.export(specta_typescript::Typescript::default(), bindings_path)
+            {
+                warn!(error = %err, "Failed to export TypeScript bindings");
+            }
+        } else {
+            debug!("Skipping TypeScript bindings export outside source checkout");
+        }
     }
 
     let (camera_preview_state_tx, camera_preview_state_rx) =
@@ -4363,7 +4565,16 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             trace!("Single instance invoked with args {args:?}");
 
-            // This is also handled as a deeplink on some platforms (eg macOS), see deeplink_actions
+            let action_urls = args
+                .iter()
+                .filter(|arg| arg.starts_with("cap-desktop://"))
+                .filter_map(|arg| tauri::Url::parse(arg).ok())
+                .collect::<Vec<_>>();
+            if !action_urls.is_empty() {
+                deeplink_actions::handle(app, action_urls);
+                return;
+            }
+
             let Some(cap_file) = args
                 .iter()
                 .find(|arg| arg.ends_with(".cap"))
@@ -4584,6 +4795,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                 app.manage(CameraWindowOperationLock::default());
                 app.manage(AppExitState::default());
                 app.manage(MainWindowReadyState::default());
+                app.manage(deeplink_actions::DeepLinkActionExecutor::new(&app));
                 spawn_process_memory_sampler(app.clone());
 
                 app.manage(Arc::new(RwLock::new(
@@ -4965,13 +5177,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 restore_main_windows_if_no_editors(app);
                             }
                             CapWindowId::Settings => {
-                                for (label, window) in app.webview_windows() {
-                                    if let Ok(id) = CapWindowId::from_str(&label)
-                                        && let CapWindowId::Main = id {
-                                            let _ = window.show();
-                                                restore_main_window_inputs(app);
-                                    }
-                                }
+                                restore_main_and_target_select_windows(app);
 
                                 restore_camera_window(app);
 
@@ -4984,13 +5190,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                                 return;
                             }
                             CapWindowId::Upgrade | CapWindowId::ModeSelect => {
-                                for (label, window) in app.webview_windows() {
-                                    if let Ok(id) = CapWindowId::from_str(&label)
-                                        && let CapWindowId::Main = id {
-                                            let _ = window.show();
-                                                restore_main_window_inputs(app);
-                                    }
-                                }
+                                restore_main_and_target_select_windows(app);
                                 restore_camera_window(app);
                                 #[cfg(target_os = "macos")]
                                 return;
@@ -5329,6 +5529,32 @@ fn restore_main_windows_if_no_editors(app: &AppHandle) {
     }
 }
 
+fn restore_main_and_target_select_windows(app: &AppHandle) {
+    let target_select_overlays_hidden_for_restore = app
+        .try_state::<target_select_overlay::WindowFocusManager>()
+        .map(|focus_manager| focus_manager.take_overlay_restore_labels())
+        .unwrap_or_default();
+
+    for (label, window) in app.webview_windows() {
+        if let Ok(id) = CapWindowId::from_str(&label) {
+            match id {
+                CapWindowId::TargetSelectOverlay { .. } => {
+                    if window.is_visible().unwrap_or(false)
+                        || target_select_overlays_hidden_for_restore.contains(label.as_str())
+                    {
+                        show_overlay(&window);
+                    }
+                }
+                CapWindowId::Main => {
+                    let _ = window.show();
+                    restore_main_window_inputs(app);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 fn restore_main_window_inputs(app: &AppHandle) {
     let handle = app.clone();
     spawn_on_runtime(async move {
@@ -5361,22 +5587,7 @@ fn restore_camera_window(app: &AppHandle) {
 }
 
 fn close_target_select_overlays(app: &AppHandle) {
-    let focus_manager = app.try_state::<target_select_overlay::WindowFocusManager>();
-    let mut saw_overlay = false;
-
-    for (label, window) in app.webview_windows() {
-        if let Ok(CapWindowId::TargetSelectOverlay { display_id }) = CapWindowId::from_str(&label) {
-            saw_overlay = true;
-            hide_overlay(&window);
-            if let Some(focus_manager) = focus_manager.as_ref() {
-                focus_manager.destroy(&display_id, app.global_shortcut());
-            }
-        }
-    }
-
-    if !saw_overlay && let Some(focus_manager) = focus_manager {
-        focus_manager.shutdown(app);
-    }
+    target_select_overlay::close_target_select_overlay_windows(app);
 }
 
 #[cfg(target_os = "windows")]
@@ -5496,6 +5707,7 @@ async fn resume_uploads(app: AppHandle) -> Result<(), String> {
                                             meta.sharing = Some(SharingMeta {
                                                 link: uploaded_video.link.clone(),
                                                 id: uploaded_video.id.clone(),
+                                                content_hash: None,
                                             });
                                             meta.save_for_project()
                                                 .map_err(|e| error!("Failed to save recording meta: {e}"))
@@ -5954,4 +6166,39 @@ fn open_project_from_path(path: &Path, app: AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod screenshot_share_cache_tests {
+    use super::*;
+
+    fn sharing(content_hash: Option<&str>) -> SharingMeta {
+        SharingMeta {
+            id: String::from("video-id"),
+            link: String::from("https://cap.so/s/video-id"),
+            content_hash: content_hash.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn reuses_link_when_content_hash_matches() {
+        let link =
+            screenshot_share_link_for_hash(Some(&sharing(Some("hash-a"))), "hash-a").unwrap();
+
+        assert_eq!(link, "https://cap.so/s/video-id");
+    }
+
+    #[test]
+    fn does_not_reuse_link_when_content_hash_changed() {
+        let link = screenshot_share_link_for_hash(Some(&sharing(Some("hash-a"))), "hash-b");
+
+        assert!(link.is_none());
+    }
+
+    #[test]
+    fn does_not_reuse_legacy_link_without_content_hash() {
+        let link = screenshot_share_link_for_hash(Some(&sharing(None)), "hash-a");
+
+        assert!(link.is_none());
+    }
 }

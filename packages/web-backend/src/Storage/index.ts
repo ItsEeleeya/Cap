@@ -244,6 +244,7 @@ const makeS3Access = (s3: S3BucketAccess) => ({
 				Contents: result.Contents?.map((object) => ({
 					Key: object.Key,
 					Size: object.Size,
+					LastModified: object.LastModified,
 				})),
 				KeyCount: result.KeyCount,
 				IsTruncated: result.IsTruncated,
@@ -501,6 +502,7 @@ const makeGoogleDriveAccess = ({
 						.map((object) => ({
 							Key: object.objectKey,
 							Size: object.contentLength ?? undefined,
+							LastModified: object.updatedAt,
 						})),
 					KeyCount: objects.filter(
 						(object) =>
@@ -556,12 +558,14 @@ const makeGoogleDriveAccess = ({
 					},
 					tokenStore,
 				).pipe(mapStorageError);
+				const uploadBody =
+					body instanceof Uint8Array ? new Uint8Array(body).buffer : body;
 				const response = yield* Effect.tryPromise({
 					try: () =>
 						fetch(uploadUrl, {
 							method: "PUT",
 							headers: getGoogleDriveUploadHeaders(contentType, contentLength),
-							body,
+							body: uploadBody,
 						}),
 					catch: (cause) => new StorageDomain.StorageError({ cause }),
 				});
