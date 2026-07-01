@@ -28,6 +28,12 @@
 		--window-titlebar-captions-width: 0px;
 		--window-titlebar-leading-safe: 0px;
 		--window-titlebar-trailing-safe: 0px;
+
+		--window-corner-radius: 0px;
+	}
+
+	:root[data-macos-window-has-extended-radius] & {
+		--window-corner-radius: 20px;
 	}
 
 	:root:not(.sidebar-resizing):not(.sidebar-initializing) {
@@ -37,11 +43,13 @@
 	html[data-platform="macos"] {
 		--window-titlebar-captions-width: 90px;
 		--window-titlebar-height: 52px;
+		--window-corner-radius: 10px;
 	}
 	html[data-platform="windows"] {
 		--window-titlebar-captions-width: 144px;
 		--window-titlebar-height: 48px;
 		--winui-caption-width: 46px;
+		--window-corner-radius: 7px;
 	}
 
 	html[data-platform="macos"] {

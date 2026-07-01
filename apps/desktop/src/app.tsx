@@ -34,6 +34,9 @@ const SettingsGeneralPage = lazy(
 const SettingsAccountPage = lazy(
 	() => import("./routes/(window-chrome)/settings/account"),
 );
+const SettingsAppearancePage = lazy(
+	() => import("./routes/(window-chrome)/settings/appearance"),
+);
 const SettingsRecordingsPage = lazy(
 	() => import("./routes/(window-chrome)/settings/recordings"),
 );
@@ -175,6 +178,7 @@ function Inner() {
 							}}
 						>
 							<Route path="/" component={() => <Navigate href="general" />} />
+							<Route path="/appearance" component={SettingsAppearancePage} />
 							<Route path="/account" component={SettingsAccountPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
 							<Route path="/recordings" component={SettingsRecordingsPage} />

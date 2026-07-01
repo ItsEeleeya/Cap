@@ -25,6 +25,8 @@ import toast from "solid-toast";
 import themePreviewAuto from "~/assets/theme-previews/auto.jpg";
 import themePreviewDark from "~/assets/theme-previews/dark.jpg";
 import themePreviewLight from "~/assets/theme-previews/light.jpg";
+import { FlexiSegmentedControl } from "~/components/solarium/SegmentedControl";
+import { KineticSlider } from "~/components/solarium/SolariumSlider";
 import { Input } from "~/routes/editor/ui";
 import { authStore, generalSettingsStore } from "~/store";
 import { clientEnv } from "~/utils/env";
@@ -32,6 +34,7 @@ import {
 	deriveGeneralSettings,
 	type GeneralSettingsStore,
 } from "~/utils/general-settings";
+import { springs } from "~/utils/springs";
 import {
 	type Appearance,
 	type CaptureWindow,
@@ -203,6 +206,33 @@ function AppearanceSection(props: {
 				</div>
 			</SectionCard>
 		</Section>
+	);
+}
+
+function DemoSection() {
+	const [tab, setTab] = createSignal("Podcasts");
+
+	return (
+		<div class="size-full flex items-center justify-center">
+			<div class="flex flex-col gap-10 w-80 p-8">
+				<FlexiSegmentedControl
+					options={["Music", "Podcasts", "Radio"]}
+					value={tab()}
+					onChange={setTab}
+				/>
+
+				<KineticSlider
+					defaultValue={[60]}
+					kinetic={{ preset: "position-bouncy" }}
+				/>
+				<KineticSlider defaultValue={[40]} kinetic={{ preset: "subtle" }} />
+				<KineticSlider
+					defaultValue={[75]}
+					step={20}
+					kinetic={{ preset: "bouncy" }}
+				/>
+			</div>
+		</div>
 	);
 }
 
@@ -471,13 +501,19 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	return (
 		<div ref={scrollContainerRef}>
 			<SettingsPageContent>
-				<AppearanceSection
+				{/* <AppearanceSection
 					currentTheme={settings.appearance ?? "system"}
 					onThemeChange={(newAppearance) => {
 						setSettings("appearance", newAppearance);
 						commands.setAppearance(newAppearance);
 					}}
-				/>
+				/> */}
+
+				<Section title="Liquid Glass">
+					<SectionRows>
+						<DemoSection />
+					</SectionRows>
+				</Section>
 
 				{ostype === "macos" && (
 					<Section

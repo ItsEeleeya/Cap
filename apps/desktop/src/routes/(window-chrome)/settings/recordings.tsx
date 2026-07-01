@@ -199,7 +199,7 @@ export default function Recordings() {
 	};
 
 	return (
-		<div class="cap-settings-page flex relative flex-col w-full h-full custom-scroll">
+		<div class="cap-settings-page flex relative flex-col">
 			<SettingsPageContent class="max-w-none space-y-4">
 				<Section
 					title="Recordings"

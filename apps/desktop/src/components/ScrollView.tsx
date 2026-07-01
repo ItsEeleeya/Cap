@@ -203,11 +203,11 @@ function Viewport(props: ViewportProps) {
 			aria-labelledby={props["aria-labelledby"]}
 			aria-describedby={props["aria-describedby"]}
 			class={cx("absolute inset-0 scrollbar-none", props.class)}
-			classList={{ "cap-fade-mask": props.fade }}
+			classList={{ "fade-mask": props.fade }}
 			style={{
 				// Top edge
 				"--fade-top-length": `${edge().top}px`,
-				"--fade-top-start": `${edge().top * 0.7}px`,
+				"--fade-top-start": `${edge().top * 0.5}px`,
 				"--fade-top-intensity": "0.85",
 				// Bottom edge
 				"--fade-bottom-length": `${edge().bottom}px`,

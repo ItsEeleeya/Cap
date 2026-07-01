@@ -1,3 +1,16 @@
+/* 
+	Old class 						->	New class
+
+	bg-gray-1						-> bg-background
+	bg-gray-2 / bg-gray-3			-> bg-surface
+	bg-gray-4 / bg-gray-5			-> bg-surface-2
+	text-gray-12					-> text-foreground
+	text-gray-11					-> text-muted
+	border-gray-4 / border-gray-5	-> border-border
+	bg-blue-9						-> bg-accent
+	text-blue-11					-> text-accent 
+*/
+
 @import "@cap/ui-solid/main.css";
 
 @import "./easings.css";
@@ -9,8 +22,6 @@
 @custom-variant win (&:where(html[data-platform="windows"] *));
 @custom-variant macos (&:where(html[data-platform="macos"] *));
 @custom-variant linux (&:where(html[data-platform="linux"] *));
-/* @custom-variant gtk (&:where(html[data-linux-de="GTK"] *)); */
-/* @custom-variant kde (&:where(html[data-linux-de="KDE"] *)); */
 
 @custom-variant solarium (&:where(html[data-solarium="true"] *));
 @custom-variant floating-sidebar {
@@ -269,7 +280,7 @@
 			}
 
 			@variant not-floating-sidebar {
-				@apply overflow-hidden bg-white/50 dark:bg-black/50;
+				@apply overflow-hidden bg-white/50 dark:bg-gray-1;
 
 				.cap-sidebar__inner {
 					@apply size-full overflow-hidden absolute;

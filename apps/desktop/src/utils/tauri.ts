@@ -302,9 +302,6 @@ async seekTo(frameNumber: number) : Promise<null> {
 async getDisplayFrameForCropping(fps: number) : Promise<number[]> {
     return await TAURI_INVOKE("get_display_frame_for_cropping", { fps });
 },
-async getClipThumbnail(recordingSegment: number, time: number) : Promise<string> {
-    return await TAURI_INVOKE("get_clip_thumbnail", { recordingSegment, time });
-},
 async globalMessageDialog(message: string) : Promise<void> {
     await TAURI_INVOKE("global_message_dialog", { message });
 },

@@ -1,6 +1,7 @@
 import { Button } from "@cap/ui-solid";
 import { Separator } from "@kobalte/core";
 import { Show } from "solid-js";
+import GlassEffectContainer from "~/components/GlassEffectContainer";
 import { createLicenseQuery } from "~/utils/queries";
 import { useUserAccount } from "~/utils/UserAccountProvider";
 import { SectionCard } from "./Setting";
@@ -30,11 +31,9 @@ function UserAccountPage(props: { user: ReturnType<typeof useUserAccount> }) {
 	return (
 		<>
 			<div class="flex flex-col items-center justify-center p-5 gap-3">
-				<img
-					draggable={false}
-					class="size-20 rounded-full apple-glass not-solarium:border p-1 active:scale-105 transition-transform ease-(--gentle-spring) duration-200"
-					src={props.user.avatarDataUrl() ?? ""}
-				/>
+				<GlassEffectContainer class="size-20 rounded-full *:rounded-full p-1">
+					<img draggable={false} src={props.user.avatarDataUrl() ?? ""} />
+				</GlassEffectContainer>
 				<span class="inline-flex flex-col items-center">
 					<span class="text-lg font-semibold">{profile()?.name}</span>
 					<span class="text-md opacity-80">{profile()?.email}</span>

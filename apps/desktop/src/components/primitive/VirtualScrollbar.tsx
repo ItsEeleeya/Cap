@@ -496,11 +496,11 @@ export default function VirtualScrollbarPrimitive(props: Props) {
 
 				<div
 					ref={trackRef}
-					class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-full"
+					class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-full smoothed"
 					onClick={handleTrackClick}
 				>
 					<div
-						class="absolute rounded-full bg-white/30"
+						class="absolute rounded-full bg-white/30 smoothed"
 						style={thumbStyle()}
 						onPointerDown={beginDrag}
 					/>
