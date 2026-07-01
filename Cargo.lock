@@ -1347,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "cap-desktop"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -1391,6 +1391,7 @@ dependencies = [
  "kameo",
  "keyed_priority_queue",
  "lazy_static",
+ "libappindicator",
  "log",
  "lz4_flex",
  "md5",
@@ -1756,6 +1757,7 @@ dependencies = [
  "cocoa",
  "core-foundation 0.10.1",
  "core-graphics 0.24.0",
+ "coreaudio-rs",
  "cpal 0.15.3 (git+https://github.com/CapSoftware/cpal?rev=3cc779a7b4ca)",
  "device_query",
  "dhat",

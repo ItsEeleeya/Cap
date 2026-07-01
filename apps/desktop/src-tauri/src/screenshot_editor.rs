@@ -102,7 +102,7 @@ impl<'de, R: Runtime> CommandArg<'de, R> for WindowScreenshotEditorInstance {
 }
 
 impl ScreenshotEditorInstances {
-    async fn create_instance(
+    async fn create_standalone_instance(
         app_handle: &AppHandle,
         path: PathBuf,
     ) -> Result<Arc<ScreenshotEditorInstance>, String> {
@@ -266,14 +266,30 @@ impl ScreenshotEditorInstances {
             )
         } else {
             let instance = cap_rendering::create_wgpu_instance().await;
-            let adapter = instance
-                .request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::HighPerformance,
-                    force_fallback_adapter: false,
-                    compatible_surface: None,
-                })
-                .await
-                .map_err(|_| "No GPU adapter found".to_string())?;
+            let force_software_adapter = cap_rendering::force_software_wgpu_adapter();
+            let hardware_adapter = if force_software_adapter {
+                None
+            } else {
+                instance
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::HighPerformance,
+                        force_fallback_adapter: false,
+                        compatible_surface: None,
+                    })
+                    .await
+                    .ok()
+            };
+            let adapter = match hardware_adapter {
+                Some(adapter) => adapter,
+                None => instance
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::LowPower,
+                        force_fallback_adapter: true,
+                        compatible_surface: None,
+                    })
+                    .await
+                    .map_err(|_| "No GPU adapter found".to_string())?,
+            };
             let adapter_info = adapter.get_info();
             let is_software_adapter = cap_rendering::is_software_wgpu_adapter(&adapter_info);
 
@@ -501,7 +517,7 @@ impl ScreenshotEditorInstances {
                     }
                 }
 
-                let instance = Self::create_instance(window.app_handle(), path).await?;
+                let instance = Self::create_standalone_instance(window.app_handle(), path).await?;
                 entry.insert(instance.clone());
                 Ok(instance)
             }
@@ -581,7 +597,7 @@ impl PendingScreenshotEditorInstances {
         }
 
         tokio::spawn(async move {
-            let result = ScreenshotEditorInstances::create_instance(&app, path).await;
+            let result = ScreenshotEditorInstances::create_standalone_instance(&app, path).await;
             tx.send(Some(result)).ok();
         });
     }
@@ -683,6 +699,15 @@ pub struct SerializedScreenshotEditorInstance {
     pub path: PathBuf,
     pub config: Option<ProjectConfiguration>,
     pub pretty_name: String,
+    pub image_width: u32,
+    pub image_height: u32,
+}
+
+#[derive(Serialize, Type, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenshotProjectExport {
+    pub image_bytes: Vec<u8>,
+    pub config: ProjectConfiguration,
     pub image_width: u32,
     pub image_height: u32,
 }
@@ -1437,6 +1462,30 @@ pub async fn render_screenshot_for_export(
     render_screenshot_png(&instance).await
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn render_screenshot_project_for_export(
+    app: AppHandle,
+    path: PathBuf,
+) -> Result<ScreenshotProjectExport, String> {
+    let instance = ScreenshotEditorInstances::create_standalone_instance(&app, path).await?;
+    let config = instance.config_tx.borrow().config.clone();
+    let image_width = instance.image_width;
+    let image_height = instance.image_height;
+
+    let result =
+        render_screenshot_png(&instance)
+            .await
+            .map(|image_bytes| ScreenshotProjectExport {
+                image_bytes,
+                config,
+                image_width,
+                image_height,
+            });
+    instance.dispose().await;
+    result
+}
+
 pub async fn render_screenshot_png(instance: &ScreenshotEditorInstance) -> Result<Vec<u8>, String> {
     let path = instance.path.clone();
     let config = instance.config_tx.borrow().config.clone();
@@ -1505,14 +1554,30 @@ pub async fn render_screenshot_png(instance: &ScreenshotEditorInstance) -> Resul
         )
     } else {
         let instance = cap_rendering::create_wgpu_instance().await;
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: None,
-            })
-            .await
-            .map_err(|_| "No GPU adapter found".to_string())?;
+        let force_software_adapter = cap_rendering::force_software_wgpu_adapter();
+        let hardware_adapter = if force_software_adapter {
+            None
+        } else {
+            instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    force_fallback_adapter: false,
+                    compatible_surface: None,
+                })
+                .await
+                .ok()
+        };
+        let adapter = match hardware_adapter {
+            Some(adapter) => adapter,
+            None => instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    force_fallback_adapter: true,
+                    compatible_surface: None,
+                })
+                .await
+                .map_err(|_| "No GPU adapter found".to_string())?,
+        };
         let adapter_info = adapter.get_info();
         let is_software_adapter = cap_rendering::is_software_wgpu_adapter(&adapter_info);
         let (device, queue) = adapter
