@@ -7,7 +7,6 @@ use crate::general_settings::{GeneralSettingsStore, WindowPosition};
 
 #[derive(Default)]
 struct PendingState {
-    main: Option<WindowPosition>,
     camera_position: Option<(f64, f64)>,
 }
 
@@ -76,7 +75,7 @@ pub fn install(app: &AppHandle) {
             };
             let pending = persistence.take_pending();
 
-            if pending.main.is_none() && pending.camera_position.is_none() {
+            if pending.camera_position.is_none() {
                 continue;
             }
 
