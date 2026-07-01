@@ -303,7 +303,7 @@ function Inner() {
 			}
 			await commands.setProjectConfig(serializeProjectConfiguration(project));
 			await commands.addExistingRecordingToEditor(recordingPath);
-			await commands.deleteRecordingDirectory(recordingPath).catch(() => { });
+			await commands.deleteRecordingDirectory(recordingPath).catch(() => {});
 			toast.success("Clip added", { id: toastId });
 			window.location.reload();
 		} catch (error) {
@@ -992,7 +992,7 @@ function Dialogs() {
 									Math.max(
 										Math.floor(
 											(editorState.previewTime ?? editorState.playbackTime) *
-											FPS,
+												FPS,
 										),
 										0,
 									);

@@ -1349,11 +1349,11 @@ impl CapWindow {
                 }
 
                 #[cfg(target_os = "macos")]
-                window.with_nswindow_on_main({
+                window.run_on_main_thread({
                     let window = window.clone();
                     let app = app.clone();
                     let panel_activation_guard = panel_activation_guard;
-                    move |_, nswindow| {
+                    move || {
                         use crate::panel_manager::try_to_panel;
                         use objc2_app_kit::{NSWindowCollectionBehavior, NSWindowStyleMask};
                         use objc2_foundation::ns_string;

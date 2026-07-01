@@ -105,7 +105,9 @@ function Header() {
 			{ctx.state()?.items}
 			{isWindows && <CaptionControlsWindows11 class="ml-auto!" />}
 			{isMacOS && !isSettings() && <div class="h-full w-[64px]" />}
-			{isLinux && <CaptionControlsWindows11 class="mr-auto! flex-row-reverse" />}
+			{isLinux && (
+				<CaptionControlsWindows11 class="mr-auto! flex-row-reverse" />
+			)}
 		</header>
 	);
 }

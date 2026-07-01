@@ -876,8 +876,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                             if crate::import::is_supported_video_import_path(&path) {
                                 match crate::import::start_video_import(app.clone(), path).await {
                                     Ok(project_path) => {
-                                        let _ =
-                                            CapWindow::Editor { project_path }.show(&app).await;
+                                        let _ = CapWindow::Editor { project_path }.show(&app).await;
                                     }
                                     Err(e) => {
                                         tracing::error!("Failed to import video: {e}");
@@ -891,9 +890,8 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                             } else if crate::import::is_supported_image_import_path(&path) {
                                 match crate::import::start_image_import(app.clone(), path).await {
                                     Ok(path) => {
-                                        let _ = CapWindow::ScreenshotEditor { path }
-                                            .show(&app)
-                                            .await;
+                                        let _ =
+                                            CapWindow::ScreenshotEditor { path }.show(&app).await;
                                     }
                                     Err(e) => {
                                         tracing::error!("Failed to import image: {e}");

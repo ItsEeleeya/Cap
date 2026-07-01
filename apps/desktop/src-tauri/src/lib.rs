@@ -119,7 +119,7 @@ use web_api::AuthedApiError;
 use web_api::ManagerExt as WebManagerExt;
 use windows::{
     CapWindow, CapWindowId, EditorRecordingTarget, EditorWindowIds, ScreenshotEditorWindowIds,
-    hide_overlay,
+    hide_overlay, show_overlay,
 };
 
 use crate::{recording::start_recording, upload::build_video_meta};
@@ -4810,8 +4810,6 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                 app.manage(AppExitState::default());
                 app.manage(MainWindowReadyState::default());
                 app.manage(deeplink_actions::DeepLinkActionExecutor::new(&app));
-                #[cfg(target_os = "macos")]
-                install_macos_native_terminate_handler(&app);
                 spawn_process_memory_sampler(app.clone());
 
                 app.manage(Arc::new(RwLock::new(
