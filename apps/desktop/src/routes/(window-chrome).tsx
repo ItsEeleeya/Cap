@@ -2,7 +2,6 @@ import { type RouteSectionProps, useCurrentMatches } from "@solidjs/router";
 import { type } from "@tauri-apps/plugin-os";
 import { createMemo, type ParentProps, Show, Suspense } from "solid-js";
 import { AbsoluteInsetLoader } from "~/components/Loader";
-import CaptionControlsTrafficLights from "~/components/titlebar/controls/CaptionControlsTrafficLights";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import {
 	useWindowChromeContext,
@@ -83,6 +82,9 @@ function LegacyChrome(props: ParentProps) {
 						<CaptionControlsWindows11 class="ml-auto!" />
 					)}
 					{type() === "macos" && <div class="h-full w-[68px]" />}
+					{type() === "linux" && (
+						<CaptionControlsWindows11 class="mr-auto! flex-row-reverse" />
+					)}
 				</header>
 
 				<div class="cap-window-body flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
