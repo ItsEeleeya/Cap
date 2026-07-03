@@ -1703,15 +1703,7 @@ pub async fn start_recording(
     }
 
     let countdown = general_settings.and_then(|v| v.recording_countdown);
-    for (id, win) in app
-        .webview_windows()
-        .iter()
-        .filter_map(|(label, win)| CapWindowId::from_str(label).ok().map(|id| (id, win)))
-    {
-        if matches!(id, CapWindowId::TargetSelectOverlay { .. }) {
-            hide_overlay(win);
-        }
-    }
+    crate::target_select_overlay::close_target_select_overlay_windows(&app);
     let _ = CapWindow::InProgressRecording {
         countdown,
         capture_target: Some(inputs.capture_target.clone()),
@@ -2378,18 +2370,25 @@ async fn handle_spawn_failure(
     }
     .emit(app);
 
-    let mut dialog = MessageDialogBuilder::new(
-        app.dialog().clone(),
-        "An error occurred".to_string(),
-        message.clone(),
-    )
-    .kind(tauri_plugin_dialog::MessageDialogKind::Error);
+    // DeviceNotFound errors are surfaced to the user via the frontend toast; skip the
+    // blocking native dialog so the overlay stays responsive and the error isn't repeated.
+    let is_device_not_found =
+        message.contains("no longer available") || message.contains("DeviceNotFound");
 
-    if let Some(window) = CapWindowId::RecordingControls.get(app) {
-        dialog = dialog.parent(&window);
+    if !is_device_not_found {
+        let mut dialog = MessageDialogBuilder::new(
+            app.dialog().clone(),
+            "An error occurred".to_string(),
+            message.clone(),
+        )
+        .kind(tauri_plugin_dialog::MessageDialogKind::Error);
+
+        if let Some(window) = CapWindowId::RecordingControls.get(app) {
+            dialog = dialog.parent(&window);
+        }
+
+        dialog.blocking_show();
     }
-
-    dialog.blocking_show();
 
     let mut state = state_mtx.write().await;
     let _ = handle_recording_end(
@@ -3019,11 +3018,15 @@ async fn handle_recording_end(
         let _ = window.hide();
     }
 
-    // Destroy any target-select overlays that were hidden when recording started
-    // so they don't reappear when the main window comes back.
+    // Destroy any target-select overlays so they don't reappear when the main window comes back.
+    // On Windows, hide() leaves the DirectComposition transparency surface composited on screen
+    // (ghost overlay); closing the window releases the surface entirely.
     let focus_manager = handle.try_state::<crate::target_select_overlay::WindowFocusManager>();
     for (label, window) in handle.webview_windows() {
         if let Ok(CapWindowId::TargetSelectOverlay { display_id }) = CapWindowId::from_str(&label) {
+            #[cfg(windows)]
+            let _ = window.close();
+            #[cfg(not(windows))]
             hide_overlay(&window);
             if let Some(ref fm) = focus_manager {
                 fm.destroy(&display_id, handle.global_shortcut());
@@ -3415,34 +3418,27 @@ async fn handle_recording_finish(
             .map_err(|e| format!("Failed to save recording meta: {e}"))?;
     }
 
-    if let RecordingMetaInner::Studio(_) = meta_inner {
-        match GeneralSettingsStore::get(app)
-            .ok()
-            .flatten()
-            .map(|v| v.post_studio_recording_behaviour)
-            .unwrap_or(PostStudioRecordingBehaviour::OpenEditor)
-        {
-            PostStudioRecordingBehaviour::OpenEditor => {
-                let _ = CapWindow::Editor {
-                    project_path: recording_dir,
-                }
-                .show(app)
-                .await;
-            }
-            PostStudioRecordingBehaviour::ShowOverlay => {
-                let _ = CapWindow::RecordingsOverlay.show(app).await;
-
-                let app = AppHandle::clone(app);
-                tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-
-                    let _ = NewStudioRecordingAdded {
-                        path: recording_dir.clone(),
-                    }
-                    .emit(&app);
-                });
-            }
+    if let RecordingMetaInner::Instant(_) = &meta_inner {
+        let (link, id) = match instant_share {
+            Some((link, id)) => (Some(link), Some(id)),
+            None => (None, None),
         };
+        crate::automation::run_instant_recording_automations(
+            app.clone(),
+            recording_dir.clone(),
+            link,
+            id,
+        );
+    }
+
+    if let RecordingMetaInner::Studio(_) = meta_inner {
+        let duration = compute_studio_duration_secs(&recording_dir);
+        crate::automation::run_studio_recording_automations(
+            app.clone(),
+            recording_dir.clone(),
+            duration,
+        );
+        apply_post_studio_editor_behaviour(app, recording_dir, duration).await;
     }
 
     // Play sound to indicate recording has stopped

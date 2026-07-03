@@ -109,7 +109,7 @@ export function Toggle(
 			{...others}
 			checked={effectiveChecked()}
 		>
-			<KSwitch.Input class="peer absolute inset-0 cursor-pointer opacity-0" />
+			<KSwitch.Input class="peer absolute inset-0 opacity-0" />
 			<KSwitch.Control class={toggleControlStyles({ size: local.size })}>
 				<KSwitch.Thumb
 					class={toggleThumbStyles({ size: local.size })}

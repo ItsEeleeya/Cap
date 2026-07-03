@@ -87,7 +87,7 @@ function LegacyChrome(props: ParentProps) {
 					)}
 				</header>
 
-				<div class="cap-window-body flex overflow-y-hidden flex-col flex-1 animate-in fade-in">
+				<div class="cap-window-body flex overflow-hidden flex-col flex-1">
 					{props.children}
 				</div>
 			</Suspense>

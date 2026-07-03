@@ -505,7 +505,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 					currentTheme={settings.appearance ?? "system"}
 					onThemeChange={(newAppearance) => {
 						setSettings("appearance", newAppearance);
-						commands.setAppearance(newAppearance);
+						void commands.setAppearance(newAppearance).catch(console.error);
 					}}
 				/> */}
 
@@ -681,7 +681,9 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 								setSettings("recordingsPath", path);
 							}
 						} catch (e) {
-							toast.error(`Failed to choose recordings folder: ${e instanceof Error ? e.message : String(e)}`);
+							toast.error(
+								`Failed to choose recordings folder: ${e instanceof Error ? e.message : String(e)}`,
+							);
 						}
 					}}
 					onReset={async () => {
@@ -689,7 +691,9 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 							await commands.resetRecordingsFolder();
 							setSettings("recordingsPath", null);
 						} catch (e) {
-							toast.error(`Failed to reset recordings folder: ${e instanceof Error ? e.message : String(e)}`);
+							toast.error(
+								`Failed to reset recordings folder: ${e instanceof Error ? e.message : String(e)}`,
+							);
 						}
 					}}
 				/>
@@ -752,10 +756,7 @@ function StorageSection(props: {
 	const isCustom = () => props.recordingsPath !== null;
 
 	return (
-		<Section
-			title="Storage"
-			description="Where Cap saves your recordings."
-		>
+		<Section title="Storage" description="Where Cap saves your recordings.">
 			<SectionCard padded>
 				<div class="flex flex-col gap-3">
 					<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-3 border border-gray-4 min-w-0">
@@ -1167,7 +1168,7 @@ function DefaultProjectNameCard(props: {
 			<button
 				type="button"
 				title="Click to copy"
-				class="px-1.5 py-0.5 mx-0.5 font-mono text-[11px] rounded-md transition-[background-color,color,transform] duration-150 ease-out cursor-pointer bg-gray-3 hover:bg-gray-4 active:scale-95 text-gray-12"
+				class="px-1.5 py-0.5 mx-0.5 font-mono text-[11px] rounded-md transition-[background-color,color,transform] duration-150 ease-out bg-gray-3 hover:bg-gray-4 active:scale-95 text-gray-12"
 				onClick={() => commands.writeClipboardString(props.children)}
 			>
 				{props.children}

@@ -1553,17 +1553,32 @@ impl CapWindow {
             Self::Editor { .. } => {
                 hide_recording_windows(app, false);
 
-                let window = self
+                let window = match self
                     .window_builder(app, "/editor")
                     .maximizable(true)
                     .focused(true)
-                    .build()?;
+                    .build()
+                {
+                    Ok(window) => window,
+                    Err(error) => {
+                        // Don't leave the prewarmed instance (decoders, frame
+                        // websocket) orphaned if the window failed to appear.
+                        let window_label = self.id(app).label();
+                        PendingEditorInstances::get(app)
+                            .cancel_prewarm(&window_label)
+                            .await;
+                        return Err(error);
+                    }
+                };
 
                 #[cfg(windows)]
                 {
                     use tauri::LogicalSize;
                     if let Err(e) = window.set_size(LogicalSize::new(1275.0, 800.0)) {
                         warn!("Failed to set Editor window size on Windows: {}", e);
+                    }
+                    if let Err(e) = window.set_position(tauri::LogicalPosition::new(pos_x, pos_y)) {
+                        warn!("Failed to position Editor window on Windows: {}", e);
                     }
                 }
 
@@ -2523,7 +2538,13 @@ impl CapWindow {
             CapWindow::Editor { project_path } => {
                 let state = manager.state::<EditorWindowIds>();
                 let s = state.ids.lock().unwrap();
-                let id = s.iter().find(|(path, _)| path == project_path).unwrap().1;
+                let id = s
+                    .iter()
+                    .find(|(path, _)| path == project_path)
+                    .map(|(_, id)| *id)
+                    .unwrap_or_else(|| {
+                        panic!("editor window id should be registered before calling CapWindow::id ({project_path:?})")
+                    });
                 CapWindowId::Editor { id }
             }
             CapWindow::RecordingsOverlay => CapWindowId::RecordingsOverlay,
