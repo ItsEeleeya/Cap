@@ -78,13 +78,12 @@ function LegacyChrome(props: ParentProps) {
 					class="cap-window-header flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2 win:flex-row macos:flex-row-reverse"
 				>
 					{ctx.state()?.items?.()}
-					{type() === "windows" && (
+					{/* This is temporary until the re-strcture of window-chrome.
+			    		Then we'll use native captions on Windows and GTK-4 window controls on Linux */}
+					{(type() === "windows" || type() === "linux") && (
 						<CaptionControlsWindows11 class="ml-auto!" />
 					)}
 					{type() === "macos" && <div class="h-full w-[68px]" />}
-					{type() === "linux" && (
-						<CaptionControlsWindows11 class="mr-auto! flex-row-reverse" />
-					)}
 				</header>
 
 				<div class="cap-window-body flex overflow-hidden flex-col flex-1">

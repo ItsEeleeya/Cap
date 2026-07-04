@@ -22,6 +22,9 @@ use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+const PREVIEW_RENDER_MAX_ATTEMPTS: u32 = 3;
+const PREVIEW_RENDER_RETRY_DELAY_MS: u64 = 120;
+
 fn get_video_duration_fallback(path: &Path) -> Option<f64> {
     tracing::debug!("get_video_duration_fallback called for: {:?}", path);
     let input = match ffmpeg::format::input(path) {
@@ -112,6 +115,26 @@ impl EditorInstance {
         on_state_change: impl Fn(&EditorState) + Send + Sync + 'static,
         frame_cb: Box<dyn FnMut(editor::EditorFrameOutput) + Send>,
         shared_device: Option<SharedWgpuDevice>,
+    ) -> Result<Arc<Self>, String> {
+        Self::new_with_audio_output(
+            project_path,
+            on_state_change,
+            frame_cb,
+            shared_device,
+            Arc::new(crate::AudioOutput::new()),
+        )
+        .await
+    }
+
+    /// Like [`EditorInstance::new`] but with a caller-provided audio output,
+    /// letting harnesses substitute a headless sink while everything else
+    /// (decoders, renderer, playback) runs the production path.
+    pub async fn new_with_audio_output(
+        project_path: PathBuf,
+        on_state_change: impl Fn(&EditorState) + Send + Sync + 'static,
+        frame_cb: Box<dyn FnMut(editor::EditorFrameOutput) + Send>,
+        shared_device: Option<SharedWgpuDevice>,
+        audio_output: Arc<crate::AudioOutput>,
     ) -> Result<Arc<Self>, String> {
         if !project_path.exists() {
             return Err(format!("Video path {} not found!", project_path.display()));
@@ -243,16 +266,24 @@ impl EditorInstance {
         // Segment setup (decoder init + kicking off audio decodes) is
         // independent of the GPU/render setup below, so run it concurrently on
         // its own task.
+        // The env override lets headless harnesses on runners whose
+        // VideoToolbox is too slow for real-time playback fall back to the
+        // FFmpeg decoder.
+        let force_ffmpeg_for_editor = cfg!(target_os = "windows")
+            || std::env::var_os("CAP_EDITOR_FORCE_FFMPEG_DECODER").is_some();
+        if force_ffmpeg_for_editor {
+            tracing::info!("Using FFmpeg decoder for editor preview");
+        }
+
         let segments_task = tokio::spawn({
             let recording_meta = recording_meta.clone();
             let studio_meta = (**meta).clone();
-            async move { create_segments(&recording_meta, &studio_meta, false).await }
+            async move { create_segments(&recording_meta, &studio_meta, force_ffmpeg_for_editor).await }
         });
 
         // Open the session's audio output stream now (in the background) so
         // the first play press doesn't wait on the device — Bluetooth outputs
         // in particular can take seconds to wake.
-        let audio_output = Arc::new(crate::AudioOutput::new());
         let has_declared_audio = match meta.as_ref() {
             StudioRecordingMeta::SingleSegment { segment } => segment.audio.is_some(),
             StudioRecordingMeta::MultipleSegments { inner } => inner
@@ -570,29 +601,41 @@ impl EditorInstance {
                                 continue;
                             }
 
-                            if let Some(segment_frames) = segment_frames_opt {
-                                let total_duration = project
-                                    .timeline
-                                    .as_ref()
-                                    .map(|t| t.duration())
-                                    .unwrap_or(0.0);
+                            if segment_frames_opt.is_none() {
+                                warn!("Preview renderer: no frames returned for frame {}", frame_number);
+                                break;
+                            }
 
-                                let cursor_smoothing = (!project.cursor.raw).then_some(
-                                    SpringMassDamperSimulationConfig {
-                                        tension: project.cursor.tension,
-                                        mass: project.cursor.mass,
-                                        friction: project.cursor.friction,
-                                    },
-                                );
+                            let total_duration = project
+                                .timeline
+                                .as_ref()
+                                .map(|t| t.duration())
+                                .unwrap_or(0.0);
 
-                                let zoom_focus_interpolator = ZoomFocusInterpolator::new_arc(
-                                    segment_medias.cursor.clone(),
-                                    cursor_smoothing,
-                                    project.cursor.click_spring_config(),
-                                    project.screen_movement_spring,
-                                    total_duration,
-                                    project.timeline.as_ref().map(|t| t.zoom_segments.as_slice()).unwrap_or(&[]),
-                                );
+                            let cursor_smoothing = (!project.cursor.raw).then_some(
+                                SpringMassDamperSimulationConfig {
+                                    tension: project.cursor.tension,
+                                    mass: project.cursor.mass,
+                                    friction: project.cursor.friction,
+                                },
+                            );
+
+                            let zoom_focus_interpolator = ZoomFocusInterpolator::new_arc(
+                                segment_medias.cursor.clone(),
+                                cursor_smoothing,
+                                project.cursor.click_spring_config(),
+                                project.screen_movement_spring,
+                                total_duration,
+                                project.timeline.as_ref().map(|t| t.zoom_segments.as_slice()).unwrap_or(&[]),
+                            );
+
+                            let mut next_segment_frames = segment_frames_opt;
+                            let mut rendered = false;
+
+                            for attempt in 0..PREVIEW_RENDER_MAX_ATTEMPTS {
+                                let Some(segment_frames) = next_segment_frames.take() else {
+                                    break;
+                                };
 
                                 let uniforms = ProjectUniforms::new(
                                     &self.render_constants,
@@ -605,10 +648,47 @@ impl EditorInstance {
                                     total_duration,
                                     &zoom_focus_interpolator,
                                 );
-                                self.renderer
-                                    .render_frame(segment_frames, uniforms, segment_medias.cursor.clone());
-                            } else {
-                                warn!("Preview renderer: no frames returned for frame {}", frame_number);
+
+                                if self
+                                    .renderer
+                                    .render_frame_confirmed(
+                                        segment_frames,
+                                        uniforms,
+                                        segment_medias.cursor.clone(),
+                                    )
+                                    .await
+                                {
+                                    rendered = true;
+                                    break;
+                                }
+
+                                if preview_rx.has_changed().unwrap_or(false) {
+                                    break;
+                                }
+
+                                if attempt + 1 < PREVIEW_RENDER_MAX_ATTEMPTS {
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        PREVIEW_RENDER_RETRY_DELAY_MS,
+                                    ))
+                                    .await;
+                                    next_segment_frames = segment_medias
+                                        .decoders
+                                        .get_frames(
+                                            segment_time as f32,
+                                            !project.camera.hide,
+                                            true,
+                                            clip_offsets,
+                                        )
+                                        .await;
+                                }
+                            }
+
+                            if !rendered && !preview_rx.has_changed().unwrap_or(false) {
+                                warn!(
+                                    frame_number,
+                                    attempts = PREVIEW_RENDER_MAX_ATTEMPTS,
+                                    "Preview renderer: frame render failed"
+                                );
                             }
                         }
                     }

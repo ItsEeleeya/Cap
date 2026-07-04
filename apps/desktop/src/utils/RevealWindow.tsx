@@ -71,5 +71,10 @@ export function RevealWindowWithSuspense(
 export function maybeShowWindow() {
 	if (windowShown) return;
 	windowShown = true;
-	void getCurrentWindow().show();
+	void getCurrentWindow()
+		.show()
+		.catch((err) => {
+			windowShown = false;
+			console.error("getCurrentWindow().show() failed", err);
+		});
 }

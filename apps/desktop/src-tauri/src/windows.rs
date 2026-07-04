@@ -760,7 +760,7 @@ impl CapWindowId {
     pub fn traffic_lights_position(&self) -> Option<Option<LogicalPosition<f64>>> {
         match self {
             Self::Editor { .. } | Self::ScreenshotEditor { .. } => {
-                Some(Some(LogicalPosition::new(20.0, 24.0)))
+                Some(Some(LogicalPosition::new(20.0, 28.0)))
             }
             Self::Settings => Some(Some(LogicalPosition::new(20.0, 28.0))),
             Self::Camera
@@ -769,6 +769,7 @@ impl CapWindowId {
             | Self::RecordingsOverlay
             | Self::RecordingControls
             | Self::TargetSelectOverlay { .. } => None,
+            Self::Settings => Some(Some(LogicalPosition::new(22.0, 22.0))),
             _ => Some(None),
         }
     }

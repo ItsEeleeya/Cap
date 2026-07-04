@@ -118,12 +118,19 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 
 	// Single source of truth for every px<->value conversion in this file.
 	function geometry(): SliderGeometry {
-		return { minValue, maxValue, step, trackWidth: trackWidth(), pillWidth: PILL_WIDTH };
+		return {
+			minValue,
+			maxValue,
+			step,
+			trackWidth: trackWidth(),
+			pillWidth: PILL_WIDTH,
+		};
 	}
 
 	const [kobalteValue, setKobalteValue] = createSignal<number[]>(
 		(() => {
-			if (Array.isArray(sliderProps.defaultValue)) return sliderProps.defaultValue as number[];
+			if (Array.isArray(sliderProps.defaultValue))
+				return sliderProps.defaultValue as number[];
 			if (sliderProps.value !== undefined) return sliderProps.value as number[];
 			return [nearestStep(geometry(), (minValue + maxValue) / 2)];
 		})(),
@@ -134,7 +141,9 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 
 	onMount(() => {
 		if (!trackEl) return;
-		const ro = new ResizeObserver(([entry]) => setTrackWidth(entry.contentRect.width));
+		const ro = new ResizeObserver(([entry]) =>
+			setTrackWidth(entry.contentRect.width),
+		);
 		ro.observe(trackEl);
 		setTrackWidth(trackEl.clientWidth);
 		onCleanup(() => ro.disconnect());
@@ -144,7 +153,10 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 	// Fill reads this directly as a width. The pill reads it too, but only
 	// nudges it inward at render time via pillEdgeClampPx, so the two never
 	// have separate positions to keep in sync — there's only one position.
-	const posSpring = createSpring(rawCentrePx(geometry(), toT(geometry(), currentValue)), CLICK_SPRING);
+	const posSpring = createSpring(
+		rawCentrePx(geometry(), toT(geometry(), currentValue)),
+		CLICK_SPRING,
+	);
 
 	// During rubber-band this can go negative or exceed trackWidth — left
 	// unclamped on purpose (aside from the floor at 0), since the track's
@@ -154,7 +166,8 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 
 	onMount(() => {
 		const w = trackWidth();
-		if (w > 0) posSpring.snap(rawCentrePx(geometry(), toT(geometry(), currentValue)));
+		if (w > 0)
+			posSpring.snap(rawCentrePx(geometry(), toT(geometry(), currentValue)));
 	});
 
 	let isDragging = false;
@@ -248,7 +261,11 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 			pressScale.set(1.25);
 		}
 		trackEl.addEventListener("pointerdown", onCaptureDown, { capture: true });
-		onCleanup(() => trackEl?.removeEventListener("pointerdown", onCaptureDown, { capture: true }));
+		onCleanup(() =>
+			trackEl?.removeEventListener("pointerdown", onCaptureDown, {
+				capture: true,
+			}),
+		);
 	});
 
 	function handleTrackClick(e: MouseEvent) {
@@ -320,7 +337,9 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 
 						<div
 							class="absolute top-1/2 pointer-events-none"
-							style={{ transform: `translateY(-50%) translateX(${pillTranslateX()}px)` }}
+							style={{
+								transform: `translateY(-50%) translateX(${pillTranslateX()}px)`,
+							}}
 						>
 							<div style={{ width: `${PILL_WIDTH}px`, height: "18px" }}>
 								<div
@@ -335,8 +354,11 @@ export const KineticSlider: Component<KineticSliderProps> = (rawProps) => {
 										"transform-origin": "center center",
 										transform: `scale(${pressScale.value()}) scaleX(${k.scaleX()}) scaleY(${k.scaleY()})`,
 										"will-change": "transform, background-color",
-										transition: "background-color 150ms ease-out, transform 150ms ease-out",
-										"background-color": isInteracting() ? "transparent" : "var(--color-white)",
+										transition:
+											"background-color 150ms ease-out, transform 150ms ease-out",
+										"background-color": isInteracting()
+											? "transparent"
+											: "var(--color-white)",
 									}}
 								/>
 							</div>
