@@ -118,7 +118,7 @@ function Inner(props: ParentProps) {
 	// const topEdge = () => 60 + headerHeight();
 
 	return (
-		<SidebarProvider resizable>
+		<SidebarProvider>
 			<Toolbar class="fixed top-0 z-50">
 				<ToolbarSidebarSlot class="size-full rounded-xs text-sm flex items-center justify-center">
 					<div class="flex size-full p-3 items-center justify-end gap-4">
@@ -178,10 +178,10 @@ function Inner(props: ParentProps) {
 												<A
 													href={item.href}
 													activeClass="pointer-events-none font-bold text-gray-12 bg-gray-5 dark:bg-gray-1/50 text-blue-8"
-													class="rounded-full h-9.5 hover:bg-gray-7/50 focus-visible:bg-gray-7/50 text-[13px] px-3 flex flex-row items-center gap-2.5 motion-safe:transition-colors duration-100 hover:duration-0 ease-out smoothed cursor-default"
+													class="rounded-full h-9 hover:bg-gray-7/50 focus-visible:bg-gray-7/50 text-[13px] px-3 flex flex-row items-center gap-2.5 motion-safe:transition-colors duration-100 hover:duration-0 ease-out smoothed cursor-default"
 												>
 													<span
-														class="inline-flex items-center justify-center size-6 rounded-full shrink-0 not-solarium:border not-solarium:border-gray-6 text-white"
+														class="inline-flex items-center justify-center size-5.5 rounded-full shrink-0 not-solarium:border not-solarium:border-gray-6 text-white"
 														style={{
 															color: active() ? "currentcolor" : item.color,
 															// background: `color-mix(in srgb, ${item.color} 10%, var(--color-gray-1) 80%)`,
@@ -225,7 +225,7 @@ function Inner(props: ParentProps) {
 									</RevealWindowWithSuspense>
 								</div>
 							</Scroller.Viewport>
-							<Scroller.EdgeEffect to="top" size={55} blurIntensity={0.12} />
+							<Scroller.EdgeEffect to="top" size={50} blurIntensity={0.12} />
 							<Scroller.Scrollbar edges={{ top: 50, bottom: 30 }} />
 						</Scroller.Root>
 					</CapErrorBoundary>
@@ -251,7 +251,7 @@ function ProfileButton() {
 			type="button"
 			activeClass="bg-gray-10/30 pointer-events-none font-bold text-gray-12"
 			class="rounded-full hover:bg-gray-3/50 hover:duration-0 px-2 py-1.5 flex flex-row items-center gap-2.5 motion-safe:transition-colors duration-100 ease-out smoothed cursor-default"
-			// onClick={handleProfileClick}
+		// onClick={handleProfileClick}
 		>
 			<Show
 				when={user.signedIn() && user.profile()}

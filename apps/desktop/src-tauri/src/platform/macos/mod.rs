@@ -17,8 +17,7 @@ use objc2_app_kit::{
     NSWindowWillEnterFullScreenNotification,
 };
 use objc2_foundation::{
-    NSNotificationCenter, NSNumber, NSObjectNSKeyValueCoding, NSObjectProtocol, NSOperationQueue,
-    ns_string,
+    NSNotificationCenter, NSNumber, NSObjectProtocol, NSOperationQueue, ns_string,
 };
 use objc2_web_kit::{WKProcessPool, WKWebViewConfiguration};
 pub use sc_shareable_content::*;

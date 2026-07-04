@@ -25,8 +25,11 @@ import toast from "solid-toast";
 import themePreviewAuto from "~/assets/theme-previews/auto.jpg";
 import themePreviewDark from "~/assets/theme-previews/dark.jpg";
 import themePreviewLight from "~/assets/theme-previews/light.jpg";
-import { FlexiSegmentedControl } from "~/components/solarium/SegmentedControl";
-import { KineticSlider } from "~/components/solarium/SolariumSlider";
+import { FluidSurfaceDemo } from "~/components/solarium/FSDemo";
+import { KSolariumSlider } from "~/components/solarium/KSolariumSlider";
+import { KineticSlider } from "~/components/solarium/OLDSolariumSlider";
+import { SolariumSlider } from "~/components/solarium/SolariumSlider";
+import { SolariumSwitch } from "~/components/solarium/SolariumSwitch";
 import { Input } from "~/routes/editor/ui";
 import { authStore, generalSettingsStore } from "~/store";
 import { clientEnv } from "~/utils/env";
@@ -213,13 +216,39 @@ function DemoSection() {
 	const [tab, setTab] = createSignal("Podcasts");
 
 	return (
-		<div class="size-full flex items-center justify-center">
-			<div class="flex flex-col gap-10 w-80 p-8">
-				<FlexiSegmentedControl
+		<div class="size-full flex flex-col items-center justify-center">
+			<FluidSurfaceDemo />
+			<div class="flex flex-col gap-4 w-80 p-8">
+				{/* <FlexiSegmentedControl
 					options={["Music", "Podcasts", "Radio"]}
 					value={tab()}
 					onChange={setTab}
+				/> */}
+
+				{/*<KSolariumSlider defaultValue={[10]} size="lg" />*/}
+
+				<SolariumSlider defaultValue={[50]} maxValue={100} size="xl" />
+				<SolariumSlider defaultValue={[2]} maxValue={6} step={1} size="lg" />
+				<SolariumSlider
+					defaultValue={[40]}
+					kinetic={{ preset: "subtle" }}
+					size="xs"
 				/>
+				<div class="w-full flex flex-col gap-2">
+					<p class="text-xs text-gray-11 mb-2">SolariumSwitch demos</p>
+					<SolariumSwitch defaultChecked={false} size="xs" />
+					<SolariumSwitch defaultChecked={true} size="sm" />
+					<SolariumSwitch defaultChecked={true} size="md" />
+					<SolariumSwitch defaultChecked={true} size="lg" />
+					<SolariumSwitch defaultChecked={true} size="xl" />
+				</div>
+				<SolariumSlider
+					defaultValue={[75]}
+					step={20}
+					kinetic={{ preset: "bouncy" }}
+				/>
+
+				<div class="w-full h-px bg-gray-8" />
 
 				<KineticSlider
 					defaultValue={[60]}

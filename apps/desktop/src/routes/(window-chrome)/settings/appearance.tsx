@@ -7,7 +7,7 @@ import themePreviewLight from "~/assets/theme-previews/light.jpg";
 import { ElasticSurface } from "~/components/ElasticSurface";
 import { Platform } from "~/components/Platform";
 import { Scroller } from "~/components/ScrollView";
-import { KineticSlider } from "~/components/solarium/SolariumSlider";
+import { KineticSlider } from "~/components/solarium/OLDSolariumSlider";
 import { Toggle } from "~/components/Toggle";
 import { generalSettingsStore } from "~/store";
 import { deriveGeneralSettings } from "~/utils/general-settings";
@@ -145,7 +145,7 @@ export default function Appearance() {
 						label="Tint editor window backgrounds with wallpaper color"
 						description="Allows for background tinting within editor windows when this option is enabled within System Settings."
 						value={!settings.hideDockIcon}
-						onChange={(v) => {}}
+						onChange={(v) => { }}
 					/>
 				</SectionRows>
 			</Section>

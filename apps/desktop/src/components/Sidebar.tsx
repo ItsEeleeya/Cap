@@ -78,9 +78,9 @@ interface SidebarProviderProps extends ParentProps {
 
 export function SidebarProvider(props: SidebarProviderProps) {
 	const side = () => props.side ?? "left";
-	const minWidth = () => props.minWidth ?? 240;
-	const maxWidth = () => props.maxWidth ?? 480;
-	const defaultWidth = () => props.defaultWidth ?? 240;
+	const minWidth = () => props.minWidth ?? 230;
+	const maxWidth = () => props.maxWidth ?? 420;
+	const defaultWidth = () => props.defaultWidth ?? 230;
 	const collapsible = () => props.collapsible ?? false;
 	const resizable = () => props.resizable ?? false;
 	const storageKey = () => props.storageKey ?? "sidebar";
@@ -106,8 +106,8 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
 	const [persisted, setPersisted] = shouldPersist()
 		? makePersisted(createSignal(initialPersist), {
-				name: `${storageKey()}-state`,
-			})
+			name: `${storageKey()}-state`,
+		})
 		: createSignal(initialPersist);
 
 	function width() {
