@@ -22,7 +22,7 @@ use tauri::{
 };
 use tauri_specta::Event;
 use tokio::sync::RwLock;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 #[cfg(target_os = "macos")]
 use crate::{
@@ -1552,6 +1552,7 @@ impl CapWindow {
                 .inner_size(782.0, 775.0)
                 .build()?,
             Self::Editor { .. } => {
+                let open_started = std::time::Instant::now();
                 hide_recording_windows(app, false);
 
                 let window = match self
