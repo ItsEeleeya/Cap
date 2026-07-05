@@ -234,13 +234,36 @@ function DemoSection() {
 					kinetic={{ preset: "subtle" }}
 					size="xs"
 				/>
+				<div class="bg-blue-10 h-30 w-80 self-center smoothed rounded-full flex items-center justify-center">
+					Cap, now with Squircles
+				</div>
 				<div class="w-full flex flex-col gap-2">
 					<p class="text-xs text-gray-11 mb-2">SolariumSwitch demos</p>
-					<SolariumSwitch defaultChecked={false} size="xs" />
-					<SolariumSwitch defaultChecked={true} size="sm" />
-					<SolariumSwitch defaultChecked={true} size="md" />
-					<SolariumSwitch defaultChecked={true} size="lg" />
-					<SolariumSwitch defaultChecked={true} size="xl" />
+					<SolariumSwitch
+						defaultChecked={false}
+						size="xs"
+						differentiateWithoutColor
+					/>
+					<SolariumSwitch
+						defaultChecked={true}
+						size="sm"
+						differentiateWithoutColor
+					/>
+					<SolariumSwitch
+						defaultChecked={true}
+						size="md"
+						differentiateWithoutColor
+					/>
+					<SolariumSwitch
+						defaultChecked={true}
+						size="lg"
+						differentiateWithoutColor
+					/>
+					<SolariumSwitch
+						defaultChecked={true}
+						size="xl"
+						differentiateWithoutColor
+					/>
 				</div>
 				<SolariumSlider
 					defaultValue={[75]}
