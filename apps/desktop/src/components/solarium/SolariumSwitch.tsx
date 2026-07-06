@@ -302,7 +302,6 @@ export const SolariumSwitch: Component<SwitchProps> = (rawProps) => {
 	createEffect(() => {
 		pressScale.set(pressed() || isInteracting() ? 1.5 : 1);
 	});
-	onCleanup(() => pressScale.destroy());
 
 	let trackEl: HTMLButtonElement | undefined;
 
