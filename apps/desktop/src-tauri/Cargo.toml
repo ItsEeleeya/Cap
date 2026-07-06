@@ -2,8 +2,9 @@
 name = "cap-desktop"
 version = "0.5.4"
 description = "Beautiful screen recordings, owned by you."
-authors = ["you"]
+authors = ["Richie McIlroy <richie@cap.so>"]
 edition = "2024"
+license = "AGPL-3.0-only"
 
 [lints]
 workspace = true
