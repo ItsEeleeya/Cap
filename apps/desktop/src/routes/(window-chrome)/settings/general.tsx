@@ -228,6 +228,7 @@ function DemoSection() {
 				{/*<KSolariumSlider defaultValue={[10]} size="lg" />*/}
 
 				<SolariumSlider defaultValue={[50]} maxValue={100} size="xl" />
+
 				<SolariumSlider defaultValue={[2]} maxValue={6} step={1} size="lg" />
 				<SolariumSlider
 					defaultValue={[40]}

@@ -168,7 +168,7 @@ const COMMIT_SPRING = { k: 420, d: 30 };
 // only gate when the next phase's LOGIC runs, not when the scale spring
 // visually completes.
 const SCALE_UP_MS = 100;
-const SLIDE_MS = 150;
+const SLIDE_MS = 80;
 const SCALE_DOWN_MS = 100;
 
 function clampValue(v: number, min: number, max: number) {

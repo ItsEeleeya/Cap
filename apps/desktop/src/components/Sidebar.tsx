@@ -106,8 +106,8 @@ export function SidebarProvider(props: SidebarProviderProps) {
 
 	const [persisted, setPersisted] = shouldPersist()
 		? makePersisted(createSignal(initialPersist), {
-			name: `${storageKey()}-state`,
-		})
+				name: `${storageKey()}-state`,
+			})
 		: createSignal(initialPersist);
 
 	function width() {

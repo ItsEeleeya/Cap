@@ -1,4 +1,4 @@
-/* 
+/*
 	Old class 						->	New class
 
 	bg-gray-1						-> bg-background
@@ -8,7 +8,7 @@
 	text-gray-11					-> text-muted
 	border-gray-4 / border-gray-5	-> border-border
 	bg-blue-9						-> bg-accent
-	text-blue-11					-> text-accent 
+	text-blue-11					-> text-accent
 */
 
 @import "@cap/ui-solid/main.css";
