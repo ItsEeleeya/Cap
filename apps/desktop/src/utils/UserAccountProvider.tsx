@@ -19,7 +19,6 @@ import {
 	getConfiguredServerUrl,
 	protectedHeaders,
 } from "~/utils/web-api";
-import { commands } from "./tauri";
 
 const USER_PROFILE_CACHE_GC_MS = 2 * 60 * 60 * 1000;
 const USER_PROFILE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
