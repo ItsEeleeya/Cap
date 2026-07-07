@@ -5,7 +5,6 @@ import { getVersion } from "@tauri-apps/api/app";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import * as shell from "@tauri-apps/plugin-shell";
-import { check } from "@tauri-apps/plugin-updater";
 import {
 	createEffect,
 	createMemo,
@@ -15,6 +14,7 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 } from "solid-js";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
 import { SignInButton } from "~/components/SignInButton";
@@ -23,7 +23,6 @@ import { trackEvent } from "~/utils/analytics";
 import { createSignInMutation } from "~/utils/auth";
 import { RevealWindowWithSuspense } from "~/utils/RevealWindow";
 import { commands } from "~/utils/tauri";
-import { getUpdaterCheckOptions } from "~/utils/updater";
 import {
 	apiClient,
 	getConfiguredServerUrl,
@@ -171,13 +170,9 @@ export default function Settings(props: RouteSectionProps) {
 				return null;
 			}
 
-			commands.log("before response");
-
 			const response = await apiClient.desktop.getUserProfile({
 				headers: await protectedHeaders(),
 			});
-
-			commands.log("before clear");
 
 			if (response.status === 401) {
 				await clearLocalAuth();
@@ -303,12 +298,6 @@ export default function Settings(props: RouteSectionProps) {
 		void userProfile.refetch();
 	};
 
-	createEffect(async () => {
-		commands.log(
-			`fetch ${auth()?.user_id} ${JSON.stringify(userProfile.data)} ${await getConfiguredServerUrl()}`,
-		);
-	});
-
 	createEffect(
 		on(accountRemoteImageUrl, (imageUrl) => {
 			setProfileImageObjectUrl(null);
@@ -421,7 +410,7 @@ export default function Settings(props: RouteSectionProps) {
 		setIsCheckingForUpdates(true);
 
 		try {
-			const update = await check(getUpdaterCheckOptions());
+			const update = await commands.updatesCheck();
 
 			if (!update) {
 				await dialog.message(
