@@ -3,7 +3,7 @@ import { createEventListener } from "@solid-primitives/event-listener";
 import { createElementSize } from "@solid-primitives/resize-observer";
 import { makePersisted } from "@solid-primitives/storage";
 import { useSearchParams } from "@solidjs/router";
-import { createMutation, useQuery } from "@tanstack/solid-query";
+import { useMutation, useQuery } from "@tanstack/solid-query";
 import {
 	LogicalPosition,
 	type PhysicalPosition,
@@ -14,7 +14,7 @@ import {
 	CheckMenuItem,
 	Menu,
 	MenuItem,
-	PredefinedMenuItem,
+	type PredefinedMenuItemOptions,
 } from "@tauri-apps/api/menu";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { type as ostype } from "@tauri-apps/plugin-os";
@@ -78,6 +78,7 @@ import {
 	type ScreenCaptureTarget,
 	type TargetUnderCursor,
 } from "~/utils/tauri";
+import { usePrefersReducedMotion } from "~/utils/use-media-query";
 import { CameraSelectBase } from "./(window-chrome)/new-main/CameraSelect";
 import InfoPill from "./(window-chrome)/new-main/InfoPill";
 import { MicrophoneSelectBase } from "./(window-chrome)/new-main/MicrophoneSelect";
@@ -231,10 +232,24 @@ function Inner() {
 		enabled: params.displayId !== undefined && options.targetMode === "display",
 	}));
 
+	const [lastSelectedCropArea, setLastSelectedCropArea] = makePersisted(
+		createStore<{ screen: DisplayId; bounds: CropBounds }[]>([]),
+		{ name: "capture-area" },
+	);
+
 	const [crop, setCrop] = createSignal<CropBounds>(CROP_ZERO);
+
 	type AreaTarget = Extract<ScreenCaptureTarget, { variant: "area" }>;
 	const [pendingAreaTarget, setPendingAreaTarget] =
 		createSignal<AreaTarget | null>(null);
+
+	const createInitialBounds = () => {
+		const target = options.captureTarget;
+		if (target.variant !== "area") return;
+		return lastSelectedCropArea.find((last) => last.screen === target.screen)
+			?.bounds;
+	};
+
 	const [initialAreaBounds, setInitialAreaBounds] = createSignal<
 		CropBounds | undefined
 	>(undefined);
@@ -290,6 +305,11 @@ function Inner() {
 				setPendingAreaTarget(null);
 				setInitialAreaBounds(undefined);
 			}
+
+			if (!prevMode && mode === "area") {
+				setInitialAreaBounds(createInitialBounds());
+			}
+
 			return mode;
 		},
 	);
@@ -940,11 +960,29 @@ function Inner() {
 								bounds.y + bounds.height - newHeight - padding,
 							);
 
+							// The command applies these as raw device pixels. On Windows
+							// that means converting with the scale of the display the
+							// target rect is on (the overlay's display) — the camera
+							// window's own scale is wrong when it starts on a monitor
+							// with different DPI. On macOS physical coordinates are
+							// interpreted relative to the camera window's scale, so its
+							// own factor is the correct (self-canceling) one, and on
+							// Linux scap reports logical == physical so the display
+							// ratio would collapse to 1 and lose the window scale.
+							const targetScale = (() => {
+								if (ostype() !== "windows") return scaleFactor;
+								const physicalWidth = displayInfo?.physical_size?.width;
+								const logicalWidth = displayInfo?.logical_size?.width;
+								return physicalWidth && logicalWidth && logicalWidth > 0
+									? physicalWidth / logicalWidth
+									: scaleFactor;
+							})();
+
 							setTargetState({
-								x: (newX + displayOriginX) * scaleFactor,
-								y: (newY + displayOriginY) * scaleFactor,
-								width: newWidth * scaleFactor,
-								height: newHeight * scaleFactor,
+								x: (newX + displayOriginX) * targetScale,
+								y: (newY + displayOriginY) * targetScale,
+								width: newWidth * targetScale,
+								height: newHeight * targetScale,
 							});
 						}
 					});
@@ -975,24 +1013,47 @@ function Inner() {
 						e.preventDefault();
 						e.stopPropagation();
 						const items = [
-							{
-								text: "Reset selection",
-								action: () => {
-									cropperRef?.reset();
-									setAspect(null);
-									setPendingAreaTarget(null);
-									revertCamera();
-								},
-							},
-							await PredefinedMenuItem.new({
-								item: "Separator",
-							}),
 							...createCropOptionsMenuItems({
 								aspect: aspect(),
 								snapToRatioEnabled: snapToRatioEnabled(),
 								onAspectSet: setAspect,
 								onSnapToRatioSet: setSnapToRatioEnabled,
 							}),
+							{
+								item: "Separator",
+							} satisfies PredefinedMenuItemOptions,
+							{
+								text: "Reset saved selection",
+								action: () => {
+									cropperRef?.reset();
+									setAspect(null);
+									setPendingAreaTarget(null);
+									revertCamera();
+
+									const target = options.captureTarget;
+									if (target.variant === "area") {
+										setLastSelectedCropArea((values) =>
+											values.filter((v) => v.screen !== target.screen),
+										);
+									}
+									setInitialAreaBounds(undefined);
+								},
+							},
+							{
+								text: "Reset all saved selections",
+								action: () => {
+									cropperRef?.reset();
+									setAspect(null);
+									setPendingAreaTarget(null);
+									revertCamera();
+
+									const target = options.captureTarget;
+									if (target.variant === "area") {
+										setLastSelectedCropArea([]);
+									}
+									setInitialAreaBounds(undefined);
+								},
+							},
 						];
 						const menu = await Menu.new({ items });
 						await menu.popup();
@@ -1023,16 +1084,18 @@ function Inner() {
 						if (raf) cancelAnimationFrame(raf);
 					});
 
-					const controlsStyle = createMemo(() => {
-						const bounds = crop();
+					const onCropperFrame = (bounds: CropBounds) => {
+						if (!controlsEl) return;
 						const size = controlsSize;
-						if (!size?.width || !size?.height) return undefined;
+						if (!size?.width || !size?.height) return;
 
 						if (size.width === 0 || bounds.width === 0) {
-							return { transform: "translate(-1000px, -1000px)" }; // Hide off-screen initially
+							controlsEl.style.transform = "translate(-1000px, -1000px)"; // Hide off-screen initially
 						}
 
-						const centerX = bounds.x + bounds.width / 2;
+						const centerX =
+							Math.round(bounds.x + bounds.width / 2 - size.width / 2) +
+							size.width / 2;
 						let finalY: number;
 
 						// Try below the crop
@@ -1053,18 +1116,18 @@ function Inner() {
 							}
 						}
 
-						const finalX = Math.max(
-							SIDE_MARGIN,
-							Math.min(
-								centerX - size.width / 2,
-								window.innerWidth - size.width - SIDE_MARGIN,
+						const finalX = Math.round(
+							Math.max(
+								SIDE_MARGIN,
+								Math.min(
+									centerX - size.width / 2,
+									window.innerWidth - size.width - SIDE_MARGIN,
+								),
 							),
 						);
 
-						return {
-							transform: `translate(${finalX}px, ${finalY}px)`,
-						};
-					});
+						controlsEl.style.transform = `translate(${finalX}px, ${finalY}px)`;
+					};
 
 					createEffect(() => {
 						if (isInteracting()) return;
@@ -1147,6 +1210,8 @@ function Inner() {
 						}
 					});
 
+					const reducedMotion = usePrefersReducedMotion();
+
 					return (
 						<div
 							class="fixed w-screen h-screen"
@@ -1156,8 +1221,15 @@ function Inner() {
 						>
 							<div
 								ref={controlsEl}
-								class="fixed z-50 transition-opacity"
-								style={controlsStyle()}
+								style={{ transform: "translate(-1000px, -1000px)" }}
+								class="fixed z-50"
+								classList={{
+									"opacity-0 blur-sm": isInteracting(),
+									"opacity-100 blur-none": !isInteracting(),
+									"transition-[opacity,filter] duration-200 cubic-bezier(0.34, 1.56, 0.64, 1)":
+										!reducedMotion(),
+									hidden: shouldShowSelectionHint(),
+								}}
 							>
 								<div class="flex flex-col items-center">
 									<Show when={options.mode !== "screenshot"}>
@@ -1181,6 +1253,25 @@ function Inner() {
 											onRecordingStart={() => {
 												setOriginalCameraBounds(null);
 												dismissPickerForRecordingStart();
+
+												const target = options.captureTarget;
+												if (target.variant === "area") {
+													const existingIndex = lastSelectedCropArea?.findIndex(
+														(item) => item.screen === target.screen,
+													);
+
+													if (existingIndex >= 0) {
+														setLastSelectedCropArea(existingIndex, {
+															screen: target.screen,
+															bounds: crop(),
+														});
+													} else {
+														setLastSelectedCropArea([
+															...lastSelectedCropArea,
+															{ screen: target.screen, bounds: crop() },
+														]);
+													}
+												}
 											}}
 											onClose={() => {
 												setOptions({
@@ -1223,6 +1314,9 @@ function Inner() {
 								aspectRatio={aspect() ?? undefined}
 								snapToRatioEnabled={snapToRatioEnabled()}
 								onContextMenu={(e) => showCropOptionsMenu(e)}
+								enableAnimation={!shouldShowSelectionHint()}
+								hideSelection={shouldShowSelectionHint()}
+								onAnimationFrame={onCropperFrame}
 							/>
 						</div>
 					);
@@ -1597,7 +1691,7 @@ function RecordingControls(props: {
 	const cameras = createMemo(() => devices.data?.cameras ?? []);
 	const mics = createMemo(() => devices.data?.microphones ?? []);
 	const permissions = createMemo(() => devices.data?.permissions);
-	const setMicInput = createMutation(() => ({
+	const setMicInput = useMutation(() => ({
 		mutationFn: async (name: string | null) => {
 			const previous = rawOptions.micName ?? null;
 			if (previous !== name) setOptions("micName", name);
@@ -1724,7 +1818,7 @@ function RecordingControls(props: {
 	return (
 		<>
 			<div class="flex flex-col gap-2.5 items-stretch my-2.5 w-104 max-w-[90vw]">
-				<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
+				<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg contrast-more:bg-gray-1!">
 					<div class="flex gap-2.5 items-center">
 						<div
 							onClick={() => {
@@ -1901,7 +1995,7 @@ function RecordingControls(props: {
 					</div>
 				</div>
 				<Show when={(rawOptions.mode as string) !== "screenshot"}>
-					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg backdrop-blur-xl">
+					<div class="p-3 rounded-2xl border border-white/30 dark:border-white/10 bg-white/70 dark:bg-gray-2/70 shadow-lg contrast-more:bg-gray-2!">
 						<div class="grid grid-cols-2 gap-2 w-full">
 							<CameraSelectBase
 								disabled={devices.isPending}
@@ -1942,22 +2036,20 @@ function RecordingControls(props: {
 					</div>
 				</Show>
 			</div>
-			<div class="flex justify-center items-center w-full">
-				<div
-					onClick={() => props.setToggleModeSelect?.(true)}
-					class="flex gap-1 justify-center items-center self-center mb-5 transition-opacity duration-200 w-fit hover:opacity-60"
-					classList={{
-						"bg-black/50 p-2 rounded-lg border border-white/10 hover:bg-black/50 hover:opacity-80":
-							props.showBackground,
-						"hover:opacity-60": !props.showBackground,
-					}}
-				>
-					<IconCapInfo class="opacity-70 will-change-transform size-3" />
-					<p class="text-sm text-white drop-shadow-md">
-						<span class="opacity-70">What is </span>
-						<span class="font-medium">{capitalize(rawOptions.mode)} Mode</span>?
-					</p>
-				</div>
+			<div
+				onClick={() => props.setToggleModeSelect?.(true)}
+				class="flex gap-1 justify-center items-center self-center mb-5 motion-safe:transition-opacity duration-200 w-fit hover:opacity-60 contrast-more:hover:opacity-100"
+				classList={{
+					"bg-black/50 p-2 rounded-lg border border-white/10 hover:bg-black/50 hover:opacity-80 contrast-more:border-white! contrast-more:bg-black!":
+						props.showBackground,
+					"hover:opacity-60": !props.showBackground,
+				}}
+			>
+				<IconCapInfo class="opacity-70 will-change-transform size-3 contrast-more:opacity-100" />
+				<p class="text-sm text-white drop-shadow-md contrast-more:drop-shadow-none">
+					<span class="opacity-70 contrast-more:opacity-100">What is </span>
+					<span class="font-medium">{capitalize(rawOptions.mode)} Mode</span>?
+				</p>
 			</div>
 		</>
 	);

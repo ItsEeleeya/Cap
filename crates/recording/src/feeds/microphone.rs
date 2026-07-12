@@ -17,7 +17,7 @@ use std::{
     ops::Deref,
     sync::{
         Arc, Weak,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, SyncSender},
     },
     time::{Duration, Instant},
@@ -697,6 +697,24 @@ impl MicrophoneFeed {
                     CallbackSampleRateEstimator::new(callback_sample_rate);
                 let mut pending_samples = VecDeque::new();
 
+                let latency_info = estimate_input_latency(
+                    callback_sample_rate,
+                    buffer_size_frames.unwrap_or(1024),
+                    Some(&label),
+                );
+                let capture_latency = Duration::from_secs_f64(
+                    latency_info
+                        .device_latency_secs
+                        .clamp(0.0, MAX_CAPTURE_LATENCY_COMPENSATION_SECS),
+                );
+                if !capture_latency.is_zero() {
+                    info!(
+                        "🎤 Compensating capture timestamps by {:.1}ms input pipeline latency (transport: {:?})",
+                        capture_latency.as_secs_f64() * 1000.0,
+                        latency_info.transport
+                    );
+                }
+
                 let stream = match device.build_input_stream_raw(
                     &stream_config,
                     sample_format,
@@ -730,7 +748,8 @@ impl MicrophoneFeed {
                                 sample_rate: effective_sample_rate.sample_rate,
                                 channels: callback_channels,
                                 info: info.clone(),
-                                timestamp: Timestamp::from_cpal(input_timestamp.capture),
+                                timestamp: Timestamp::from_cpal(input_timestamp.capture)
+                                    - capture_latency,
                             };
 
                             if !effective_sample_rate.settled {
@@ -914,6 +933,14 @@ const WIRELESS_TARGET_LATENCY_MS: u32 = 80;
 const WIRELESS_MIN_LATENCY_MS: u32 = 50;
 const WIRELESS_MAX_LATENCY_MS: u32 = 200;
 
+// The cpal capture timestamp (mHostTime / QPC) marks when samples left the
+// audio HAL, not when the sound reached the microphone. The gap between the
+// two is the input pipeline latency (device latency + safety offset + stream
+// latency), which otherwise lands in the recording as the mic track running
+// late relative to video. Buffer latency is deliberately excluded: the
+// callback timestamp already refers to the first frame of the buffer.
+const MAX_CAPTURE_LATENCY_COMPENSATION_SECS: f64 = 0.5;
+
 fn stream_config_with_latency(
     config: &SupportedStreamConfig,
     device_name: Option<&str>,
@@ -984,6 +1011,11 @@ pub struct MicrophoneFeedLock {
     buffer_size_frames: Option<u32>,
     drop_tx: Option<oneshot::Sender<()>>,
     device_name: String,
+    // Recording-scoped mute. The stream keeps flowing at its normal cadence —
+    // the recording source zeroes sample payloads while this is set — so
+    // timestamps, resampler state, and the muxer timeline are untouched by
+    // muting. A fresh lock (i.e. every new recording) always starts unmuted.
+    recording_muted: Arc<AtomicBool>,
     _token: Arc<()>,
 }
 
@@ -1006,6 +1038,18 @@ impl MicrophoneFeedLock {
 
     pub async fn dropped_message_count(&self) -> u64 {
         self.actor.ask(GetDroppedMessageCount).await.unwrap_or(0)
+    }
+
+    pub fn set_recording_muted(&self, muted: bool) {
+        self.recording_muted.store(muted, Ordering::Relaxed);
+    }
+
+    pub fn is_recording_muted(&self) -> bool {
+        self.recording_muted.load(Ordering::Relaxed)
+    }
+
+    pub fn recording_muted_handle(&self) -> Arc<AtomicBool> {
+        self.recording_muted.clone()
     }
 }
 
@@ -1454,6 +1498,7 @@ impl Message<Lock> for MicrophoneFeed {
             buffer_size_frames,
             drop_tx: Some(drop_tx),
             device_name,
+            recording_muted: Arc::new(AtomicBool::new(false)),
             _token: token,
         })
     }

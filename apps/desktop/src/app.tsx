@@ -7,7 +7,7 @@ import {
 } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { message } from "@tauri-apps/plugin-dialog";
-import { lazy, onMount, Suspense } from "solid-js";
+import { createEffect, lazy, onMount, Suspense } from "solid-js";
 import { Toaster } from "solid-toast";
 
 import "@cap/ui-solid/main.css";
@@ -20,6 +20,7 @@ import SettingsLayout from "./routes/(window-chrome)/new-settings";
 import { initAnonymousUser } from "./utils/analytics";
 import { AutoRevealWindowOnReady } from "./utils/RevealWindow";
 import titlebar from "./utils/titlebar-state";
+import { usePrefersDarkMode } from "./utils/use-media-query";
 
 if (import.meta.env.TAURI_ENV_PLATFORM === "darwin") {
 	import("~/styles/solarium.css");
@@ -85,7 +86,6 @@ const OnboardingPage = lazy(
 const UpgradePage = lazy(() => import("./routes/(window-chrome)/upgrade"));
 const UpdatePage = lazy(() => import("./routes/(window-chrome)/update"));
 const CameraPage = lazy(() => import("./routes/camera"));
-const CaptureAreaPage = lazy(() => import("./routes/capture-area"));
 const DebugPage = lazy(() => import("./routes/debug"));
 const EditorPage = lazy(() => import("./routes/editor"));
 const InProgressRecordingPage = lazy(
@@ -127,11 +127,11 @@ export default function App() {
 }
 
 function Inner() {
-	const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
-	const apply = () =>
-		document.documentElement.classList.toggle("dark", prefersDark.matches);
-	apply();
-	createEventListener(prefersDark, "change", apply);
+	const prefersDark = usePrefersDarkMode();
+
+	createEffect(() =>
+		document.documentElement.classList.toggle("dark", prefersDark()),
+	);
 
 	onMount(() => {
 		initAnonymousUser();
@@ -220,7 +220,6 @@ function Inner() {
 						component={CameraPage}
 						info={{ autoShow: false }}
 					/>
-					<Route path="/capture-area" component={CaptureAreaPage} />
 					<Route path="/debug" component={DebugPage} />
 					<Route path="/editor" component={EditorPage} />
 					<Route
