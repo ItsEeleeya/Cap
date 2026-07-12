@@ -85,11 +85,11 @@ import type { KineticConfig } from "./kinetic";
 export type SolariumSliderSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 const SIZE_FONT_SIZE_PX: Record<SolariumSliderSize, number> = {
-	xs: 12,
+	xs: 10,
 	sm: 14,
-	md: 16,
-	lg: 18,
-	xl: 24,
+	md: 18,
+	lg: 22,
+	xl: 28,
 };
 
 // md (16px font) × 1.5 = 24px, matching the slider's original fixed thumb size.
@@ -187,7 +187,6 @@ function quantizeToStep(
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 export interface SolariumSliderProps extends SliderRootProps {
-	kinetic?: KineticConfig;
 	class?: string;
 	/** Thumb size, on a font-size-like scale. Affects only the thumb. @default "md" */
 	size?: SolariumSliderSize;
@@ -215,11 +214,7 @@ export const SolariumSlider: Component<SolariumSliderProps> = (props) => {
 // ─── Plain fallback (2+ values) ───────────────────────────────────────────────
 
 const PlainSolariumSlider: Component<SolariumSliderProps> = (rawProps) => {
-	const [local, sliderProps] = splitProps(rawProps, [
-		"kinetic",
-		"class",
-		"size",
-	]);
+	const [local, sliderProps] = splitProps(rawProps, ["class", "size"]);
 	return (
 		<Slider {...sliderProps} class={`relative w-full ${local.class ?? ""}`}>
 			<Slider.Track class="relative flex items-center h-6 w-full">
@@ -246,7 +241,6 @@ const PlainSolariumSlider: Component<SolariumSliderProps> = (rawProps) => {
 
 const SimpleSolariumSlider: Component<SolariumSliderProps> = (rawProps) => {
 	const [local, sliderProps] = splitProps(rawProps, [
-		"kinetic",
 		"class",
 		"onChange",
 		"onChangeEnd",
@@ -532,7 +526,7 @@ const SimpleSolariumSlider: Component<SolariumSliderProps> = (rawProps) => {
 	}
 
 	return (
-		<div class={`select-none w-full ${local.class ?? ""}`}>
+		<div class={`select-none ${local.class ?? ""}`}>
 			<Slider
 				{...sliderProps}
 				// Always controlled, even when the consumer didn't pass `value`
@@ -559,7 +553,7 @@ const SimpleSolariumSlider: Component<SolariumSliderProps> = (rawProps) => {
 							animate={pillAnimate()}
 							size={pillWidth()}
 							axis="x"
-							kinetic={local.kinetic}
+							kinetic={{ preset: "default" }}
 							pulseId={stepPulseId()}
 							pulseVelocity={stepPulseVelocity()}
 						>

@@ -1,7 +1,12 @@
+import {
+	createEventListener,
+	createEventListenerMap,
+} from "@solid-primitives/event-listener";
 import { createDerivedSpring } from "@solid-primitives/spring";
 import { createTween } from "@solid-primitives/tween";
-import type { ComponentProps } from "solid-js";
-import { createSignal, onCleanup, splitProps } from "solid-js";
+import type { ComponentProps, ValidComponent } from "solid-js";
+import { createRoot, createSignal, onCleanup, splitProps } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
 /**
  * Elastic Surface
@@ -300,63 +305,51 @@ export function createElasticSurface(options: ElasticSurfaceOptions = {}) {
 		return { dx: clientX - downX, dy: clientY - downY };
 	}
 
-	let lastZIndex = "";
 	function onPointerDown(e: PointerEvent): void {
 		if (!el) return;
+		// Don't intercept pointerdown that started on an interactive child —
+		// let it reach the child normally (click, focus, etc). We still want
+		// elastic feedback, so we proceed with the effect, we just avoid
+		// capturing the pointer on `el`, which would hijack the child's
+		// pointerup/click.
 		activePointerId = e.pointerId;
 		downX = e.clientX;
 		downY = e.clientY;
-		// One layout read per gesture, not per frame.
 		const rect = el.getBoundingClientRect();
 		halfWidth = rect.width / 2;
 		halfHeight = rect.height / 2;
-		el.setPointerCapture?.(e.pointerId);
-		// Zero delta at the instant of press: stretch/translate target is
-		// untouched, only the press tween kicks in.
+
+		createRoot((dispose) => {
+			function cancel() {
+				if (activePointerId !== e.pointerId) return;
+				activePointerId = null;
+				setTarget(computeTarget(0, 0));
+				setPressScaleTarget(1);
+				dispose();
+			}
+
+			// Track globally instead of via setPointerCapture, so children keep
+			// receiving their own native pointer/click events, and drag tracking
+			// still works past the element's bounds.
+			createEventListenerMap(window, {
+				pointermove: (e) => {
+					if (activePointerId !== e.pointerId) return;
+					const { dx, dy } = localDelta(e.clientX, e.clientY);
+					setTarget(computeTarget(dx, dy));
+				},
+				pointerup: cancel,
+				pointercancel: cancel,
+			});
+		});
+
 		setTarget(computeTarget(0, 0));
 		setPressScaleTarget(profile.pressScale);
-		lastZIndex = el.style.zIndex;
-		el.style.zIndex = "999";
 	}
 
-	function onPointerMove(e: PointerEvent): void {
-		if (activePointerId !== e.pointerId) return;
-		const { dx, dy } = localDelta(e.clientX, e.clientY);
-		setTarget(computeTarget(dx, dy));
-	}
-
-	function onPointerUp(e: PointerEvent): void {
-		if (activePointerId !== e.pointerId) return;
-		activePointerId = null;
-		setTarget(computeTarget(0, 0));
-		setPressScaleTarget(1);
-		if (el) el.style.zIndex = lastZIndex;
-	}
-
-	function onPointerCancel(e: PointerEvent): void {
-		if (activePointerId !== e.pointerId) return;
-		activePointerId = null;
-		setTarget(computeTarget(0, 0));
-		setPressScaleTarget(1);
-	}
-
-	function bind(node: HTMLElement): void {
+	function ref(node: HTMLElement): void {
 		el = node;
-		node.addEventListener("pointerdown", onPointerDown);
-		node.addEventListener("pointermove", onPointerMove);
-		node.addEventListener("pointerup", onPointerUp);
-		node.addEventListener("pointercancel", onPointerCancel);
+		createEventListener(node, "pointerdown", onPointerDown);
 		if (options.autoVelocity) startAutoVelocity(node);
-	}
-
-	function unbind(): void {
-		stopAutoVelocity();
-		if (!el) return;
-		el.removeEventListener("pointerdown", onPointerDown);
-		el.removeEventListener("pointermove", onPointerMove);
-		el.removeEventListener("pointerup", onPointerUp);
-		el.removeEventListener("pointercancel", onPointerCancel);
-		el = null;
 	}
 
 	// --- Auto velocity ---------------------------------------------------
@@ -530,9 +523,8 @@ export function createElasticSurface(options: ElasticSurfaceOptions = {}) {
 		return `translate(${s.tx}px, ${s.ty}px) scale(${sx}, ${sy})`;
 	}
 
-	return {
-		bind,
-		unbind,
+    return {
+        ref,
 		notifyVelocity,
 		notifyMoved,
 		resetMovementTracking,
@@ -555,22 +547,24 @@ export function createElasticSurface(options: ElasticSurfaceOptions = {}) {
  * `mode="touch" profile={{ movementMaxSquash: 0.4 }}`.
  */
 export function ElasticSurface(
-	props: ComponentProps<"div"> & ElasticSurfaceOptions,
+    props: ComponentProps<"div"> & ElasticSurfaceOptions & {
+        as?: ValidComponent
+	},
 ) {
 	const [local, options, rest] = splitProps(
 		props,
-		["children", "class", "style"],
+		["children", "class", "style", "as"],
 		["mode", "profile", "autoVelocity"],
 	);
 
 	const surface = createElasticSurface(options);
-	onCleanup(surface.unbind);
 
 	return (
-		<div
+        <Dynamic
+            component={local.as ?? "div"}
 			{...rest}
 			class={local.class}
-			ref={surface.bind}
+			ref={surface.ref}
 			style={{
 				...(typeof local.style === "object" ? local.style : {}),
 				"will-change": "transform",
@@ -578,7 +572,7 @@ export function ElasticSurface(
 			}}
 		>
 			{local.children}
-		</div>
+		</Dynamic>
 	);
 }
 

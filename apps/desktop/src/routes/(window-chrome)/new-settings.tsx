@@ -36,8 +36,14 @@ const pages = [
 	{
 		href: "screenshots",
 		name: "Screenshots",
-		color: "oklch(70% 0.16 85)", // amber
+		color: "oklch(70% 0.26 85)", // amber
 		icon: IconMynauiImageRectangle,
+	},
+	{
+		href: "automations",
+		name: "Automations",
+		color: "oklch(80% 0.05 200)", // light cyan
+		icon: IconMynauiLightning,
 	},
 	{
 		href: "transcription",
@@ -60,7 +66,7 @@ const pages = [
 	{
 		href: "cli",
 		name: "CLI",
-		color: "oklch(60% 0.14 200)", // teal-blue
+		color: "oklch(70% 0.24 200)", // teal-blue
 		icon: IconMynauiTerminal,
 	},
 	{
@@ -85,13 +91,13 @@ const pages = [
 		href: "feedback",
 		name: "Feedback",
 		color: "oklch(65% 0.14 195)", // sky
-		icon: IconMynauiHeart,
+		icon: IconMynauiMessagePlus,
 	},
 	{
 		href: "changelog",
 		name: "Changelog",
 		color: "oklch(55% 0.05 240)", // desaturated slate-blue
-		icon: IconMynauiBox,
+		icon: IconMynauiBell,
 	},
 ];
 
@@ -129,10 +135,12 @@ function Inner(props: ParentProps) {
 				</ToolbarSidebarSlot>
 
 				<ToolbarContent class="px-4">
-					<GlassEffectContainer class="inline-flex items-center justify-center gap-2 rounded-full h-9 w-9 px-2 mx-1 z-50">
-						<button>
-							<IconMynauiChevronLeft class="size-5.5 pr-0.5 apple-vibrancy-fill" />
-						</button>
+                    <GlassEffectContainer class="inline-flex items-center justify-center gap-2 rounded-full h-9 w-9 px-2 mx-1 z-50"
+                        as={"button"}
+                        onClick={(e) => {
+                            console.log("hello");
+                        }}
+                    >
 						{/* <button>
 							<IconMynauiChevronRight class="size-5.5" />
 						</button> */}
@@ -144,7 +152,7 @@ function Inner(props: ParentProps) {
 				<Sidebar class="relative">
 					<div class="absolute inset-x-0 top-0 z-10 p-1.5 pt-15">
 						<div class="flex flex-col gap-2">
-							<div class="w-full px-2">
+							<div class="w-full px-3">
 								<GlassEffectContainer class="w-full h-7.5 rounded-full inline-flex items-center gap-2 px-3 text-sm">
 									<IconMynauiSearch class="relative bottom-[0.5px]" />
 									<input
@@ -250,7 +258,7 @@ function ProfileButton() {
 			href="account"
 			type="button"
 			activeClass="bg-gray-10/30 pointer-events-none font-bold text-gray-12"
-			class="rounded-full hover:bg-gray-3/50 hover:duration-0 px-2 py-1.5 flex flex-row items-center gap-2.5 motion-safe:transition-colors duration-100 ease-out smoothed cursor-default"
+			class="rounded-full hover:bg-gray-3/50 hover:duration-0 px-2 py-1.5 flex flex-row items-center gap-2.5 motion-safe:transition-colors duration-80 ease-out smoothed cursor-default"
 			// onClick={handleProfileClick}
 		>
 			<Show

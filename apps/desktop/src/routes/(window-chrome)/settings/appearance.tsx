@@ -4,10 +4,8 @@ import { createStore } from "solid-js/store";
 import themePreviewAuto from "~/assets/theme-previews/auto.jpg";
 import themePreviewDark from "~/assets/theme-previews/dark.jpg";
 import themePreviewLight from "~/assets/theme-previews/light.jpg";
-import { ElasticSurface } from "~/components/ElasticSurface";
 import { Platform } from "~/components/Platform";
-import { Scroller } from "~/components/ScrollView";
-import { KineticSlider } from "~/components/solarium/OLDSolariumSlider";
+import { SolariumSlider } from "~/components/solarium/SolariumSlider";
 import { Toggle } from "~/components/Toggle";
 import { generalSettingsStore } from "~/store";
 import { deriveGeneralSettings } from "~/utils/general-settings";
@@ -55,8 +53,7 @@ export default function Appearance() {
 							description={elasticityLabel(elasticity())}
 						>
 							<div class="w-50 flex flex-col gap-1.5">
-								<KineticSlider
-									kinetic={{ preset: "position-bouncy" }}
+								<SolariumSlider
 									defaultValue={[50]}
 									onChange={(v) => setElasticity(v[0])}
 								/>
@@ -145,7 +142,7 @@ export default function Appearance() {
 						label="Tint editor window backgrounds with wallpaper color"
 						description="Allows for background tinting within editor windows when this option is enabled within System Settings."
 						value={!settings.hideDockIcon}
-						onChange={(v) => { }}
+						onChange={(v) => {}}
 					/>
 				</SectionRows>
 			</Section>

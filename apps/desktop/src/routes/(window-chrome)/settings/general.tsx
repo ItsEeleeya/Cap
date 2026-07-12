@@ -220,23 +220,12 @@ function DemoSection() {
 		<div class="size-full flex flex-col items-center justify-center">
 			<FluidSurfaceDemo />
 			<div class="flex flex-col gap-4 w-80 p-8">
-				{/* <FlexiSegmentedControl
-					options={["Music", "Podcasts", "Radio"]}
-					value={tab()}
-					onChange={setTab}
-				/> */}
-
-				{/*<KSolariumSlider defaultValue={[10]} size="lg" />*/}
-
 				<SolariumSlider defaultValue={[50]} maxValue={100} size="xl" />
-
 				<SolariumSlider defaultValue={[2]} maxValue={6} step={1} size="lg" />
-				<SolariumSlider
-					defaultValue={[40]}
-					kinetic={{ preset: "subtle" }}
-					size="xs"
-				/>
-				<div class="bg-blue-10 h-30 w-80 self-center smoothed rounded-full flex items-center justify-center">
+				<SolariumSlider defaultValue={[2]} maxValue={6} />
+				<SolariumSlider defaultValue={[50]} maxValue={100} size="sm" />
+				<SolariumSlider defaultValue={[40]} size="xs" />
+				<div class="bg-blue-10 h-18 w-60 self-center smoothed rounded-full flex items-center justify-center">
 					Cap, now with Squircles
 				</div>
 				<div class="w-full flex flex-col gap-2">
@@ -267,24 +256,9 @@ function DemoSection() {
 						differentiateWithoutColor
 					/>
 				</div>
-				<SolariumSlider
-					defaultValue={[75]}
-					step={20}
-					kinetic={{ preset: "bouncy" }}
-				/>
+				<SolariumSlider defaultValue={[75]} step={20} />
 
 				<div class="w-full h-px bg-gray-8" />
-
-				<KineticSlider
-					defaultValue={[60]}
-					kinetic={{ preset: "position-bouncy" }}
-				/>
-				<KineticSlider defaultValue={[40]} kinetic={{ preset: "subtle" }} />
-				<KineticSlider
-					defaultValue={[75]}
-					step={20}
-					kinetic={{ preset: "bouncy" }}
-				/>
 			</div>
 		</div>
 	);

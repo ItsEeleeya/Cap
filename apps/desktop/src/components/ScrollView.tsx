@@ -2,13 +2,16 @@ import { makeEventListener } from "@solid-primitives/event-listener";
 import { makeResizeObserver } from "@solid-primitives/resize-observer";
 import { cx } from "cva";
 import {
+	type ComponentProps,
 	createContext,
 	createEffect,
 	createSignal,
 	type JSX,
+	mergeProps,
 	onCleanup,
 	type ParentProps,
 	Show,
+	splitProps,
 	useContext,
 } from "solid-js";
 import { ProgressiveBlur } from "~/components/primitive/ProgressiveBlur";
@@ -149,7 +152,7 @@ function Root(props: RootProps) {
 
 // ─── Viewport ─────────────────────────────────────────────────────────────────
 
-type ViewportProps = ParentProps<{
+type ViewportProps = ComponentProps<"div"> & {
 	orientation?: ScrollOrientation;
 	edges?: Partial<Record<EdgeDirection, number>>;
 	overscroll?: "contain" | "auto" | "none";
@@ -160,7 +163,7 @@ type ViewportProps = ParentProps<{
 	"aria-label"?: string;
 	"aria-labelledby"?: string;
 	"aria-describedby"?: string;
-}>;
+};
 
 function Viewport(props: ViewportProps) {
 	const { _setViewportEl } =
@@ -194,31 +197,50 @@ function Viewport(props: ViewportProps) {
 		"padding-right": edge().right ? `${edge().right}px` : undefined,
 	});
 
+	const [local, rest] = splitProps(props, [
+		"ref",
+		"children",
+		"class",
+		"contentClass",
+		"orientation",
+		"edges",
+		"fade",
+		"overscroll",
+	]);
+
 	return (
 		<div
-			ref={_setViewportEl}
+			{...rest}
+			ref={(el) => {
+				_setViewportEl(el);
+
+				if (typeof local.ref === "function") {
+					local.ref(el);
+				} else if (local.ref) {
+					// Solid signal/object refs
+					local.ref = el;
+				}
+			}}
 			role="region"
 			tabIndex={0}
-			aria-label={props["aria-label"]}
-			aria-labelledby={props["aria-labelledby"]}
-			aria-describedby={props["aria-describedby"]}
-			class={cx("absolute inset-0 scrollbar-none", props.class)}
-			classList={{ "fade-mask": props.fade }}
+			class={cx("absolute inset-0 scrollbar-none", local.class)}
+			classList={{ "cap-fade-mask": local.fade }}
 			style={{
-				// Top edge
 				"--fade-top-length": `${edge().top}px`,
 				"--fade-top-start": `${edge().top * 0.5}px`,
 				"--fade-top-intensity": "0.85",
-				// Bottom edge
+
 				"--fade-bottom-length": `${edge().bottom}px`,
 				"--fade-bottom-start": `${edge().bottom * 0.7}px`,
 				"--fade-bottom-intensity": "0.8",
-				// Horizontal edges
+
 				"--fade-left-length": `${edge().left}px`,
 				"--fade-right-length": `${edge().right}px`,
-				"overscroll-behavior": props.overscroll,
+
+				"overscroll-behavior": local.overscroll,
+
 				...overflowStyle(),
-				...props.style,
+				...(rest.style as JSX.CSSProperties),
 			}}
 		>
 			<div

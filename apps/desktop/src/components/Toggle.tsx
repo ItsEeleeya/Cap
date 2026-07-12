@@ -9,6 +9,7 @@ import {
 	splitProps,
 } from "solid-js";
 import { commands } from "~/utils/tauri";
+import { SolariumSwitch } from "./solarium/SolariumSwitch";
 
 const toggleControlStyles = cva(
 	"flex shrink-0 items-center rounded-full bg-gray-6 transition-[background-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer group-focus-visible:ring-2 group-focus-visible:ring-blue-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-transparent group-data-[disabled]:bg-gray-3 group-data-[checked]:bg-blue-500 group-data-[pressed]:bg-gray-5 smoothed",
@@ -49,6 +50,12 @@ function performHaptic() {
 }
 
 export function Toggle(
+	props: ComponentProps<typeof KSwitch> & { size?: "sm" | "md" | "lg" },
+) {
+	return <SolariumSwitch {...props} />;
+}
+
+export function _Toggle(
 	props: ComponentProps<typeof KSwitch> & { size?: "sm" | "md" | "lg" },
 ) {
 	const [local, others] = splitProps(props, ["size"]);
