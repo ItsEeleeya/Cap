@@ -139,6 +139,7 @@ declare global {
   const IconMynauiBell: typeof import('~icons/mynaui/bell.jsx')['default']
   const IconMynauiBox: typeof import('~icons/mynaui/box.jsx')['default']
   const IconMynauiChevronLeft: typeof import('~icons/mynaui/chevron-left.jsx')['default']
+  const IconMynauiChevronRight: typeof import('~icons/mynaui/chevron-right.jsx')['default']
   const IconMynauiCogThree: typeof import('~icons/mynaui/cog-three.jsx')['default']
   const IconMynauiFilm: typeof import('~icons/mynaui/film.jsx')['default']
   const IconMynauiHeart: typeof import('~icons/mynaui/heart.jsx')['default']

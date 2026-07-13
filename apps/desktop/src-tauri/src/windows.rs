@@ -2017,15 +2017,16 @@ impl CapWindow {
                     .window_builder(app, "/in-progress-recording")
                     .fullscreen(false)
                     .always_on_top(true)
+                    .transparent(true)
                     .visible_on_all_workspaces(true)
                     .content_protected(should_protect)
                     .inner_size(width, height)
-                    .skip_taskbar(false)
+                    .skip_taskbar(cfg!(target_os = "macos"))
+                    .resizable(!cfg!(target_os = "linux"))
                     .initialization_script(format!(
                         "window.COUNTDOWN = {};",
                         countdown.unwrap_or_default()
-                    ))
-                    .build()?;
+                    ));
 
                 if cfg!(target_os = "linux") {
                     builder = builder.maximized(false);
@@ -2362,6 +2363,14 @@ impl CapWindow {
                     pool_policy,
                 ))
             });
+
+            if let Some(maybe_position) = id.traffic_lights_position() {
+                if !id.needs_toolbar_shell() {
+                    builder = builder.traffic_light_position(
+                        maybe_position.unwrap_or(DEFAULT_TRAFFIC_LIGHTS_INSET),
+                    );
+                }
+            }
         }
 
         #[cfg(windows)]

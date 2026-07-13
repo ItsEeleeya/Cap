@@ -135,15 +135,15 @@ function Inner(props: ParentProps) {
 				</ToolbarSidebarSlot>
 
 				<ToolbarContent class="px-4">
-                    <GlassEffectContainer class="inline-flex items-center justify-center gap-2 rounded-full h-9 w-9 px-2 mx-1 z-50"
-                        as={"button"}
-                        onClick={(e) => {
-                            console.log("hello");
-                        }}
-                    >
-						{/* <button>
-							<IconMynauiChevronRight class="size-5.5" />
-						</button> */}
+					<GlassEffectContainer
+						class="inline-flex items-center justify-center gap-2 rounded-full h-9 w-9 px-2 mx-1 z-50"
+						onClick={(e) => {
+							console.log("hello");
+						}}
+					>
+						<button>
+							<IconMynauiChevronRight class="size-5 rotate-180 -ml-0.5" />
+						</button>
 					</GlassEffectContainer>
 				</ToolbarContent>
 			</Toolbar>
