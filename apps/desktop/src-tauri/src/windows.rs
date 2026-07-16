@@ -753,6 +753,11 @@ impl CapWindowId {
         matches!(self, Self::Settings)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn appears_more_round(&self) -> bool {
+        matches!(self, Self::Main | Self::Onboarding | Self::Teleprompter)
+    }
+
     pub fn min_size(&self) -> Option<(f64, f64)> {
         Some(match self {
             Self::Main => (330.0, 395.0),
@@ -2242,38 +2247,36 @@ impl CapWindow {
                 crate::permissions::sync_macos_dock_visibility(app);
             }
 
-            let disables_fullscreen = id.disables_fullscreen();
-            let appears_transparent = id.appears_transparent();
-
-            if disables_fullscreen || !appears_transparent {
-                window.with_nswindow_on_main(move |_, nswindow| {
-                    if !appears_transparent {
+            window.with_nswindow_on_main({
+                let id = id.clone();
+                move |_, nswindow| {
+                    if !id.appears_transparent() {
                         nswindow.setOpaque(true);
                         nswindow.setBackgroundColor(Some(
                             &objc2_app_kit::NSColor::windowBackgroundColor(),
                         ));
                     }
 
-                    if disables_fullscreen {
+                    if id.disables_fullscreen() {
                         nswindow.setCollectionBehavior(
                             nswindow.collectionBehavior()
                                 | objc2_app_kit::NSWindowCollectionBehavior::FullScreenNone,
                         );
                     }
-                })?;
-            }
+
+                    if id.appears_more_round() && !id.needs_toolbar_shell() {
+                        crate::platform::set_nswindow_radius(&nswindow, 26.0);
+                    }
+
+                    if id.frame_autosaves() {
+                        let label = id.label();
+                        crate::platform::setup_frame_autosave(&nswindow, &label);
+                    }
+                }
+            })?;
 
             if id.needs_toolbar_shell() {
                 // crate::platform::add_toolbar_shell(&window)?;
-            }
-
-            if id.frame_autosaves() {
-                let label = id.label();
-                window.with_nswindow_on_main(move |_, nswindow| {
-                    let autosave_name = objc2_foundation::NSString::from_str(&label);
-                    nswindow.setFrameAutosaveName(&autosave_name);
-                    nswindow.setFrameUsingName_force(&autosave_name, true);
-                })?;
             }
         }
 
