@@ -602,6 +602,7 @@ pub enum CapWindowId {
     Debug,
     ScreenshotEditor { id: u32 },
     Onboarding,
+    Teleprompter,
 }
 
 impl FromStr for CapWindowId {
@@ -619,6 +620,7 @@ impl FromStr for CapWindowId {
             "mode-select" => Self::ModeSelect,
             "debug" => Self::Debug,
             "onboarding" => Self::Onboarding,
+            "teleprompter" => Self::Teleprompter,
             s if s.starts_with("editor-") => Self::Editor {
                 id: s
                     .replace("editor-", "")
@@ -668,6 +670,7 @@ impl std::fmt::Display for CapWindowId {
             Self::Debug => write!(f, "debug"),
             Self::ScreenshotEditor { id } => write!(f, "screenshot-editor-{id}"),
             Self::Onboarding => write!(f, "onboarding"),
+            Self::Teleprompter => write!(f, "teleprompter"),
         }
     }
 }
@@ -689,6 +692,7 @@ impl CapWindowId {
             Self::Camera => "Cap Camera".to_string(),
             Self::RecordingsOverlay => "Cap Recordings Overlay".to_string(),
             Self::TargetSelectOverlay { .. } => "Cap Target Select".to_string(),
+            Self::Teleprompter => "Cap Teleprompter".to_string(),
             _ => "Cap".to_string(),
         }
     }
@@ -759,6 +763,7 @@ impl CapWindowId {
             Self::Upgrade => (950.0, 850.0),
             Self::ModeSelect => (580.0, 340.0),
             Self::Onboarding => (860.0, 690.0),
+            Self::Teleprompter => (420.0, 220.0),
             _ => return None,
         })
     }
@@ -766,7 +771,11 @@ impl CapWindowId {
     pub fn resizable(&self) -> bool {
         matches!(
             self,
-            Self::Debug | Self::Editor { .. } | Self::ScreenshotEditor { .. } | Self::Settings
+            Self::Debug
+                | Self::Editor { .. }
+                | Self::ScreenshotEditor { .. }
+                | Self::Settings
+                | Self::Teleprompter
         )
     }
 
@@ -815,6 +824,7 @@ pub enum CapWindow {
         path: PathBuf,
     },
     Onboarding,
+    Teleprompter,
 }
 
 impl CapWindow {
@@ -1433,14 +1443,6 @@ impl CapWindow {
                                 NSStatusWindowLevel, NSWindowCollectionBehavior, NSWindowStyleMask,
                             };
                             use tauri_nspanel::Panel;
-
-                            #[link(name = "CoreGraphics", kind = "framework")]
-                            unsafe extern "C" {
-                                fn CGWindowLevelForKey(key: i32) -> i32;
-                            }
-
-                            #[allow(non_upper_case_globals)]
-                            const kCGMaximumWindowLevelKey: i32 = 10;
 
                             let panel = match TargetSelectOverlayPanel::from_window(&window) {
                                 Ok(p) => p,
@@ -2212,6 +2214,22 @@ impl CapWindow {
 
                 window
             }
+            Self::Teleprompter => {
+                let mut builder = self
+                    .window_builder(app, "/teleprompter")
+                    .inner_size(560.0, 320.0)
+                    .visible_on_all_workspaces(true)
+                    .always_on_top(true)
+                    .decorations(false)
+                    .skip_taskbar(true);
+
+                #[cfg(target_os = "macos")]
+                {
+                    builder = builder.transparent(true).decorations(true);
+                }
+
+                builder.build()?
+            }
         };
 
         let id = self.id(app);
@@ -2425,6 +2443,7 @@ impl CapWindow {
                 let id = s.iter().find(|(p, _)| p == path).unwrap().1;
                 CapWindowId::ScreenshotEditor { id }
             }
+            CapWindow::Teleprompter => CapWindowId::Teleprompter,
         }
     }
 }
@@ -2494,6 +2513,53 @@ pub fn update_window_rasterization_scale(_window: &WebviewWindow<Wry>, _scale_fa
     }
 }
 
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(window))]
+pub fn set_window_always_on_top(
+    window: tauri::WebviewWindow,
+    always_on_top: bool,
+    _macos_level: Option<i32>,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "macos"))]
+    window
+        .set_always_on_top(always_on_top)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    window
+        .with_nswindow_on_main(move |_, nswindow| {
+            nswindow.setLevel(if always_on_top {
+                _macos_level
+                    .map(|lvl| lvl as isize)
+                    .unwrap_or(objc2_app_kit::NSFloatingWindowLevel)
+            } else {
+                objc2_app_kit::NSNormalWindowLevel
+            });
+        })
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(_window))]
+pub fn set_window_opacity(_window: tauri::WebviewWindow, _opacity: f64) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        _window
+            .with_nswindow_on_main(move |_, nswindow| {
+                nswindow.setAlphaValue(_opacity.clamp(0.0, 1.0));
+            })
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Unsupported platform".into())
+    }
+}
+
 // Capture exclusion (WDA_EXCLUDEFROMCAPTURE / NSWindowSharingType::None) also hides
 // the window from "capture-based" displays such as virtual/indirect/dummy-HDMI or
 // mirrored monitors, making it invisible and unreachable. We therefore only protect
@@ -2545,7 +2611,11 @@ fn content_protection_enabled(app: &AppHandle<Wry>) -> bool {
         .unwrap_or(false)
 }
 
-fn window_matches_exclusion_list(app: &AppHandle<Wry>, window_title: &str) -> bool {
+fn window_capture_excluded(app: &AppHandle<Wry>, window_title: &str) -> bool {
+    if window_title == CapWindowId::Teleprompter.title() {
+        return true;
+    }
+
     let matches = |list: &[WindowExclusion]| {
         list.iter()
             .any(|entry| entry.matches(None, None, Some(window_title)))
@@ -2561,7 +2631,7 @@ fn window_matches_exclusion_list(app: &AppHandle<Wry>, window_title: &str) -> bo
 fn should_protect_window(app: &AppHandle<Wry>, window_title: &str) -> bool {
     content_protection_enabled(app)
         && !capture_exclusion_hides_ui()
-        && window_matches_exclusion_list(app, window_title)
+        && window_capture_excluded(app, window_title)
 }
 
 pub fn apply_content_protection(app: &AppHandle<Wry>, enabled: bool) {
@@ -2583,7 +2653,7 @@ pub fn apply_content_protection(app: &AppHandle<Wry>, enabled: bool) {
         }
 
         let title = id.title();
-        let should_protect = enabled && window_matches_exclusion_list(app, &title);
+        let should_protect = enabled && window_capture_excluded(app, &title);
         let _ = window.set_content_protected(should_protect);
 
         #[cfg(target_os = "windows")]

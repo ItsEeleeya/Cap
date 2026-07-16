@@ -110,6 +110,7 @@ const DEFAULT_EXCLUDED_WINDOW_TITLES: &[&str] = &[
     "Cap Capture Area",
     "Cap Mode Selection",
     "Cap Recordings Overlay",
+    "Cap Teleprompter",
 ];
 
 pub fn default_excluded_windows() -> Vec<WindowExclusion> {
@@ -239,6 +240,8 @@ pub struct GeneralSettingsStore {
     pub camera_blur_disabled_by_crash: Option<String>,
     #[serde(default)]
     pub update_channel: UpdateChannel,
+    #[serde(default = "default_true")]
+    pub main_window_always_on_top: bool,
 }
 
 fn default_enable_native_camera_preview() -> bool {
@@ -340,6 +343,7 @@ impl Default for GeneralSettingsStore {
             previous_recordings_paths: Vec::new(),
             camera_blur_disabled_by_crash: None,
             update_channel: UpdateChannel::Stable,
+            main_window_always_on_top: true,
         }
     }
 }

@@ -13,9 +13,16 @@ import titlebarState from "~/utils/titlebar-state";
 import { WindowControlButton as ControlButton } from "./WindowControlButton";
 
 export default function (
-	props: ComponentProps<"div"> & { maximizable?: boolean },
+	props: ComponentProps<"div"> & {
+		maximizable?: boolean;
+		minimizable?: boolean;
+	},
 ) {
-	const [local, otherProps] = splitProps(props, ["class"]);
+	const [local, otherProps] = splitProps(props, [
+		"class",
+		"maximizable",
+		"minimizable",
+	]);
 	const currentWindow = getCurrentWindow();
 	const [focused, setFocus] = createSignal(true);
 
@@ -34,7 +41,7 @@ export default function (
 	return (
 		<div
 			class={cx(
-				"flex flex-row items-stretch h-9 align-baseline cursor-default rounded-none select-none *:outline-hidden *:transition-all *:duration-200",
+				"flex flex-row items-stretch h-full align-baseline cursor-default rounded-none select-none *:outline-hidden *:transition-all *:duration-200",
 				local.class,
 				focused()
 					? "*:text-black-transparent-80"
@@ -42,17 +49,21 @@ export default function (
 			)}
 			{...otherProps}
 		>
-			<ControlButton
-				disabled={!titlebarState.minimizable}
-				onClick={titlebarState.minimizable ? currentWindow.minimize : undefined}
-				class={cx(
-					"w-[46px] rounded-none bg-transparent",
-					"hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] active:bg-[#00000008] dark:active:bg-[#e9e9e908]",
-					"disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:text-black-transparent-40",
-				)}
-			>
-				<icons.minimizeWin />
-			</ControlButton>
+			<Show when={props.minimizable !== false}>
+				<ControlButton
+					disabled={!titlebarState.minimizable}
+					onClick={
+						titlebarState.minimizable ? currentWindow.minimize : undefined
+					}
+					class={cx(
+						"max-h-20 w-[46px] rounded-none bg-transparent",
+						"hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] active:bg-[#00000008] dark:active:bg-[#e9e9e908]",
+						"disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:text-black-transparent-40",
+					)}
+				>
+					<icons.minimizeWin />
+				</ControlButton>
+			</Show>
 			<Show
 				when={
 					titlebarState.maximizable ||
@@ -70,7 +81,7 @@ export default function (
 							: undefined
 					}
 					class={cx(
-						"w-[46px] rounded-none bg-transparent",
+						"max-h-20 w-[46px] rounded-none bg-transparent",
 						"hover:bg-[#0000000D] dark:hover:bg-[#FFFFFF0D] active:bg-[#00000008] dark:active:bg-[#e9e9e908]",
 						"disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:text-black-transparent-40",
 					)}
@@ -86,7 +97,7 @@ export default function (
 				onClick={titlebarState.closable ? handleClose : undefined}
 				disabled={!titlebarState.closable}
 				class={cx(
-					"w-[46px] rounded-none bg-transparent hover:text-gray-1",
+					"max-h-20 w-[46px] rounded-none bg-transparent hover:text-gray-1",
 					"hover:bg-[#c42b1c] dark:hover:bg-[#c42b1c active:bg-[#c42b1c]/90 dark:active:bg-[#c42b1c]/90",
 					"disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:text-black-transparent-40",
 				)}

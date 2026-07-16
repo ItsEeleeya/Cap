@@ -14,7 +14,6 @@ import "@cap/ui-solid/main.css";
 import "unfonts.css";
 import "./styles/app.css";
 
-import { createEventListener } from "@solid-primitives/event-listener";
 import { CapErrorBoundary } from "./components/CapErrorBoundary";
 import SettingsLayout from "./routes/(window-chrome)/new-settings";
 import { initAnonymousUser } from "./utils/analytics";
@@ -101,6 +100,7 @@ const TargetSelectOverlayPage = lazy(
 const WindowCaptureOccluderPage = lazy(
 	() => import("./routes/window-capture-occluder"),
 );
+const TeleprompterPage = lazy(() => import("./routes/teleprompter"));
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -242,6 +242,11 @@ function Inner() {
 					<Route
 						path="/window-capture-occluder"
 						component={WindowCaptureOccluderPage}
+					/>
+					<Route
+						path="/teleprompter"
+						info={{ AUTO_SHOW_WINDOW: false }}
+						component={TeleprompterPage}
 					/>
 				</Router>
 			</CapErrorBoundary>

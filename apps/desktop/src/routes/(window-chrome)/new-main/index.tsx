@@ -1,8 +1,8 @@
 import { Button } from "@cap/ui-solid";
 import { useNavigate } from "@solidjs/router";
 import {
-	createMutation,
 	queryOptions,
+	useMutation,
 	useQuery,
 	useQueryClient,
 } from "@tanstack/solid-query";
@@ -85,6 +85,7 @@ import IconLucideBug from "~icons/lucide/bug";
 import IconLucideCircleHelp from "~icons/lucide/circle-help";
 import IconLucideImage from "~icons/lucide/image";
 import IconLucideImport from "~icons/lucide/import";
+import IconLucideScanText from "~icons/lucide/scan-text";
 import IconLucideSearch from "~icons/lucide/search";
 import IconLucideSettings from "~icons/lucide/settings";
 import IconLucideSquarePlay from "~icons/lucide/square-play";
@@ -2173,7 +2174,7 @@ function Page() {
 		closeAllMenuPanels();
 	});
 
-	const setMicInput = createMutation(() => ({
+	const setMicInput = useMutation(() => ({
 		mutationFn: async (name: string | null) => {
 			const previous = rawOptions.micName ?? null;
 			if (previous !== name) setOptions("micName", name);
@@ -2478,7 +2479,7 @@ function Page() {
 	const license = createLicenseQuery();
 
 	const signIn = createSignInMutation();
-	const stopRecording = createMutation(() => ({
+	const stopRecording = useMutation(() => ({
 		mutationFn: async () => {
 			try {
 				await commands.stopRecording();
@@ -2777,7 +2778,56 @@ function Page() {
 								<IconLucideSquarePlay class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
 							</button>
 						</Tooltip>
+						<Tooltip content={<span>Teleprompter</span>}>
+							<button
+								type="button"
+								onClick={() => {
+									commands.showWindow("Teleprompter").then(() => {
+										commands.refreshWindowContentProtection();
+									});
+								}}
+								class="flex justify-center items-center size-5 focus:outline-hidden"
+								aria-label="Open teleprompter"
+							>
+								<IconLucideScanText class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+							</button>
+						</Tooltip>
 						<ChangelogButton />
+						<Tooltip content={<span>Always on Top</span>}>
+							<button
+								type="button"
+								onClick={async () => {
+									const current =
+										generalSettings.data?.mainWindowAlwaysOnTop ?? true;
+									try {
+										await commands.setWindowAlwaysOnTop(
+											!current,
+											26 /* NSStatusWindowLevel + 1 */,
+										);
+										await generalSettingsStore.set({
+											mainWindowAlwaysOnTop: !current,
+										});
+									} catch (e) {
+										console.warn("Failed to toggle Always on Top", e);
+										toast.error("Failed to toggle Always on Top");
+									}
+								}}
+								class="flex justify-center items-center size-5 focus:outline-hidden"
+								aria-label="Always on Top"
+								aria-pressed={
+									generalSettings.data?.mainWindowAlwaysOnTop ?? true
+								}
+							>
+								<Show
+									when={generalSettings.data?.mainWindowAlwaysOnTop ?? true}
+									fallback={
+										<IconLucidePinOff class="transition-colors text-gray-11 size-4 hover:text-gray-12" />
+									}
+								>
+									<IconLucidePin class="transition-colors text-blue-11 size-4 hover:text-gray-12" />
+								</Show>
+							</button>
+						</Tooltip>
 						{import.meta.env.DEV && (
 							<button
 								type="button"
