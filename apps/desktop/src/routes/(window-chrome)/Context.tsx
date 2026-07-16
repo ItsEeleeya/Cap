@@ -10,6 +10,8 @@ import {
 interface WindowChromeState {
 	/** @deprecated */
 	hideMaximize?: boolean;
+	maximized?: boolean;
+	onMaximize?: () => void;
 	/** @deprecated */
 	items?: () => JSX.Element;
 }
@@ -43,16 +45,15 @@ export function useWindowChrome(state: WindowChromeState) {
 	});
 }
 
-export function WindowChromeHeader(
-	props: ParentProps<{
-		hideMaximize?: boolean;
-		/** @deprecated */
-		items?: JSX.Element;
-	}>,
-) {
+export function WindowChromeHeader(props: {
+	hideMaximize?: boolean;
+	children?: JSX.Element;
+}) {
 	useWindowChrome({
 		hideMaximize: props.hideMaximize,
-		items: () => props.children,
+		get items() {
+			return props.children;
+		},
 	});
 
 	return null;

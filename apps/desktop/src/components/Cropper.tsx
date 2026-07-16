@@ -20,7 +20,6 @@ import {
 	Show,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Transition } from "solid-transition-group";
 import { createKeyDownSignal } from "~/utils/events";
 import { MotionSafeTransition } from "~/utils/motion-safe";
 
@@ -1686,7 +1685,8 @@ export function createCropOptionsMenuItems(options: {
 			(ratio) =>
 				({
 					text: `${ratio[0]}:${ratio[1]}`,
-					checked: options.aspect === ratio,
+					checked:
+						options.aspect?.[0] === ratio[0] && options.aspect[1] === ratio[1],
 					action: () => options.onAspectSet(ratio),
 				}) satisfies CheckMenuItemOptions,
 		),

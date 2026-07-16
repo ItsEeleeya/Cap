@@ -81,7 +81,12 @@ function LegacyChrome(props: ParentProps) {
 					{/* This is temporary until the re-strcture of window-chrome.
 			    		Then we'll use native captions on Windows and GTK-4 window controls on Linux */}
 					{(type() === "windows" || type() === "linux") && (
-						<CaptionControlsWindows11 class="ml-auto!" />
+						<CaptionControlsWindows11
+							class="ml-auto!"
+							maximizable={ctx.state()?.onMaximize ? true : undefined}
+							maximized={ctx.state()?.maximized}
+							onMaximize={ctx.state()?.onMaximize}
+						/>
 					)}
 					{type() === "macos" && <div class="h-full w-[68px]" />}
 				</header>
