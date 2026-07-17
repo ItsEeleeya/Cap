@@ -7,7 +7,6 @@ pub use wkwv_utils::{WebviewProcessPoolPolicy, create_wk_configuration};
 use std::sync::OnceLock;
 
 use block2::RcBlock;
-use objc2::Message;
 use objc2::runtime::AnyObject;
 use objc2::{
     ClassType, MainThreadMarker, MainThreadOnly, msg_send,
@@ -15,6 +14,7 @@ use objc2::{
     runtime::AnyClass,
     sel,
 };
+use objc2::{Message, available};
 use objc2_app_kit::{
     NSToolbar, NSUserInterfaceLayoutDirection, NSWindow, NSWindowDidExitFullScreenNotification,
     NSWindowWillEnterFullScreenNotification,
@@ -132,7 +132,7 @@ pub fn remove_toolbar_shell(webview: &WebviewWindow) -> tauri::Result<()> {
 // This properly sets the corner radius on the window,
 // AppKit communicates with SkyLight to set it on the server side
 // which results in having the correct overlay in mission control etc.
-pub fn set_nswindow_radius(nswindow: &NSWindow, radius: f64) {
+pub fn set_nswindow_radius(_mtm: MainThreadMarker, nswindow: &NSWindow, radius: f64) {
     if nswindow.respondsToSelector(sel!(_setCornerRadius:)) {
         // NSWindow - (void)_setCornerRadius:(double)radius;
         // SAFETY: We ensure the selector exists.
@@ -140,10 +140,23 @@ pub fn set_nswindow_radius(nswindow: &NSWindow, radius: f64) {
     }
 }
 
-pub fn setup_frame_autosave(nswindow: &NSWindow, autosave_name: &str) {
+pub fn setup_frame_autosave(_mtm: MainThreadMarker, nswindow: &NSWindow, autosave_name: &str) {
     let autosave_name = objc2_foundation::NSString::from_str(&autosave_name);
     nswindow.setFrameAutosaveName(&autosave_name);
     nswindow.setFrameUsingName_force(&autosave_name, true);
+}
+
+pub fn set_traffic_lights_hidden(_mtm: MainThreadMarker, nswindow: &NSWindow, hidden: bool) {
+    use objc2_app_kit::NSWindowButton;
+    for btn in [
+        NSWindowButton::CloseButton,
+        NSWindowButton::ZoomButton,
+        NSWindowButton::MiniaturizeButton,
+    ] {
+        if let Some(nsbtn) = nswindow.standardWindowButton(btn) {
+            nsbtn.setHidden(hidden);
+        }
+    }
 }
 
 pub trait WebviewWindowExt {

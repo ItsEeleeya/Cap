@@ -19,7 +19,6 @@ import {
 	teleprompterDefaults,
 	teleprompterStore,
 } from "~/store";
-import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
 import { commands } from "~/utils/tauri";
 import { initializeTitlebar } from "~/utils/titlebar-state";
 import IconLucideChevronLeft from "~icons/lucide/chevron-left";
@@ -124,7 +123,6 @@ export default function Teleprompter() {
 		document.body.style.background = "transparent";
 
 		void Promise.allSettled([
-			applyMacOSWindowMaterial("teleprompter"),
 			initializeTitlebar().then((unlisten) => {
 				unlistenTitlebar = unlisten;
 			}),

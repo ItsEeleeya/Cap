@@ -744,13 +744,20 @@ impl CapWindowId {
 
     #[cfg(target_os = "macos")]
     pub fn needs_toolbar_shell(&self) -> bool {
-        // matches!(self, Self::Settings)
-        false
+        matches!(
+            self,
+            Self::Main | Self::Settings | Self::Teleprompter | Self::Onboarding
+        )
     }
 
     #[cfg(target_os = "macos")]
     pub fn disables_fullscreen(&self) -> bool {
         matches!(self, Self::Settings)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn hides_traffic_lights(&self) -> bool {
+        matches!(self, Self::Onboarding)
     }
 
     #[cfg(target_os = "macos")]
@@ -767,7 +774,7 @@ impl CapWindowId {
             Self::Camera => (200.0, 200.0),
             Self::Upgrade => (950.0, 850.0),
             Self::ModeSelect => (580.0, 340.0),
-            Self::Onboarding => (860.0, 690.0),
+            Self::Onboarding => (850.0, 690.0),
             Self::Teleprompter => (420.0, 220.0),
             _ => return None,
         })
@@ -2249,7 +2256,7 @@ impl CapWindow {
 
             window.with_nswindow_on_main({
                 let id = id.clone();
-                move |_, nswindow| {
+                move |mtm, nswindow| {
                     if !id.appears_transparent() {
                         nswindow.setOpaque(true);
                         nswindow.setBackgroundColor(Some(
@@ -2264,20 +2271,27 @@ impl CapWindow {
                         );
                     }
 
-                    if id.appears_more_round() && !id.needs_toolbar_shell() {
-                        crate::platform::set_nswindow_radius(&nswindow, 26.0);
+                    if id.appears_more_round()
+                        && !(objc2::available!(macos = 26.0) && !objc2::available!(macos = 27.0))
+                    {
+                        // We're not on macOS 26 which automatically sets this corner radius for windows with toolbars.
+                        crate::platform::set_nswindow_radius(mtm, &nswindow, 26.0);
                     }
 
                     if id.frame_autosaves() {
                         let label = id.label();
-                        crate::platform::setup_frame_autosave(&nswindow, &label);
+                        crate::platform::setup_frame_autosave(mtm, &nswindow, &label);
+                    }
+
+                    if id.hides_traffic_lights() {
+                        crate::platform::set_traffic_lights_hidden(mtm, &nswindow, true);
                     }
                 }
             })?;
+        }
 
-            if id.needs_toolbar_shell() {
-                // crate::platform::add_toolbar_shell(&window)?;
-            }
+        if id.needs_toolbar_shell() {
+            crate::platform::add_toolbar_shell(&window)?;
         }
 
         if let Some(min) = id.min_size() {

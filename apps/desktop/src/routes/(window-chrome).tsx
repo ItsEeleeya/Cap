@@ -77,7 +77,7 @@ function LegacyChrome(props: ParentProps) {
 					data-tauri-drag-region="deep"
 					class="cap-window-header flex items-center min-w-0 w-full h-9 select-none shrink-0 bg-gray-2 win:flex-row macos:flex-row-reverse"
 				>
-					{ctx.state()?.items?.()}
+					{ctx.state()?.items}
 					{/* This is temporary until the re-strcture of window-chrome.
 			    		Then we'll use native captions on Windows and GTK-4 window controls on Linux */}
 					{(type() === "windows" || type() === "linux") && (

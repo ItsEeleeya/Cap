@@ -321,7 +321,7 @@ export default function OnboardingPage() {
 
 	createEffect(() => {
 		if (settings.data?.hasCompletedStartup && showStartupOverlay()) {
-			setShowStartupOverlay(false);
+			setShowStartupOverlay(true);
 		}
 	});
 

@@ -82,6 +82,7 @@ const SettingsGoogleDriveConfigPage = lazy(
 const OnboardingPage = lazy(
 	() => import("./routes/(window-chrome)/onboarding"),
 );
+const NewOnboardingPage = lazy(() => import("./routes/new-onboarding"));
 const UpgradePage = lazy(() => import("./routes/(window-chrome)/upgrade"));
 const UpdatePage = lazy(() => import("./routes/(window-chrome)/update"));
 const CameraPage = lazy(() => import("./routes/camera"));
@@ -211,10 +212,10 @@ function Inner() {
 								component={SettingsGoogleDriveConfigPage}
 							/>
 						</Route>
-						<Route path="/onboarding" component={OnboardingPage} />
 						<Route path="/upgrade" component={UpgradePage} />
 						<Route path="/update" component={UpdatePage} />
 					</Route>
+					<Route path="/onboarding" component={NewOnboardingPage} />
 					<Route
 						path="/camera"
 						component={CameraPage}
