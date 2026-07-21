@@ -138,6 +138,8 @@ declare global {
   const IconMaterialSymbolsScreenshotFrame2Rounded: typeof import('~icons/material-symbols/screenshot-frame2-rounded.jsx')['default']
   const IconMdiMonitor: typeof import('~icons/mdi/monitor.jsx')['default']
   const IconMynauiApi: typeof import('~icons/mynaui/api.jsx')['default']
+  const IconMynauiArrowLongLeft: typeof import('~icons/mynaui/arrow-long-left.jsx')['default']
+  const IconMynauiArrowLongRight: typeof import('~icons/mynaui/arrow-long-right.jsx')['default']
   const IconMynauiBell: typeof import('~icons/mynaui/bell.jsx')['default']
   const IconMynauiBox: typeof import('~icons/mynaui/box.jsx')['default']
   const IconMynauiChevronLeft: typeof import('~icons/mynaui/chevron-left.jsx')['default']
