@@ -248,7 +248,7 @@ function Inner() {
 					/>
 					<Route
 						path="/teleprompter"
-						info={{ AUTO_SHOW_WINDOW: false }}
+						info={{ autoShow: false }}
 						component={TeleprompterPage}
 					/>
 				</Router>
