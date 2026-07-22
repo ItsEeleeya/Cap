@@ -1,6 +1,6 @@
 import { createSpring } from "@solid-primitives/spring";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createSignal, onMount, Show } from "solid-js";
+import { createEffect, createSignal, onMount, Show } from "solid-js";
 import startupAudio from "../../assets/floating-in-the-air-adi-goldstein.mp3";
 import { AnimatedLogo } from "./AnimatedLogo";
 import SkyBackground from "./SkyBackground";
@@ -20,15 +20,17 @@ const MAIN_PAGE_DRIFT_SPEED = 0.4;
 const MAIN_PAGE_DISSIPATION_SPEED = 1.0;
 const MAIN_PAGE_FPS = 0;
 
-const OTHER_PAGE_FPS = 16;
+const MAIN_PAGE_RENDER_SCALE = 0.5;
+const OTHER_PAGE_RENDER_SCALE = 0.2;
+
+const OTHER_PAGE_FPS = 24;
 
 const BURST_DRIFT_SPEED = 25.8;
 const BURST_DISSIPATION_SPEED = 10.65;
 const BURST_FPS = 0; // unlimited
 
 const MAIN_PAGE_CLOUD_COVERAGE = 0.7;
-const OTHER_PAGE_CLOUD_COVERAGE = 0.3;
-const OTHER_PAGE_OVERLAY_OPACITY = 0.15;
+const OTHER_PAGE_CLOUD_COVERAGE = 0.7;
 
 const TRANSITION_DURATION_MS = 600;
 // Hold the burst speed for the transition duration, then spring back down.
@@ -54,6 +56,13 @@ export default function Onboarding() {
 	// overlay.
 	const [page, setPage] = createSignal(0);
 	const onMainPage = () => page() === 0;
+
+	const [renderScale, setRenderScale] = createSignal(MAIN_PAGE_RENDER_SCALE);
+	createEffect(() => {
+		setRenderScale(
+			onMainPage() ? MAIN_PAGE_CLOUD_COVERAGE : OTHER_PAGE_RENDER_SCALE,
+		);
+	});
 
 	const [driftSpeed, setDriftSpeed] = createSpring(
 		MAIN_PAGE_DRIFT_SPEED,
@@ -121,21 +130,23 @@ export default function Onboarding() {
 			{/* sky: fixed background layer, z-index 0 */}
 			<div class="fixed inset-0 z-0">
 				<SkyBackground
-					hourOverride={1}
+					// play
+					// hourOverride={20}
 					driftSpeed={driftSpeed()}
 					dissipationSpeed={dissipationSpeed()}
 					fpsCap={fpsCap()}
 					cloudCoverage={cloudCoverage()}
+					renderScale={renderScale()}
 				/>
 			</div>
 
 			{/* dims the sky further once we're off the main page, sits between
 			    the sky and all foreground content */}
 			<div
-				class="fixed inset-0 z-10 bg-black transition-opacity duration-500 ease-out"
+				class="fixed inset-0 z-10 bg-black/40 transition-opacity duration-1000 ease-out pointer-events-none"
 				style={{
-					opacity: onMainPage() ? 0 : OTHER_PAGE_OVERLAY_OPACITY,
-					"pointer-events": "none",
+					opacity: onMainPage() ? 0 : 1,
+					// "backdrop-filter": onMainPage() ? "none" : "blur(1px)",
 				}}
 			/>
 

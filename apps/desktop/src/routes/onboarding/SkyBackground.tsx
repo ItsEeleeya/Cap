@@ -6,6 +6,8 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { Portal } from "solid-js/web";
+import blitFragSrc from "./sky-clouds.blit.frag.glsl?raw";
 import fragSrc from "./sky-clouds.frag.glsl?raw";
 
 // ---------------------------------------------------------------------------
@@ -171,12 +173,13 @@ const KEYFRAMES: Keyframe[] = [
 // (see SkyBackgroundProps) since the parent app drives them during page
 // transitions - the values below are just their defaults.
 // ---------------------------------------------------------------------------
-const DEFAULT_DRIFT_SPEED = 0.8;
-const DEFAULT_DISSIPATION_SPEED = 1.5;
-const DEFAULT_FPS_CAP = 48;
+const DEFAULT_DRIFT_SPEED = 0.85;
+const DEFAULT_DISSIPATION_SPEED = 3.0;
+const DEFAULT_FPS_CAP = 0;
 const DEFAULT_CLOUD_COVERAGE = 0.7;
-const STAR_BRIGHTNESS = 1.0;
-const IRIDESCENCE = 0.2;
+const DEFAULT_STAR_BRIGHTNESS = 1.0;
+const DEFAULT_STAR_SCALE = 1.0;
+const IRIDESCENCE = 0.3;
 const CLOUD_SHADOW_AMOUNT = 0.5;
 
 // Play-through-day rate, in simulated hours per real second.
@@ -187,6 +190,17 @@ const SYSTEM_CLOCK_POLL_MS = 30_000;
 
 function toRad(deg: number): number {
 	return (deg * Math.PI) / 180;
+}
+
+// Same formula the shader used to compute this inline (before stars moved
+// to the blit pass): how dark/night-like the sky is at this keyframe,
+// derived from its skyTop color. Precomputed once per keyframe here so the
+// blit pass - which has no palette data of its own, only the cloud texture
+// it samples - can just linearly interpolate this one scalar by hour,
+// exactly like every other keyframed value.
+function skyDarknessFromTop(skyTop: [number, number, number]): number {
+	const luminance = (skyTop[0] + skyTop[1] + skyTop[2]) * 1.2;
+	return 1.0 - Math.min(1, Math.max(0, luminance));
 }
 
 interface KeyframeArrays {
@@ -200,6 +214,7 @@ interface KeyframeArrays {
 	lightColor: Float32Array;
 	lightDir: Float32Array;
 	skyTint: Float32Array;
+	skyDarkness: Float32Array;
 	count: number;
 }
 
@@ -215,6 +230,7 @@ function buildKeyframeArrays(frames: Keyframe[]): KeyframeArrays {
 	const lightColor = new Float32Array(n * 3);
 	const lightDir = new Float32Array(n * 2);
 	const skyTint = new Float32Array(n);
+	const skyDarkness = new Float32Array(n);
 
 	frames.forEach((f, i) => {
 		t[i] = f.t;
@@ -228,6 +244,7 @@ function buildKeyframeArrays(frames: Keyframe[]): KeyframeArrays {
 		const a = toRad(f.sunAngleDeg);
 		lightDir.set([Math.cos(a), Math.sin(a)], i * 2);
 		skyTint[i] = f.skyTint;
+		skyDarkness[i] = skyDarknessFromTop(f.skyTop);
 	});
 
 	return {
@@ -241,8 +258,32 @@ function buildKeyframeArrays(frames: Keyframe[]): KeyframeArrays {
 		lightColor,
 		lightDir,
 		skyTint,
+		skyDarkness,
 		count: n,
 	};
+}
+
+// Given the same KEYFRAMES data used to build the GPU-side arrays, linearly
+// interpolate skyDarkness for the current hour - the CPU-side mirror of
+// what getPalette() does in the cloud shader, but for this one scalar only,
+// since the blit shader needs it and has no palette data of its own.
+function interpolateSkyDarkness(hour: number): number {
+	const h = Math.min(24, Math.max(0, hour));
+	let i0 = 0;
+	for (let i = 0; i < KEYFRAMES.length - 1; i++) {
+		if (h >= KEYFRAMES[i].t && h <= KEYFRAMES[i + 1].t) {
+			i0 = i;
+			break;
+		}
+	}
+	const i1 = i0 + 1;
+	const kf0 = KEYFRAMES[i0];
+	const kf1 = KEYFRAMES[i1];
+	const span = Math.max(kf1.t - kf0.t, 0.0001);
+	const f = Math.min(1, Math.max(0, (h - kf0.t) / span));
+	const d0 = skyDarknessFromTop(kf0.skyTop);
+	const d1 = skyDarknessFromTop(kf1.skyTop);
+	return d0 + (d1 - d0) * f;
 }
 
 // Kept inline (not split into its own file) since it's only 3 lines - not
@@ -250,6 +291,41 @@ function buildKeyframeArrays(frames: Keyframe[]): KeyframeArrays {
 const VERT_SRC = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+// ---------------------------------------------------------------------------
+// The cloud/sky shader (sky-clouds.frag.glsl) is expensive - ~25 noise
+// samples per pixel. Rendering it at full canvas resolution every display
+// frame was measured at 55-60ms/frame on an M1 (far more GPU time than a
+// background element should ever cost). Instead:
+//
+//   1. The expensive shader renders into a small offscreen framebuffer
+//      (the renderScale prop, as a fraction of the canvas size) rather
+//      than the canvas directly, and only on a fixed real-time cadence
+//      (CLOUD_RERENDER_INTERVAL_MS) rather than every display frame.
+//   2. A second, essentially free "blit" shader (sky-clouds.blit.frag.glsl)
+//      samples that texture with bilinear filtering and stretches it
+//      across the actual canvas, every real display frame. This is what
+//      makes it *look* like it's updating smoothly at full fps even though
+//      the expensive pass runs far less often.
+//   3. Stars are rendered in the blit pass, not the cloud pass - they're
+//      cheap (a hash + radial falloff, no fBm) so there's no reason to pay
+//      for them at the cloud pass's low internal renderScale and have them
+//      blurred in the upscale along with the expensive noise. Rendering
+//      them in the blit pass means they're always crisp at full display
+//      resolution, regardless of how low renderScale drops - which in turn
+//      means renderScale can be pushed much lower on secondary pages for a
+//      strong blur without the stars degrading at all.
+// ---------------------------------------------------------------------------
+const DEFAULT_RENDER_SCALE = 0.5;
+// Re-render the expensive cloud pass on this real-time cadence, independent
+// of driftSpeed and independent of fpsCap. A phase-delta threshold (re-
+// render only once cloud position has moved "enough") was tried instead and
+// doesn't hold up across this component's full speed range: a threshold
+// tuned for smooth motion at the default ~0.8 drift speed implies over 200
+// renders/sec during a 10.8 burst (pure waste), while a threshold tuned to
+// be sane during a burst implies multi-second gaps at rest (visibly
+// laggy). A fixed real-time interval doesn't have that tension.
+const CLOUD_RERENDER_INTERVAL_MS = 32; // ~33 cloud-passes/sec
 
 function compileShader(
 	gl: WebGL2RenderingContext,
@@ -287,14 +363,13 @@ function createProgram(
 	return program;
 }
 
-interface UniformLocations {
+interface CloudUniformLocations {
 	uResolution: WebGLUniformLocation | null;
 	uTime: WebGLUniformLocation | null;
 	uHour: WebGLUniformLocation | null;
 	uDriftPhase: WebGLUniformLocation | null;
 	uDissipationPhase: WebGLUniformLocation | null;
 	uCoverageMul: WebGLUniformLocation | null;
-	uStarBrightness: WebGLUniformLocation | null;
 	uIridescence: WebGLUniformLocation | null;
 	uShadowAmount: WebGLUniformLocation | null;
 	uKCount: WebGLUniformLocation | null;
@@ -310,6 +385,15 @@ interface UniformLocations {
 	uKSkyTint: WebGLUniformLocation | null;
 }
 
+interface BlitUniformLocations {
+	uCloudTexture: WebGLUniformLocation | null;
+	uResolution: WebGLUniformLocation | null;
+	uTime: WebGLUniformLocation | null;
+	uStarBrightness: WebGLUniformLocation | null;
+	uStarScale: WebGLUniformLocation | null;
+	uSkyDarkness: WebGLUniformLocation | null;
+}
+
 interface SkyBackgroundProps {
 	/** Cloud drift speed. Sign controls direction: positive drifts forward
 	 * (the normal direction), negative reverses it - useful for a "going
@@ -322,8 +406,26 @@ interface SkyBackgroundProps {
 	/** Cloud coverage multiplier - lower values thin the clouds out.
 	 * @default 0.7 */
 	cloudCoverage?: number;
-	/** Frame rate cap. 0 = uncapped. @default 48 */
+	/** Star brightness multiplier. Rendered in the blit pass at full display
+	 * resolution, independent of renderScale.
+	 * @default 0.2 */
+	starBrightness?: number;
+	/** Star size/spacing multiplier - scales both the dot radius and the
+	 * gap between stars together (they're proportional, so this reads as
+	 * "bigger/smaller stars" rather than "denser/sparser"). Rendered in the
+	 * blit pass at full display resolution, independent of renderScale.
+	 * @default 1.0 */
+	starScale?: number;
+	/** Frame rate cap. 0 = uncapped. @default 0 */
 	fpsCap?: number;
+	/** Internal render resolution for the expensive cloud/sky shader, as a
+	 * fraction of the canvas's own resolution - lower values cost less GPU
+	 * time at the cost of a softer/blurrier result once upscaled. The
+	 * result is always upscaled with bilinear filtering, so lower values
+	 * read as "soft" rather than blocky. Stars are unaffected by this - they
+	 * render separately, always at full display resolution.
+	 * @default 0.5 */
+	renderScale?: number;
 	/** Manual hour override (0-24). When set, this takes precedence over
 	 * following the system clock. Ignored while `play` is true. */
 	hourOverride?: number;
@@ -386,46 +488,55 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		});
 		if (!gl) return;
 
-		let program: WebGLProgram;
+		let cloudProgram: WebGLProgram;
+		let blitProgram: WebGLProgram;
 		try {
-			program = createProgram(gl, VERT_SRC, fragSrc);
+			cloudProgram = createProgram(gl, VERT_SRC, fragSrc);
+			blitProgram = createProgram(gl, VERT_SRC, blitFragSrc);
 		} catch (err) {
 			console.error(err);
 			return;
 		}
-		gl.useProgram(program);
 
+		// Shared fullscreen-quad geometry, used by both programs.
 		const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1]);
 		const buf = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 		gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
-		const aPos = gl.getAttribLocation(program, "aPos");
-		gl.enableVertexAttribArray(aPos);
-		gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+		function bindQuad(program: WebGLProgram) {
+			const aPos = gl!.getAttribLocation(program, "aPos");
+			gl!.bindBuffer(gl!.ARRAY_BUFFER, buf);
+			gl!.enableVertexAttribArray(aPos);
+			gl!.vertexAttribPointer(aPos, 2, gl!.FLOAT, false, 0, 0);
+		}
 
 		const kf = buildKeyframeArrays(KEYFRAMES);
 
-		const u: UniformLocations = {
-			uResolution: gl.getUniformLocation(program, "uResolution"),
-			uTime: gl.getUniformLocation(program, "uTime"),
-			uHour: gl.getUniformLocation(program, "uHour"),
-			uDriftPhase: gl.getUniformLocation(program, "uDriftPhase"),
-			uDissipationPhase: gl.getUniformLocation(program, "uDissipationPhase"),
-			uCoverageMul: gl.getUniformLocation(program, "uCoverageMul"),
-			uStarBrightness: gl.getUniformLocation(program, "uStarBrightness"),
-			uIridescence: gl.getUniformLocation(program, "uIridescence"),
-			uShadowAmount: gl.getUniformLocation(program, "uShadowAmount"),
-			uKCount: gl.getUniformLocation(program, "uKCount"),
-			uKt: gl.getUniformLocation(program, "uKt"),
-			uKSkyTop: gl.getUniformLocation(program, "uKSkyTop"),
-			uKSkyBottom: gl.getUniformLocation(program, "uKSkyBottom"),
-			uKCloudDark: gl.getUniformLocation(program, "uKCloudDark"),
-			uKCloudLight: gl.getUniformLocation(program, "uKCloudLight"),
-			uKCloudCover: gl.getUniformLocation(program, "uKCloudCover"),
-			uKCloudTint: gl.getUniformLocation(program, "uKCloudTint"),
-			uKLightColor: gl.getUniformLocation(program, "uKLightColor"),
-			uKLightDir: gl.getUniformLocation(program, "uKLightDir"),
-			uKSkyTint: gl.getUniformLocation(program, "uKSkyTint"),
+		gl.useProgram(cloudProgram);
+		const u: CloudUniformLocations = {
+			uResolution: gl.getUniformLocation(cloudProgram, "uResolution"),
+			uTime: gl.getUniformLocation(cloudProgram, "uTime"),
+			uHour: gl.getUniformLocation(cloudProgram, "uHour"),
+			uDriftPhase: gl.getUniformLocation(cloudProgram, "uDriftPhase"),
+			uDissipationPhase: gl.getUniformLocation(
+				cloudProgram,
+				"uDissipationPhase",
+			),
+			uCoverageMul: gl.getUniformLocation(cloudProgram, "uCoverageMul"),
+			uIridescence: gl.getUniformLocation(cloudProgram, "uIridescence"),
+			uShadowAmount: gl.getUniformLocation(cloudProgram, "uShadowAmount"),
+			uKCount: gl.getUniformLocation(cloudProgram, "uKCount"),
+			uKt: gl.getUniformLocation(cloudProgram, "uKt"),
+			uKSkyTop: gl.getUniformLocation(cloudProgram, "uKSkyTop"),
+			uKSkyBottom: gl.getUniformLocation(cloudProgram, "uKSkyBottom"),
+			uKCloudDark: gl.getUniformLocation(cloudProgram, "uKCloudDark"),
+			uKCloudLight: gl.getUniformLocation(cloudProgram, "uKCloudLight"),
+			uKCloudCover: gl.getUniformLocation(cloudProgram, "uKCloudCover"),
+			uKCloudTint: gl.getUniformLocation(cloudProgram, "uKCloudTint"),
+			uKLightColor: gl.getUniformLocation(cloudProgram, "uKLightColor"),
+			uKLightDir: gl.getUniformLocation(cloudProgram, "uKLightDir"),
+			uKSkyTint: gl.getUniformLocation(cloudProgram, "uKSkyTint"),
 		};
 
 		gl.uniform1i(u.uKCount, kf.count);
@@ -440,15 +551,75 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		gl.uniform2fv(u.uKLightDir, kf.lightDir);
 		gl.uniform1fv(u.uKSkyTint, kf.skyTint);
 
-		function resize() {
+		gl.useProgram(blitProgram);
+		const ub: BlitUniformLocations = {
+			uCloudTexture: gl.getUniformLocation(blitProgram, "uCloudTexture"),
+			uResolution: gl.getUniformLocation(blitProgram, "uResolution"),
+			uTime: gl.getUniformLocation(blitProgram, "uTime"),
+			uStarBrightness: gl.getUniformLocation(blitProgram, "uStarBrightness"),
+			uStarScale: gl.getUniformLocation(blitProgram, "uStarScale"),
+			uSkyDarkness: gl.getUniformLocation(blitProgram, "uSkyDarkness"),
+		};
+		gl.uniform1i(ub.uCloudTexture, 0);
+
+		// Offscreen target the expensive cloud shader renders into, at a
+		// fraction of the canvas's own resolution. Reallocated whenever the
+		// canvas resizes. Bilinear filtering (LINEAR) is what turns the
+		// upscale into a soft blur instead of blocky pixelation. RGBA (not
+		// RGB) because the cloud shader writes "openness" into alpha for the
+		// blit pass's star occlusion - see sky-clouds.frag.glsl.
+		const cloudTexture = gl.createTexture();
+		gl.bindTexture(gl.TEXTURE_2D, cloudTexture);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+		const cloudFramebuffer = gl.createFramebuffer();
+
+		let cloudTexWidth = 0;
+		let cloudTexHeight = 0;
+
+		function resize(): boolean {
 			const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 			const w = Math.round(canvas.clientWidth * dpr);
 			const h = Math.round(canvas.clientHeight * dpr);
 			if (canvas.width !== w || canvas.height !== h) {
 				canvas.width = w;
 				canvas.height = h;
-				gl!.viewport(0, 0, w, h);
 			}
+
+			const renderScale = props.renderScale ?? DEFAULT_RENDER_SCALE;
+			const tw = Math.max(1, Math.round(w * renderScale));
+			const th = Math.max(1, Math.round(h * renderScale));
+			// texImage2D(..., null) below reallocates the texture's storage with
+			// UNDEFINED contents - any frame that samples it before the next
+			// cloud pass has actually redrawn into it will see a blank/black
+			// texture. This was the cause of the flash: renderScale changing
+			// (especially continuously, via a spring) reallocates on nearly
+			// every frame while it's in flight, and the cloud pass normally
+			// only redraws on its own throttled cadence (CLOUD_RERENDER_INTERVAL_MS),
+			// leaving a gap where the blit pass samples garbage. Returning
+			// whether a reallocation happened lets the caller force an
+			// immediate synchronous redraw this same frame, closing that gap.
+			if (tw !== cloudTexWidth || th !== cloudTexHeight) {
+				cloudTexWidth = tw;
+				cloudTexHeight = th;
+				gl!.bindTexture(gl!.TEXTURE_2D, cloudTexture);
+				gl!.texImage2D(
+					gl!.TEXTURE_2D,
+					0,
+					gl!.RGBA8,
+					tw,
+					th,
+					0,
+					gl!.RGBA,
+					gl!.UNSIGNED_BYTE,
+					null,
+				);
+				return true;
+			}
+			return false;
 		}
 
 		let lastFrameTime = performance.now();
@@ -464,6 +635,57 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		let driftPhase = 0;
 		let dissipationPhase = 0;
 		let lastPhaseTime = performance.now();
+
+		// Tracks when the expensive cloud pass last actually ran, so the blit
+		// pass (which runs every frame) can reuse the same texture in between.
+		let lastCloudRenderTime = 0;
+
+		function renderCloudPass(t: number) {
+			gl!.bindFramebuffer(gl!.FRAMEBUFFER, cloudFramebuffer);
+			gl!.framebufferTexture2D(
+				gl!.FRAMEBUFFER,
+				gl!.COLOR_ATTACHMENT0,
+				gl!.TEXTURE_2D,
+				cloudTexture,
+				0,
+			);
+			gl!.viewport(0, 0, cloudTexWidth, cloudTexHeight);
+
+			gl!.useProgram(cloudProgram);
+			bindQuad(cloudProgram);
+
+			gl!.uniform2f(u.uResolution, cloudTexWidth, cloudTexHeight);
+			gl!.uniform1f(u.uTime, t);
+			gl!.uniform1f(u.uHour, hour());
+			gl!.uniform1f(u.uDriftPhase, driftPhase);
+			gl!.uniform1f(u.uDissipationPhase, dissipationPhase);
+			gl!.uniform1f(
+				u.uCoverageMul,
+				props.cloudCoverage ?? DEFAULT_CLOUD_COVERAGE,
+			);
+			gl!.uniform1f(u.uIridescence, IRIDESCENCE);
+			gl!.uniform1f(u.uShadowAmount, CLOUD_SHADOW_AMOUNT);
+			gl!.drawArrays(gl!.TRIANGLES, 0, 6);
+
+			gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+		}
+
+		function renderBlitPass(t: number) {
+			gl!.viewport(0, 0, canvas.width, canvas.height);
+			gl!.useProgram(blitProgram);
+			bindQuad(blitProgram);
+			gl!.uniform2f(ub.uResolution, canvas.width, canvas.height);
+			gl!.uniform1f(ub.uTime, t);
+			gl!.uniform1f(
+				ub.uStarBrightness,
+				props.starBrightness ?? DEFAULT_STAR_BRIGHTNESS,
+			);
+			gl!.uniform1f(ub.uStarScale, props.starScale ?? DEFAULT_STAR_SCALE);
+			gl!.uniform1f(ub.uSkyDarkness, interpolateSkyDarkness(hour()));
+			gl!.activeTexture(gl!.TEXTURE0);
+			gl!.bindTexture(gl!.TEXTURE_2D, cloudTexture);
+			gl!.drawArrays(gl!.TRIANGLES, 0, 6);
+		}
 
 		function render(now: number) {
 			const capValue = props.fpsCap ?? DEFAULT_FPS_CAP;
@@ -488,22 +710,25 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			dissipationPhase +=
 				phaseDt * (props.dissipationSpeed ?? DEFAULT_DISSIPATION_SPEED) * 0.14;
 
-			resize();
+			const wasReallocated = resize();
 			const t = (performance.now() - startTime) / 1000;
 
-			gl!.uniform2f(u.uResolution, canvas.width, canvas.height);
-			gl!.uniform1f(u.uTime, t);
-			gl!.uniform1f(u.uHour, hour());
-			gl!.uniform1f(u.uDriftPhase, driftPhase);
-			gl!.uniform1f(u.uDissipationPhase, dissipationPhase);
-			gl!.uniform1f(
-				u.uCoverageMul,
-				props.cloudCoverage ?? DEFAULT_CLOUD_COVERAGE,
-			);
-			gl!.uniform1f(u.uStarBrightness, STAR_BRIGHTNESS);
-			gl!.uniform1f(u.uIridescence, IRIDESCENCE);
-			gl!.uniform1f(u.uShadowAmount, CLOUD_SHADOW_AMOUNT);
-			gl!.drawArrays(gl!.TRIANGLES, 0, 6);
+			// Re-run the expensive cloud shader on a fixed real-time cadence,
+			// independent of driftSpeed and independent of fpsCap (see
+			// CLOUD_RERENDER_INTERVAL_MS above for why time-based) - OR
+			// immediately, regardless of cadence, whenever the texture was just
+			// reallocated (new size), since its contents are otherwise
+			// undefined and would flash black/blank until the next scheduled
+			// pass. This is what fixes the flash on renderScale changes
+			// (especially a spring, which reallocates on nearly every frame
+			// while in motion) and on initial mount.
+			const isDue = now - lastCloudRenderTime >= CLOUD_RERENDER_INTERVAL_MS;
+			if (isDue || wasReallocated) {
+				renderCloudPass(t);
+				lastCloudRenderTime = now;
+			}
+
+			renderBlitPass(t);
 
 			if (import.meta.env.DEV) {
 				fpsFrames++;
@@ -538,25 +763,27 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			<canvas ref={canvasRef} class="absolute block inset-0 size-full" />
 
 			<Show when={import.meta.env.DEV}>
-				<div
-					style={{
-						position: "absolute",
-						top: "20px",
-						left: "20px",
-						"z-index": 2,
-						"font-family": "'SF Mono', ui-monospace, monospace",
-						"font-size": "11px",
-						color: "rgba(255,255,255,0.55)",
-						background: "rgba(10,14,24,0.42)",
-						"backdrop-filter": "blur(16px)",
-						border: "1px solid rgba(255,255,255,0.12)",
-						"border-radius": "999px",
-						padding: "5px 10px",
-						"pointer-events": "none",
-					}}
-				>
-					{fps()} fps
-				</div>
+				<Portal mount={document.body}>
+					<div
+						style={{
+							position: "absolute",
+							top: "20px",
+							left: "20px",
+							"z-index": 10,
+							"font-family": "'SF Mono', ui-monospace, monospace",
+							"font-size": "11px",
+							color: "rgba(255,255,255,0.55)",
+							background: "rgba(10,14,24,0.42)",
+							"backdrop-filter": "blur(16px)",
+							border: "1px solid rgba(255,255,255,0.12)",
+							"border-radius": "999px",
+							padding: "5px 10px",
+							"pointer-events": "none",
+						}}
+					>
+						{fps()} fps
+					</div>
+				</Portal>
 			</Show>
 		</div>
 	);

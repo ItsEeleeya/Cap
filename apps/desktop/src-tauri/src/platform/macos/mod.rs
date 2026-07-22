@@ -23,8 +23,6 @@ use objc2_foundation::{
     NSNotificationCenter, NSNumber, NSObjectProtocol, NSOperationQueue, ns_string,
 };
 use objc2_web_kit::{WKProcessPool, WKWebViewConfiguration};
-use objc2::MainThreadMarker;
-use objc2_app_kit::NSWindow;
 pub use sc_shareable_content::*;
 use tauri::{WebviewWindow, WindowEvent};
 

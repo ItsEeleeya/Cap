@@ -6,11 +6,14 @@
 // instead of fixed constants.
 //
 // Octave counts below (5/6/6/4/4, ~25 noise samples/pixel total) are cut
-// down from the original port (7/8/8/7/7, ~37/pixel) - full window size on
-// an M1 GPU was measuring 55-60ms/frame at the original counts, which is
-// far too expensive for a background element. Cut proportionally more from
-// the shading-detail passes (c/c1) than the shape-defining ones (r/f) since
-// they matter less to the silhouette.
+// down from the original port (7/8/8/7/7, ~37/pixel) - full-resolution
+// rendering was too expensive for a background element on an M1 GPU. Cut
+// proportionally more from the shading-detail passes (c/c1) than the
+// shape-defining ones (r/f) since they matter less to the silhouette. The
+// bigger cost reduction comes from SkyBackground.tsx rendering this shader
+// into a small offscreen texture (renderScale) and reusing it across
+// several display frames rather than rendering at full res every frame -
+// see that file for details.
 
 precision highp float;
 
@@ -20,7 +23,6 @@ uniform float uHour;
 uniform float uDriftPhase;
 uniform float uDissipationPhase;
 uniform float uCoverageMul;
-uniform float uStarBrightness;
 uniform float uIridescence;
 uniform float uShadowAmount;
 
@@ -109,16 +111,6 @@ float noise(vec2 p) {
     vec3 h = max(0.5 - vec3(dot(a, a), dot(b, b), dot(c, c)), 0.0);
     vec3 n = h * h * h * h * vec3(dot(a, hash(i + 0.0)), dot(b, hash(i + o)), dot(c, hash(i + 1.0)));
     return dot(n, vec3(70.0));
-}
-
-// Separate scalar hash for point grids (stars). The cloud hash() above has
-// visible diagonal correlation when sampled directly on an integer lattice
-// (fine for smooth noise, bad for point patterns) - this one is scrambled
-// with an extra fract/multiply pass to break that up.
-float starHash(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
 }
 
 float fbm(vec2 n) {
@@ -267,33 +259,19 @@ void main() {
     float glowTotal = (glowCore + glowHalo) * mix(1.0, 0.35, coverage);
     result += pal.lightColor * glowTotal;
 
-    // stars: small soft dots, sparse, night only, upper sky. Most are a single
-    // point; a minority render larger by filling more of their cell, using a
-    // radial falloff from the cell center rather than a flat per-cell fill.
-    float skyDarkness = 1.0 - clamp((pal.skyTop.r + pal.skyTop.g + pal.skyTop.b) * 1.2, 0.0, 1.0);
-    if (skyDarkness > 0.05) {
-        // grid keyed to physical pixels at a fixed cell size, so stars stay a
-        // consistent small size regardless of canvas resolution.
-        float starCell = 2.0;
-        vec2 cellCoord = fragCoord / starCell;
-        vec2 gi = floor(cellCoord);
-        vec2 cellUv = fract(cellCoord) - 0.5; // -0.5..0.5 within the cell
-
-        float sh = starHash(gi);
-        float sizeSeed = starHash(gi + 91.7);
-        float starMask = step(0.978, sh);
-
-        // most stars are tiny (radius ~0.18), a rarer subset are a bit bigger
-        // (~0.45), giving visible size variation instead of uniform dots.
-        float isBig = step(0.85, sizeSeed);
-        float starRadius = mix(0.18, 0.45, isBig);
-        float dot = 1.0 - smoothstep(starRadius * 0.4, starRadius, length(cellUv));
-
-        float twinkle = 0.7 + 0.3 * sin(uTime * (0.35 + sh * 0.6) + sh * 80.0);
-        float openness = 1.0 - coverage;
-        float starB = starMask * dot * twinkle * skyDarkness * smoothstep(0.05, 0.4, p.y) * openness * uStarBrightness;
-        result += vec3(starB);
-    }
-
-    fragColor = vec4(result, 1.0);
+    // Stars are intentionally NOT rendered here. They're cheap (no fBm, just
+    // a hash + radial falloff) so there's no reason to pay for them at this
+    // pass's low internal renderScale and blur them in the upscale along
+    // with the expensive cloud noise - they're rendered separately in the
+    // blit pass instead, at full display resolution, so they stay crisp
+    // even when clouds are heavily downscaled/blurred (e.g. on secondary
+    // pages where renderScale drops for performance). See
+    // sky-clouds.blit.frag.glsl.
+    //
+    // "openness" (how clear the sky is at this pixel, i.e. not covered by
+    // cloud) is written to the alpha channel so the blit pass - which only
+    // has this texture to sample, not the palette or cloud density - can
+    // still occlude stars under clouds and dim them appropriately.
+    float openness = 1.0 - coverage;
+    fragColor = vec4(result, openness);
 }
