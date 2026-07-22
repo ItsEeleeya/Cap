@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createEffect, createSignal, onMount, Show } from "solid-js";
 import startupAudio from "../../assets/floating-in-the-air-adi-goldstein.mp3";
 import { AnimatedLogo } from "./AnimatedLogo";
-import SkyBackground from "./SkyBackground";
+import SkyBackground from "./sky-background/SkyBackground";
 import { SplitText } from "./SplitText";
 
 // ---------------------------------------------------------------------------
@@ -18,9 +18,9 @@ import { SplitText } from "./SplitText";
 // ---------------------------------------------------------------------------
 const MAIN_PAGE_DRIFT_SPEED = 0.4;
 const MAIN_PAGE_DISSIPATION_SPEED = 1.0;
-const MAIN_PAGE_FPS = 0;
+const MAIN_PAGE_FPS = 0; // unlimited
 
-const MAIN_PAGE_RENDER_SCALE = 0.5;
+const MAIN_PAGE_RENDER_SCALE = 0.4;
 const OTHER_PAGE_RENDER_SCALE = 0.2;
 
 const OTHER_PAGE_FPS = 24;
@@ -32,7 +32,7 @@ const BURST_FPS = 0; // unlimited
 const MAIN_PAGE_CLOUD_COVERAGE = 0.7;
 const OTHER_PAGE_CLOUD_COVERAGE = 0.7;
 
-const TRANSITION_DURATION_MS = 600;
+const TRANSITION_DURATION_MS = 500;
 // Hold the burst speed for the transition duration, then spring back down.
 const BURST_HOLD_MS = TRANSITION_DURATION_MS;
 // How long after starting the spring-back to wait before dropping fps to
@@ -152,15 +152,15 @@ export default function Onboarding() {
 
 			{/* foreground content, above sky + overlay */}
 			<div class="relative z-20 size-full">
-				<OnboardingHeader onBack={goBack} showBack={!onMainPage()} />
+				<OnboardingHeader showBack={!onMainPage()} />
 
 				<div class="w-full mt-60 flex flex-col gap-3 items-center justify-center">
 					<AnimatedLogo class="" />
 					<SplitText
-						class="text-4xl font-light pt-2"
+						class="text-4xl font-medium pt-2"
 						tag="h1"
 						text="Welcome to Cap"
-					/>
+                    />
 
 					<button
 						class="mt-35 apple-glass-clear inline-flex items-baselinen justify-center p-2 px-4 gap-4 rounded-full text-lg *:apple-vibrancy-label"
@@ -185,24 +185,15 @@ export default function Onboarding() {
 	);
 }
 
-function OnboardingHeader(props: { onBack: () => void; showBack: boolean }) {
+function OnboardingHeader(props: { showBack: boolean }) {
 	return (
 		<div class="fixed top-0 left-0 z-50 w-full h-13 flex items-center p-4.5">
 			<button
-				class="fixed top-5 left-5 group size-3.5 rounded-full inline-flex items-center justify-center before:content[''] before:absolute hover:before:bg-white/80 before:backdropbackdrop-brightness-40 active:scale-110 before:size-7 before:rounded-full before:bg-white/5 transition duration-200 ease-in-out"
+				class="fixed top-5 left-5 group size-3.5 rounded-full inline-flex items-center justify-center before:content[''] before:absolute hover:before:bg-white/30 before:backdropbackdrop-brightness-40 active:scale-110 before:size-7 before:rounded-full before:bg-white/5 transition duration-200 ease-in-out"
 				onClick={() => void getCurrentWindow().close()}
 			>
 				<IconLucideX class="size-4 apple-vibrancy-fill group-hover:text-black" />
 			</button>
-
-			<Show when={props.showBack}>
-				<button
-					class="fixed top-5 left-14 group size-7 rounded-full inline-flex items-center justify-center hover:bg-white/10 active:scale-110 transition duration-200 ease-in-out"
-					onClick={props.onBack}
-				>
-					<IconMynauiArrowLongLeft class="size-4 apple-vibrancy-fill" />
-				</button>
-			</Show>
 		</div>
 	);
 }
