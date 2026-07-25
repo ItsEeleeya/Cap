@@ -3,7 +3,9 @@ import type { ComponentProps, ValidComponent } from "solid-js";
 import { splitProps } from "solid-js";
 import { ElasticSurface } from "~/components/ElasticSurface";
 
-export default function GlassEffectContainer(props: ComponentProps<"div"> & { as?: ValidComponent }) {
+export default function GlassEffectContainer(
+	props: ComponentProps<"div"> & { as?: ValidComponent },
+) {
 	// const solariumEnabled = document.documentElement.hasAttribute("data-solarium");
 
 	const [local, rest] = splitProps(props, ["class", "children"]);

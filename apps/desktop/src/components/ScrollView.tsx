@@ -7,7 +7,6 @@ import {
 	createEffect,
 	createSignal,
 	type JSX,
-	mergeProps,
 	onCleanup,
 	type ParentProps,
 	Show,
@@ -224,7 +223,7 @@ function Viewport(props: ViewportProps) {
 			role="region"
 			tabIndex={0}
 			class={cx("absolute inset-0 scrollbar-none", local.class)}
-			classList={{ "cap-fade-mask": local.fade }}
+			classList={{ "fade-mask": local.fade }}
 			style={{
 				"--fade-top-length": `${edge().top}px`,
 				"--fade-top-start": `${edge().top * 0.5}px`,

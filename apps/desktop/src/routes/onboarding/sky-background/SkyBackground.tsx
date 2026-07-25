@@ -4,20 +4,10 @@ import {
 	createSignal,
 	onCleanup,
 	onMount,
-	Show,
 } from "solid-js";
 import { Portal } from "solid-js/web";
 import blitFragSrc from "./sky-background.blit.frag.glsl?raw";
 import fragSrc from "./sky-background.frag.glsl?raw";
-
-// ---------------------------------------------------------------------------
-// Time-of-day palette. Named keyframes tween linearly by hour.
-// Maps onto the "drift" 2D-clouds technique's tunables:
-//   skyTop/skyBottom     -> sky gradient
-//   cloudDark/cloudLight -> cloud shading range
-//   cloudCover           -> how much cloud vs open sky (paired with cloudalpha in-shader)
-//   lightColor/sunAngle  -> sun/moon glow + warm/cool tint on light-facing cloud edges
-// ---------------------------------------------------------------------------
 
 interface Keyframe {
 	t: number;
@@ -166,38 +156,22 @@ const KEYFRAMES: Keyframe[] = [
 	},
 ];
 
-// ---------------------------------------------------------------------------
-// Fixed render tuning. These were exposed as sliders while dialing in the
-// look; now that the values are settled they're plain consts. Adjust here,
-// not via UI. Drift/dissipation speed and the fps cap are exposed as props
-// (see SkyBackgroundProps) since the parent app drives them during page
-// transitions - the values below are just their defaults.
-// ---------------------------------------------------------------------------
 const DEFAULT_DRIFT_SPEED = 0.85;
-const DEFAULT_DISSIPATION_SPEED = 3.0;
+const DEFAULT_DISSIPATION_SPEED = 2.0;
 const DEFAULT_FPS_CAP = 0;
-const DEFAULT_CLOUD_COVERAGE = 0.7;
+const DEFAULT_CLOUD_COVERAGE = 1.0;
 const DEFAULT_STAR_BRIGHTNESS = 1.0;
 const DEFAULT_STAR_SCALE = 1.0;
-const IRIDESCENCE = 0.3;
+const IRIDESCENCE = 0.22;
 const CLOUD_SHADOW_AMOUNT = 0.7;
 
-// Play-through-day rate, in simulated hours per real second.
 const PLAY_SPEED = 0.9;
-
-// How often (ms) to re-read the system clock when following real time.
 const SYSTEM_CLOCK_POLL_MS = 30_000;
 
 function toRad(deg: number): number {
 	return (deg * Math.PI) / 180;
 }
 
-// Same formula the shader used to compute this inline (before stars moved
-// to the blit pass): how dark/night-like the sky is at this keyframe,
-// derived from its skyTop color. Precomputed once per keyframe here so the
-// blit pass - which has no palette data of its own, only the cloud texture
-// it samples - can just linearly interpolate this one scalar by hour,
-// exactly like every other keyframed value.
 function skyDarknessFromTop(skyTop: [number, number, number]): number {
 	const luminance = (skyTop[0] + skyTop[1] + skyTop[2]) * 1.2;
 	return 1.0 - Math.min(1, Math.max(0, luminance));
@@ -263,10 +237,6 @@ function buildKeyframeArrays(frames: Keyframe[]): KeyframeArrays {
 	};
 }
 
-// Given the same KEYFRAMES data used to build the GPU-side arrays, linearly
-// interpolate skyDarkness for the current hour - the CPU-side mirror of
-// what getPalette() does in the cloud shader, but for this one scalar only,
-// since the blit shader needs it and has no palette data of its own.
 function interpolateSkyDarkness(hour: number): number {
 	const h = Math.min(24, Math.max(0, hour));
 	let i0 = 0;
@@ -286,43 +256,11 @@ function interpolateSkyDarkness(hour: number): number {
 	return d0 + (d1 - d0) * f;
 }
 
-// Kept inline (not split into its own file) since it's only 3 lines - not
-// worth a separate .vert.glsl for something this small.
 const VERT_SRC = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
-// ---------------------------------------------------------------------------
-// The cloud/sky shader (sky-background.frag.glsl) is expensive - ~25 noise
-// samples per pixel. Rendering it at full canvas resolution every display
-// frame was measured at 55-60ms/frame on an M1 (far more GPU time than a
-// background element should ever cost). Instead:
-//
-//   1. The expensive shader renders into a small offscreen framebuffer
-//      (the renderScale prop, as a fraction of the canvas size) rather
-//      than the canvas directly, and only on a fixed real-time cadence
-//      (CLOUD_RERENDER_INTERVAL_MS) rather than every display frame.
-//   2. A second, essentially free "blit" shader (sky-background.blit.glsl)
-//      samples that texture with bilinear filtering and stretches it
-//      across the actual canvas, every real display frame. This is what
-//      makes it *look* like it's updating smoothly at full fps even though
-//      the expensive pass runs far less often.
-//   3. Stars are rendered in the blit pass, not the cloud pass - they're
-//      cheap (a hash + radial falloff, no fBm) so there's no reason to pay
-//      for them at the cloud pass's low internal renderScale and have them
-//      blurred in the upscale along with the expensive noise. Rendering
-//      them in the blit pass means they're always crisp at full display
-//      resolution, regardless of how low renderScale drops - which in turn
-//      means renderScale can be pushed much lower on secondary pages for a
-//      strong blur without the stars degrading at all.
-// ---------------------------------------------------------------------------
 const DEFAULT_RENDER_SCALE = 0.5;
-// renderScale is exposed to callers as a plain number (e.g. driven by a
-// spring for a smooth blur transition), but the offscreen cloud texture is
-// only reallocated at these discrete steps. Snapping to the nearest step
-// (see quantizeRenderScale) means a spring sweeping continuously through
-// 0.3 -> 1 reallocates a handful of times at the crossings, not on every
-// single frame.
 const RENDER_SCALE_STEPS = [0.3, 0.5, 0.8, 1] as const;
 
 function quantizeRenderScale(scale: number): number {
@@ -338,21 +276,7 @@ function quantizeRenderScale(scale: number): number {
 	return closest;
 }
 
-// Re-render the expensive cloud pass on this real-time cadence, independent
-// of driftSpeed and independent of fpsCap. A phase-delta threshold (re-
-// render only once cloud position has moved "enough") was tried instead and
-// doesn't hold up across this component's full speed range: a threshold
-// tuned for smooth motion at the default ~0.8 drift speed implies over 200
-// renders/sec during a 10.8 burst (pure waste), while a threshold tuned to
-// be sane during a burst implies multi-second gaps at rest (visibly
-// laggy). A fixed real-time interval doesn't have that tension.
-const CLOUD_RERENDER_INTERVAL_MS = 32; // ~33 cloud-passes/sec
-
-// Fallback ceiling on phaseDt for a single frame, in seconds - not the fix
-// for the backgrounded-tab case (see the visibilitychange listener), just a
-// safety net for other stalls. Deliberately far above any fpsCap a caller
-// would set, even a conservative one, so it never affects intentional
-// low-fps playback.
+const CLOUD_RERENDER_INTERVAL_MS = 32;
 const MAX_PHASE_DT_SEC = 1;
 
 function compileShader(
@@ -423,41 +347,14 @@ interface BlitUniformLocations {
 }
 
 interface SkyBackgroundProps {
-	/** Cloud drift speed. Sign controls direction: positive drifts forward
-	 * (the normal direction), negative reverses it - useful for a "going
-	 * back a page" effect. Magnitude scales rate; try ~10 for a brief burst.
-	 * @default 0.4 */
 	driftSpeed?: number;
-	/** Edge dissipation (fraying/dissolving) speed. Same sign convention as
-	 * driftSpeed. @default 1.0 */
 	dissipationSpeed?: number;
-	/** Cloud coverage multiplier - lower values thin the clouds out.
-	 * @default 0.7 */
 	cloudCoverage?: number;
-	/** Star brightness multiplier. Rendered in the blit pass at full display
-	 * resolution, independent of renderScale.
-	 * @default 0.2 */
 	starBrightness?: number;
-	/** Star size/spacing multiplier - scales both the dot radius and the
-	 * gap between stars together (they're proportional, so this reads as
-	 * "bigger/smaller stars" rather than "denser/sparser"). Rendered in the
-	 * blit pass at full display resolution, independent of renderScale.
-	 * @default 1.0 */
 	starScale?: number;
-	/** Frame rate cap. 0 = uncapped. @default 0 */
 	fpsCap?: number;
-	/** Internal render resolution for the expensive cloud/sky shader, as a
-	 * fraction of the canvas's own resolution - lower values cost less GPU
-	 * time at the cost of a softer/blurrier result once upscaled. The
-	 * result is always upscaled with bilinear filtering, so lower values
-	 * read as "soft" rather than blocky. Stars are unaffected by this - they
-	 * render separately, always at full display resolution.
-	 * @default 0.5 */
 	renderScale?: number;
-	/** Manual hour override (0-24). When set, this takes precedence over
-	 * following the system clock. Ignored while `play` is true. */
 	hourOverride?: number;
-	/** Animate through a full day instead of showing a fixed/system hour. */
 	play?: boolean;
 }
 
@@ -471,11 +368,15 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 	let rafId = 0;
 	const startTime = performance.now();
 
-	// hour: follows the system clock by default; `hourOverride` or `play`
-	// take precedence when provided.
 	const [systemHour, setSystemHour] = createSignal(getSystemHour());
+
+	// Once play has been engaged, the clock detaches from the system clock
+	// for good - system time is only ever used for the initial, pre-play
+	// load. Otherwise stopping play would snap back to whatever the real
+	// wall clock says, which reads as time rewinding.
+	const [everPlayed, setEverPlayed] = createSignal(false);
 	const hour = () => {
-		if (props.play) return playHour();
+		if (props.play || everPlayed()) return playHour();
 		if (props.hourOverride !== undefined) return props.hourOverride;
 		return systemHour();
 	};
@@ -484,14 +385,9 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 	let playRafId = 0;
 	createEffect(() => {
 		if (props.play) {
+			setEverPlayed(true);
 			let last = performance.now();
 			const tick = (now: number) => {
-				// Same idle-catch-up issue as driftPhase/dissipationPhase in the
-				// main render loop, and the same fix: reset `last` the instant the
-				// tab becomes visible again (via the visibilitychange listener
-				// below) so a backgrounded period isn't replayed as a burst of
-				// fast-forwarding through hours, plus a generous fallback clamp
-				// for other long stalls.
 				const dt = Math.min((now - last) / 1000, MAX_PHASE_DT_SEC);
 				last = now;
 				setPlayHour((h) => (h + dt * PLAY_SPEED) % 24);
@@ -523,7 +419,6 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		onCleanup(() => clearInterval(poll));
 	});
 
-	// fps counter, dev-mode only diagnostic (no UI in production)
 	const [fps, setFps] = createSignal(0);
 
 	onMount(() => {
@@ -545,7 +440,6 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			return;
 		}
 
-		// Shared fullscreen-quad geometry, used by both programs.
 		const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1]);
 		const buf = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -609,12 +503,6 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		};
 		gl.uniform1i(ub.uCloudTexture, 0);
 
-		// Offscreen target the expensive cloud shader renders into, at a
-		// fraction of the canvas's own resolution. Reallocated whenever the
-		// canvas resizes. Bilinear filtering (LINEAR) is what turns the
-		// upscale into a soft blur instead of blocky pixelation. RGBA (not
-		// RGB) because the cloud shader writes "openness" into alpha for the
-		// blit pass's star occlusion - see sky-background.frag.glsl.
 		const cloudTexture = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, cloudTexture);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -641,16 +529,6 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			);
 			const tw = Math.max(1, Math.round(w * renderScale));
 			const th = Math.max(1, Math.round(h * renderScale));
-			// texImage2D(..., null) below reallocates the texture's storage with
-			// UNDEFINED contents - any frame that samples it before the next
-			// cloud pass has actually redrawn into it will see a blank/black
-			// texture. This was the cause of the flash: renderScale changing
-			// (especially continuously, via a spring) reallocates on nearly
-			// every frame while it's in flight, and the cloud pass normally
-			// only redraws on its own throttled cadence (CLOUD_RERENDER_INTERVAL_MS),
-			// leaving a gap where the blit pass samples garbage. Returning
-			// whether a reallocation happened lets the caller force an
-			// immediate synchronous redraw this same frame, closing that gap.
 			if (tw !== cloudTexWidth || th !== cloudTexHeight) {
 				cloudTexWidth = tw;
 				cloudTexHeight = th;
@@ -675,27 +553,10 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		let fpsFrames = 0;
 		let fpsLastReport = performance.now();
 
-		// Drift/dissipation position is integrated here (accumulated speed * dt
-		// each frame) rather than left to the shader as uTime * speed. See the
-		// comment on uDriftPhase in the shader source for why: multiplying
-		// absolute elapsed time by a live-changing speed causes a visible
-		// direction reversal whenever speed drops after being high (e.g. right
-		// as a burst settles back to its resting speed).
 		let driftPhase = 0;
 		let dissipationPhase = 0;
 		let lastPhaseTime = performance.now();
 
-		// Real wall-clock time keeps advancing while the tab is hidden, even
-		// though rAF is throttled to ~1fps (or paused entirely) - so without
-		// this, the first frame after becoming visible again sees a
-		// `now - lastPhaseTime` gap of the whole hidden duration, and
-		// driftPhase/dissipationPhase jump forward by that entire gap in one
-		// step, then keep evolving from that jumped-ahead position. That's
-		// the "clouds drift fast for a while" bug: it's not the animation
-		// actually speeding up, it's the visible position rushing to catch
-		// up to where the accumulated phase already is. Resetting the
-		// reference point the instant visibility returns means that frame
-		// computes a normal small dt instead of replaying the idle gap.
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === "visible") {
 				lastPhaseTime = performance.now();
@@ -706,12 +567,10 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			document.removeEventListener("visibilitychange", handleVisibilityChange),
 		);
 
-		// Tracks when the expensive cloud pass last actually ran, so the blit
-		// pass (which runs every frame) can reuse the same texture in between.
 		let lastCloudRenderTime = 0;
 
-        function renderCloudPass(t: number) {
-            if (!gl) return;
+		function renderCloudPass(t: number) {
+			if (!gl) return;
 			gl.bindFramebuffer(gl.FRAMEBUFFER, cloudFramebuffer);
 			gl.framebufferTexture2D(
 				gl.FRAMEBUFFER,
@@ -730,7 +589,7 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			gl.uniform1f(u.uHour, hour());
 			gl.uniform1f(u.uDriftPhase, driftPhase);
 			gl.uniform1f(u.uDissipationPhase, dissipationPhase);
-			gl  .uniform1f(
+			gl.uniform1f(
 				u.uCoverageMul,
 				props.cloudCoverage ?? DEFAULT_CLOUD_COVERAGE,
 			);
@@ -741,8 +600,8 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 		}
 
-        function renderBlitPass(t: number) {
-            if (!gl) return;
+		function renderBlitPass(t: number) {
+			if (!gl) return;
 			gl.viewport(0, 0, canvas.width, canvas.height);
 			gl.useProgram(blitProgram);
 			bindQuad(blitProgram);
@@ -773,16 +632,8 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 				lastFrameTime = now;
 			}
 
-			// The visibilitychange listener above is the actual fix for the
-			// backgrounded-tab case. This clamp is only a fallback for other
-			// long single-frame stalls (a GC pause, a slow paint) and is
-			// deliberately set far above any fpsCap a caller would realistically
-			// use, so it never throttles intentional low-fps playback.
 			const phaseDt = Math.min((now - lastPhaseTime) / 1000, MAX_PHASE_DT_SEC);
 			lastPhaseTime = now;
-			// Same baseline scale the old in-shader `baseSpeed` constant applied,
-			// so driftSpeed's numeric range (e.g. default 0.4, burst 10.8) means
-			// the same thing it did before.
 			driftPhase += phaseDt * (props.driftSpeed ?? DEFAULT_DRIFT_SPEED) * 0.006;
 			dissipationPhase +=
 				phaseDt * (props.dissipationSpeed ?? DEFAULT_DISSIPATION_SPEED) * 0.14;
@@ -790,15 +641,6 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 			const wasReallocated = resize();
 			const t = (performance.now() - startTime) / 1000;
 
-			// Re-run the expensive cloud shader on a fixed real-time cadence,
-			// independent of driftSpeed and independent of fpsCap (see
-			// CLOUD_RERENDER_INTERVAL_MS above for why time-based) - OR
-			// immediately, regardless of cadence, whenever the texture was just
-			// reallocated (new size), since its contents are otherwise
-			// undefined and would flash black/blank until the next scheduled
-			// pass. This is what fixes the flash on renderScale changes
-			// (especially a spring, which reallocates on nearly every frame
-			// while in motion) and on initial mount.
 			const isDue = now - lastCloudRenderTime >= CLOUD_RERENDER_INTERVAL_MS;
 			if (isDue || wasReallocated) {
 				renderCloudPass(t);
@@ -827,7 +669,7 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 	});
 
 	return (
-        <div
+		<div
 			style={{
 				position: "relative",
 				width: "100%",
@@ -839,13 +681,13 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
 		>
 			<canvas ref={canvasRef} class="absolute block inset-0 size-full" />
 
-            {import.meta.env.DEV && (
-                <Portal mount={document.body}>
-                    <span class="absolute top-14 left-2 z-10 w-18 rounded-full text-center font-mono text-xs text-white bg-black/50 border p-px px-2 pointer-events-none">
-                        {fps()} fps
-                    </span>
-                </Portal>
-            )}
+			{import.meta.env.DEV && (
+				<Portal mount={document.body}>
+					<span class="absolute top-14 left-2 z-10 w-18 rounded-md text-center font-mono text-xs text-white bg-black/50 border p-px px-2 pointer-events-none">
+						{fps()} fps
+					</span>
+				</Portal>
+			)}
 		</div>
 	);
 };

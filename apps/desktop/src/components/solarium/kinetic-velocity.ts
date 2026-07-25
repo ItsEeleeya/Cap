@@ -218,4 +218,3 @@ export function createKineticVelocity(
 		reset: tracker.reset,
 	};
 }
-;

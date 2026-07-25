@@ -523,8 +523,8 @@ export function createElasticSurface(options: ElasticSurfaceOptions = {}) {
 		return `translate(${s.tx}px, ${s.ty}px) scale(${sx}, ${sy})`;
 	}
 
-    return {
-        ref,
+	return {
+		ref,
 		notifyVelocity,
 		notifyMoved,
 		resetMovementTracking,
@@ -547,9 +547,10 @@ export function createElasticSurface(options: ElasticSurfaceOptions = {}) {
  * `mode="touch" profile={{ movementMaxSquash: 0.4 }}`.
  */
 export function ElasticSurface(
-    props: ComponentProps<"div"> & ElasticSurfaceOptions & {
-        as?: ValidComponent
-	},
+	props: ComponentProps<"div"> &
+		ElasticSurfaceOptions & {
+			as?: ValidComponent;
+		},
 ) {
 	const [local, options, rest] = splitProps(
 		props,
@@ -560,8 +561,8 @@ export function ElasticSurface(
 	const surface = createElasticSurface(options);
 
 	return (
-        <Dynamic
-            component={local.as ?? "div"}
+		<Dynamic
+			component={local.as ?? "div"}
 			{...rest}
 			class={local.class}
 			ref={surface.ref}

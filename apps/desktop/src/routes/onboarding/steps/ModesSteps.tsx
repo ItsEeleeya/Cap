@@ -1,0 +1,1141 @@
+import { type as ostype } from "@tauri-apps/plugin-os";
+import { cx } from "cva";
+import {
+	createEffect,
+	createSignal,
+	For,
+	onCleanup,
+	type ParentProps,
+	Show,
+} from "solid-js";
+import { commands } from "~/utils/tauri";
+
+type ModeId = "instant" | "studio" | "screenshot";
+
+interface ModeDetail {
+	id: ModeId;
+	title: string;
+	tagline: string;
+	description: string;
+	icon: typeof IconCapInstant;
+	features: string[];
+}
+
+export const MODE_DETAILS: ModeDetail[] = [
+	{
+		id: "instant",
+		title: "Instant Mode",
+		tagline: "Record & share in seconds",
+		description:
+			"Your recording uploads as you capture. Stop recording and instantly get a shareable link — no waiting.",
+		icon: IconCapInstant,
+		features: [
+			"Instant shareable link",
+			"Background uploading",
+			"AI transcription & summary",
+			"Browser-based playback",
+		],
+	},
+	{
+		id: "studio",
+		title: "Studio Mode",
+		tagline: "Professional editing tools",
+		description:
+			"Record in full quality locally, then use the built-in editor to add backgrounds, padding, cursor effects, and more.",
+		icon: IconCapFilmCut,
+		features: [
+			"Full quality local recording",
+			"Built-in editor & effects",
+			"Custom backgrounds & padding",
+			"Export or share when ready",
+		],
+	},
+	{
+		id: "screenshot",
+		title: "Screenshot Mode",
+		tagline: "Capture & beautify instantly",
+		description:
+			"Take screenshots with a single hotkey, add annotations and beautiful backgrounds, then share or copy instantly.",
+		icon: IconCapScreenshot,
+		features: [
+			"Instant hotkey capture",
+			"Annotation & drawing tools",
+			"Beautiful backgrounds",
+			"Copy, save, or share",
+		],
+	},
+];
+
+export function ModesOverviewStep(props: { active: boolean }) {
+	const [visible, setVisible] = createSignal(false);
+
+	createEffect(() => {
+		if (props.active) {
+			setVisible(false);
+			const t = setTimeout(() => setVisible(true), 100);
+			onCleanup(() => clearTimeout(t));
+		} else {
+			setVisible(false);
+		}
+	});
+
+	return (
+		<div class="flex flex-col items-center justify-center min-h-full px-10 gap-8">
+			<div
+				class={cx(
+					"flex flex-col items-center gap-3 text-center max-w-[480px] transition-all duration-500 ease-out",
+					visible() ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+				)}
+			>
+				<h2 class="text-2xl font-bold text-gray-12 tracking-tight">
+					One app, every workflow
+				</h2>
+				<p class="text-[14px] text-gray-10 leading-relaxed">
+					Whether you need speed, studio quality, or a quick screenshot — Cap
+					has a mode for it.
+				</p>
+			</div>
+
+			<div class="flex gap-4 w-full max-w-[540px]">
+				<For each={MODE_DETAILS}>
+					{(mode, index) => (
+						<div
+							class="flex-1 flex flex-col items-center gap-3 p-5 rounded-2xl border border-gray-4 bg-white dark:bg-gray-2 transition-all duration-500 ease-out shadow-xs"
+							style={{
+								"transition-delay": `${200 + index() * 100}ms`,
+								opacity: visible() ? 1 : 0,
+								transform: visible()
+									? "translateY(0) scale(1)"
+									: "translateY(16px) scale(0.95)",
+							}}
+						>
+							<div class="flex items-center justify-center size-12 rounded-2xl border border-gray-5 bg-white dark:bg-gray-3">
+								<mode.icon class="size-5 invert dark:invert-0" />
+							</div>
+							<div class="text-center">
+								<div class="text-sm font-semibold text-gray-12">
+									{mode.title}
+								</div>
+								<div class="text-[11px] text-gray-9 mt-1 leading-snug">
+									{mode.tagline}
+								</div>
+							</div>
+						</div>
+					)}
+				</For>
+			</div>
+		</div>
+	);
+}
+
+export function ModeDetailStep(
+	props: ParentProps<{
+		mode: ModeDetail;
+		active: boolean;
+	}>,
+) {
+	const [visible, setVisible] = createSignal(false);
+
+	createEffect(() => {
+		if (props.active) {
+			setVisible(false);
+			const t = setTimeout(() => setVisible(true), 80);
+			onCleanup(() => clearTimeout(t));
+		} else {
+			setVisible(false);
+		}
+	});
+
+	return (
+		<div class="flex items-center min-h-full px-10 py-6 gap-8">
+			<div class="w-[240px] shrink-0 flex flex-col justify-center">
+				<div
+					class={cx(
+						"flex flex-col gap-4 transition-all duration-500 ease-out",
+						visible() ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+					)}
+				>
+					<div class="flex items-center gap-3">
+						<div class="flex items-center justify-center size-11 rounded-xl border border-gray-5 bg-white dark:bg-gray-3">
+							<props.mode.icon class="size-5 invert dark:invert-0" />
+						</div>
+						<div>
+							<h3 class="text-lg font-bold text-gray-12">{props.mode.title}</h3>
+							<p class="text-[11px] font-medium text-gray-9">
+								{props.mode.tagline}
+							</p>
+						</div>
+					</div>
+
+					<p class="text-[13px] text-gray-10 leading-relaxed">
+						{props.mode.description}
+					</p>
+
+					<div class="flex flex-col gap-2.5">
+						<For each={props.mode.features}>
+							{(feature, index) => (
+								<div
+									class="flex items-center gap-2.5 transition-all duration-500"
+									style={{
+										"transition-delay": `${200 + index() * 60}ms`,
+										opacity: visible() ? 1 : 0,
+										transform: visible() ? "translateX(0)" : "translateX(-8px)",
+									}}
+								>
+									<div class="flex items-center justify-center size-5 rounded-full shrink-0 bg-blue-9">
+										<IconLucideCheck class="size-2.5 text-white" />
+									</div>
+									<span class="text-xs text-gray-11">{feature}</span>
+								</div>
+							)}
+						</For>
+					</div>
+				</div>
+			</div>
+
+			<div class="flex-1 min-w-0 flex items-center justify-center">
+				<div class="w-full h-full relative rounded-2xl bg-white dark:bg-gray-2 border border-gray-4 overflow-visible shadow-xs">
+					{props.children}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function ToggleStep(props: { active: boolean }) {
+	const [visible, setVisible] = createSignal(false);
+	const [activeMode, setActiveMode] = createSignal(0);
+	const [userClicked, setUserClicked] = createSignal(false);
+
+	const CIRCLE = 80;
+	const GAP = 24;
+	const PAD = 16;
+
+	createEffect(() => {
+		if (props.active) {
+			setVisible(false);
+			setActiveMode(0);
+			setUserClicked(false);
+			const t = setTimeout(() => setVisible(true), 100);
+			const interval = setInterval(() => {
+				if (!userClicked()) setActiveMode((prev) => (prev + 1) % 3);
+			}, 2500);
+			onCleanup(() => {
+				clearTimeout(t);
+				clearInterval(interval);
+			});
+		} else {
+			setVisible(false);
+		}
+	});
+
+	const ringLeft = () => PAD + activeMode() * (CIRCLE + GAP);
+
+	const handleModeClick = (index: number) => {
+		setUserClicked(true);
+		setActiveMode(index);
+		commands.setRecordingMode(MODE_DETAILS[index].id);
+	};
+
+	return (
+		<div class="flex flex-col items-center justify-center min-h-full px-12 gap-8">
+			<div
+				class={cx(
+					"flex flex-col items-center gap-3 text-center max-w-[420px] transition-all duration-500",
+					visible() ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+				)}
+			>
+				<h2 class="text-2xl font-bold text-gray-12 tracking-tight">
+					Switch modes anytime
+				</h2>
+				<p class="text-[14px] text-gray-10 leading-relaxed">
+					Toggle between modes with a single click from the main Cap window.
+				</p>
+			</div>
+
+			<div
+				class={cx(
+					"flex flex-col items-center gap-5 transition-all duration-700 delay-200",
+					visible()
+						? "opacity-100 translate-y-0 scale-100"
+						: "opacity-0 translate-y-6 scale-95",
+				)}
+			>
+				<div class="relative">
+					<div class="absolute inset-0 rounded-full border border-gray-5 bg-white dark:bg-gray-3" />
+					<div
+						class="absolute rounded-full pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+						style={{
+							width: `${CIRCLE}px`,
+							height: `${CIRCLE}px`,
+							left: `${ringLeft()}px`,
+							top: `${PAD}px`,
+							"box-shadow": "0 0 0 3px var(--gray-1), 0 0 0 5px var(--blue-9)",
+						}}
+					/>
+					<div
+						class="relative flex"
+						style={{ gap: `${GAP}px`, padding: `${PAD}px` }}
+					>
+						<For each={MODE_DETAILS}>
+							{(mode, index) => (
+								<div
+									class={cx(
+										"rounded-full flex items-center justify-center transition-colors duration-300 hover:brightness-95 border",
+										activeMode() === index()
+											? "bg-gray-7 border-transparent dark:border-gray-6"
+											: "bg-white dark:bg-gray-4 border-gray-5 dark:border-gray-6",
+									)}
+									style={{
+										width: `${CIRCLE}px`,
+										height: `${CIRCLE}px`,
+									}}
+									onClick={() => handleModeClick(index())}
+								>
+									<mode.icon
+										class={cx(
+											"size-8 invert dark:invert-0 transition-all duration-300",
+											activeMode() === index()
+												? "scale-110 opacity-100"
+												: "scale-100 opacity-50",
+										)}
+									/>
+								</div>
+							)}
+						</For>
+					</div>
+				</div>
+
+				<div
+					class="flex"
+					style={{
+						gap: `${GAP}px`,
+						"padding-left": `${PAD}px`,
+						"padding-right": `${PAD}px`,
+					}}
+				>
+					<For each={MODE_DETAILS}>
+						{(mode, index) => (
+							<span
+								class={cx(
+									"text-sm font-medium text-center transition-all duration-300",
+									activeMode() === index()
+										? "text-gray-12"
+										: "text-gray-9 opacity-50",
+								)}
+								style={{ width: `${CIRCLE}px` }}
+								onClick={() => handleModeClick(index())}
+							>
+								{mode.title}
+							</span>
+						)}
+					</For>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function RecordingBar(props: {
+	time: string;
+	stopped?: boolean;
+	class?: string;
+}) {
+	const actionIconWrap =
+		"h-8 w-8 flex shrink-0 items-center justify-center rounded-lg p-1 text-gray-11";
+
+	return (
+		<div class={cx("h-10 w-full min-w-[280px] rounded-2xl", props.class)}>
+			<div class="flex h-full w-full flex-row items-stretch overflow-hidden rounded-2xl border border-gray-5 bg-white dark:bg-gray-1 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+				<div class="flex min-w-0 flex-1 flex-col gap-2 p-1">
+					<div class="flex min-h-0 flex-1 flex-row items-center justify-between">
+						<Show
+							when={!props.stopped}
+							fallback={
+								<div class="flex flex-row items-center gap-1.5 rounded-lg px-2 py-1 text-gray-10">
+									<div class="size-2 shrink-0 rounded-full bg-gray-8" />
+									<span class="text-[0.875rem] font-medium">Stopped</span>
+								</div>
+							}
+						>
+							<button
+								type="button"
+								class="flex shrink-0 flex-row items-center gap-1 rounded-lg px-2 py-1 text-red-300 transition-colors duration-100 hover:bg-red-500/8 active:bg-red-500/12"
+							>
+								<IconCapStopCircle class="size-5 shrink-0" />
+								<span class="text-[0.875rem] font-medium tabular-nums">
+									{props.time}
+								</span>
+							</button>
+						</Show>
+						<div
+							class={cx(
+								"flex shrink-0 items-center gap-1",
+								props.stopped && "opacity-45",
+							)}
+						>
+							<div class="relative flex h-8 w-8 shrink-0 items-center justify-center">
+								<IconCapMicrophone class="size-5 text-gray-12" />
+								<div class="absolute bottom-1 left-1 right-1 h-0.5 overflow-hidden rounded-full bg-gray-10">
+									<div
+										class="absolute inset-0 bg-blue-9"
+										style={{ transform: "translateX(-40%)" }}
+									/>
+								</div>
+							</div>
+							<div class={actionIconWrap} aria-hidden="true">
+								<IconCapPauseCircle class="size-5" />
+							</div>
+							<div class={actionIconWrap} aria-hidden="true">
+								<IconCapRestart class="size-5" />
+							</div>
+							<div class={actionIconWrap} aria-hidden="true">
+								<IconCapTrash class="size-5" />
+							</div>
+							<div class={actionIconWrap} aria-hidden="true">
+								<IconCapSettings class="size-5" />
+							</div>
+						</div>
+					</div>
+				</div>
+				<div
+					class={cx(
+						"flex w-9 shrink-0 cursor-default items-center justify-center border-l border-gray-5 p-1 text-gray-10",
+						props.stopped && "opacity-45",
+					)}
+					aria-hidden="true"
+				>
+					<IconCapMoreVertical class="pointer-events-none size-5" />
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function createLoopingPhase(
+	active: () => boolean,
+	timings: number[],
+	cycleDuration: number,
+): () => number {
+	const [phase, setPhase] = createSignal(0);
+
+	createEffect(() => {
+		if (!active()) {
+			setPhase(0);
+			return;
+		}
+
+		let timers: ReturnType<typeof setTimeout>[] = [];
+		let cycleTimer: ReturnType<typeof setTimeout>;
+
+		const clearAll = () => {
+			for (const t of timers) clearTimeout(t);
+			timers = [];
+			clearTimeout(cycleTimer);
+		};
+
+		const run = () => {
+			clearAll();
+			setPhase(0);
+			timers = timings.map((delay, i) =>
+				setTimeout(() => setPhase(i + 1), delay),
+			);
+			cycleTimer = setTimeout(run, cycleDuration);
+		};
+
+		run();
+		onCleanup(clearAll);
+	});
+
+	return phase;
+}
+
+function MockupStepBar(props: { steps: string[]; activeStep: number }) {
+	return (
+		<div class="flex items-center justify-center gap-2 pb-3">
+			<For each={props.steps}>
+				{(label, index) => (
+					<>
+						<Show when={index() > 0}>
+							<div class="w-3 h-px bg-gray-5" />
+						</Show>
+						<div
+							class={cx(
+								"flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium transition-all duration-300",
+								props.activeStep === index()
+									? "bg-blue-3 text-blue-11 border border-blue-5"
+									: props.activeStep > index()
+										? "text-gray-10 bg-white dark:bg-gray-3 border border-gray-4"
+										: "text-gray-8 border border-transparent",
+							)}
+						>
+							<span class="font-bold">{index() + 1}</span>
+							{label}
+						</div>
+					</>
+				)}
+			</For>
+		</div>
+	);
+}
+
+function StartRecordingClickMock(props: {
+	active: boolean;
+	mode: "instant" | "studio";
+}) {
+	const [cursorStage, setCursorStage] = createSignal(0);
+
+	const cursorMoveMs = 1450;
+
+	createEffect(() => {
+		if (!props.active) {
+			setCursorStage(0);
+			return;
+		}
+		setCursorStage(0);
+		const settleFrameMs = 40;
+		const pauseAfterArriveMs = 280;
+		const t1 = setTimeout(() => setCursorStage(1), settleFrameMs);
+		const t2 = setTimeout(
+			() => setCursorStage(2),
+			settleFrameMs + cursorMoveMs + pauseAfterArriveMs,
+		);
+		onCleanup(() => {
+			clearTimeout(t1);
+			clearTimeout(t2);
+		});
+	});
+
+	const modeLabel = () =>
+		props.mode === "studio" ? "Studio Mode" : "Instant Mode";
+
+	const cursorW = () => (ostype() === "windows" ? 24 : 22);
+	const cursorH = () => (ostype() === "windows" ? 34 : 32);
+
+	return (
+		<div class="relative mx-auto w-full max-w-[18rem] overflow-visible pb-8">
+			<div class="relative w-full">
+				<div
+					class={cx(
+						"flex h-11 w-full overflow-hidden rounded-full bg-linear-to-r from-blue-10 via-blue-10 to-blue-11 text-white transition-transform duration-500 ease-out dark:from-blue-9 dark:via-blue-9 dark:to-blue-10",
+						cursorStage() === 2 && "scale-[0.98]",
+					)}
+				>
+					<div class="flex min-w-0 flex-1 items-center py-1 pl-4 pointer-events-none">
+						<Show
+							when={props.mode === "studio"}
+							fallback={<IconCapInstant class="size-4 shrink-0" />}
+						>
+							<IconCapFilmCut class="size-4 shrink-0" />
+						</Show>
+						<div class="mr-2 ml-3 flex min-w-0 flex-col">
+							<span class="text-[0.95rem] font-medium text-nowrap text-white">
+								Start Recording
+							</span>
+							<span class="-mt-0.5 flex items-center gap-1 text-[11px] font-light text-nowrap text-white/90">
+								{modeLabel()}
+							</span>
+						</div>
+					</div>
+					<div class="flex shrink-0 items-center border-l border-white/20 bg-white/5 py-1.5 pl-2.5 pr-3">
+						<IconCapCaretDown class="pointer-events-none" />
+					</div>
+				</div>
+				<div
+					class="pointer-events-none absolute z-10 transition-[top,left] ease-[cubic-bezier(0.22,0.82,0.28,1)]"
+					style={{
+						"transition-duration": `${cursorMoveMs}ms`,
+						top:
+							cursorStage() === 0 ? "calc(100% + 10px)" : "calc(100% - 18px)",
+						left: cursorStage() === 0 ? "-2.75rem" : "28%",
+						width: `${cursorW()}px`,
+						height: `${cursorH()}px`,
+					}}
+				>
+					<div
+						class={cx(
+							"size-full transition-transform duration-200 ease-out",
+							cursorStage() === 2 && "translate-y-[3px] scale-[0.94]",
+						)}
+					>
+						<Show
+							when={ostype() === "windows"}
+							fallback={<IconCapCursorMacos class="h-full w-full" />}
+						>
+							<IconCapCursorWindows class="h-full w-full" />
+						</Show>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function InstantMockup(props: { active: boolean }) {
+	const phase = createLoopingPhase(
+		() => props.active,
+		[300, 2350, 3350, 4350, 5350, 6350, 7350, 8350],
+		9550,
+	);
+
+	const activeStep = () => {
+		const p = phase();
+		if (p <= 5) return 0;
+		if (p <= 6) return 1;
+		return 2;
+	};
+
+	const recordingTime = () => {
+		const p = phase();
+		if (p >= 5) return "0:03";
+		if (p >= 4) return "0:02";
+		if (p >= 3) return "0:01";
+		if (p >= 2) return "0:00";
+		return "0:00";
+	};
+
+	return (
+		<div class="w-full h-full flex flex-col min-h-0 p-4">
+			<MockupStepBar
+				steps={["Record", "Stop", "Share link"]}
+				activeStep={activeStep()}
+			/>
+			<div class="relative flex-1 min-h-[200px] w-full max-w-[420px] mx-auto">
+				<div
+					class={cx(
+						"absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-500 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
+						phase() >= 1 && phase() < 7
+							? "opacity-100"
+							: "pointer-events-none opacity-0",
+					)}
+				>
+					<div class="relative min-h-[52px] w-full max-w-[400px]">
+						<div
+							class={cx(
+								"flex w-full justify-center transition-all duration-720 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
+								phase() === 1
+									? "relative z-2 translate-y-0 scale-100 opacity-100"
+									: "pointer-events-none absolute inset-0 z-1 flex items-center justify-center opacity-0 scale-[0.94] -translate-y-2",
+							)}
+						>
+							<StartRecordingClickMock active={phase() === 1} mode="instant" />
+						</div>
+						<div
+							class={cx(
+								"w-full transition-all duration-720 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
+								phase() >= 2 && phase() < 7
+									? "relative z-2 translate-y-0 scale-100 opacity-100"
+									: "pointer-events-none absolute inset-0 z-1 flex items-center justify-center opacity-0 scale-[0.94] translate-y-3",
+							)}
+						>
+							<div class="w-full shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+								<RecordingBar time={recordingTime()} stopped={phase() >= 6} />
+							</div>
+						</div>
+					</div>
+				</div>
+				<div
+					class={cx(
+						"absolute inset-0 flex items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+						phase() >= 7
+							? "opacity-100 translate-y-0 scale-100"
+							: "opacity-0 translate-y-4 scale-[0.97] pointer-events-none",
+					)}
+				>
+					<div class="w-full max-w-[340px] rounded-xl overflow-hidden border border-gray-4 bg-white dark:bg-gray-1 shadow-lg">
+						<div class="flex flex-col items-center gap-3 px-4 py-4">
+							<div class="flex items-center gap-2">
+								<div class="size-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+									<IconLucideCheck class="size-3 text-green-600" />
+								</div>
+								<span class="text-[12px] font-medium text-gray-12">
+									Link ready to share!
+								</span>
+							</div>
+							<div class="flex items-center gap-2 w-full">
+								<div class="flex-1 flex items-center px-3 py-2 rounded-lg bg-white dark:bg-gray-3 border border-gray-4">
+									<span class="text-[11px] text-gray-11 font-mono">
+										cap.link/m4k92x
+									</span>
+								</div>
+								<div
+									class={cx(
+										"flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-medium transition-all duration-300 shrink-0",
+										phase() >= 8
+											? "bg-green-50 border-green-200 text-green-700 scale-95"
+											: "bg-white dark:bg-gray-3 border-gray-5 text-gray-11",
+									)}
+								>
+									<Show
+										when={phase() >= 8}
+										fallback={
+											<>
+												<IconLucideCopy class="size-3" stroke-width={2} />
+												Copy
+											</>
+										}
+									>
+										<IconLucideCheck class="size-3" />
+										Copied!
+									</Show>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function StudioMockup(props: { active: boolean }) {
+	const phase = createLoopingPhase(
+		() => props.active,
+		[300, 2350, 3350, 4350, 5350, 6350, 7350, 8150, 9150, 10150, 11150],
+		12250,
+	);
+
+	const activeStep = () => {
+		const p = phase();
+		if (p < 7) return 0;
+		if (p < 9) return 1;
+		return 2;
+	};
+
+	const showRecording = () => phase() < 7;
+	const showEditor = () => phase() >= 7;
+	const showExporting = () => phase() >= 9;
+
+	const studioRecordingTime = () => {
+		const p = phase();
+		if (p >= 5) return "0:03";
+		if (p >= 4) return "0:02";
+		if (p >= 3) return "0:01";
+		if (p >= 2) return "0:00";
+		return "0:00";
+	};
+
+	const exportPercent = () => {
+		const p = phase();
+		if (p >= 11) return 100;
+		if (p >= 10) return 75;
+		if (p >= 9) return 25;
+		return 0;
+	};
+
+	return (
+		<div class="w-full h-full flex flex-col min-h-0 p-4">
+			<MockupStepBar
+				steps={["Record", "Edit", "Export"]}
+				activeStep={activeStep()}
+			/>
+			<div class="relative flex-1 w-full max-w-[420px] min-h-[248px] mx-auto flex items-center justify-center">
+				<div
+					class={cx(
+						"absolute inset-0 z-1 flex flex-col items-center justify-center transition-opacity duration-600 ease-out",
+						showRecording()
+							? "opacity-100 blur-0"
+							: "pointer-events-none opacity-0 blur-[2px]",
+					)}
+				>
+					<div class="relative min-h-[52px] w-full max-w-[400px]">
+						<div
+							class={cx(
+								"flex w-full justify-center transition-all duration-720 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
+								phase() === 1
+									? "relative z-2 translate-y-0 scale-100 opacity-100"
+									: "pointer-events-none absolute inset-0 z-1 flex items-center justify-center opacity-0 scale-[0.94] -translate-y-2",
+							)}
+						>
+							<StartRecordingClickMock active={phase() === 1} mode="studio" />
+						</div>
+						<div
+							class={cx(
+								"w-full transition-all duration-720 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
+								phase() >= 2 && phase() < 7
+									? "relative z-2 translate-y-0 scale-100 opacity-100"
+									: "pointer-events-none absolute inset-0 z-1 flex items-center justify-center opacity-0 scale-[0.94] translate-y-3",
+							)}
+						>
+							<div class="w-full shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+								<RecordingBar
+									time={studioRecordingTime()}
+									stopped={phase() >= 6}
+								/>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div
+					class={cx(
+						"absolute inset-0 flex flex-col rounded-xl overflow-hidden border border-gray-3 bg-white dark:bg-gray-1 shadow-lg transition-all duration-600 ease-out z-2",
+						showEditor()
+							? "opacity-100 scale-100 translate-y-0 blur-0"
+							: "opacity-0 scale-[0.96] translate-y-3 blur-[2px] pointer-events-none",
+					)}
+				>
+					<div class="flex items-center justify-between h-9 px-3 border-b border-gray-3 bg-white dark:bg-gray-1">
+						<div class="flex items-center gap-2">
+							<div class="flex gap-1">
+								<div class="size-2 rounded-full bg-gray-6" />
+								<div class="size-2 rounded-full bg-gray-6" />
+								<div class="size-2 rounded-full bg-gray-6" />
+							</div>
+							<span class="text-[10px] text-gray-11 font-medium">
+								Cap Editor
+							</span>
+						</div>
+						<div
+							class={cx(
+								"px-2.5 py-1 rounded-md text-[9px] text-white font-medium transition-all duration-500 ease-out bg-blue-9",
+								phase() >= 8
+									? "scale-105 ring-2 ring-blue-9/50 ring-offset-2 ring-offset-white dark:ring-offset-gray-1"
+									: "scale-100 ring-0 ring-offset-0",
+							)}
+						>
+							Export
+						</div>
+					</div>
+
+					<div class="flex bg-white dark:bg-gray-1 flex-1 relative">
+						<div
+							class={cx(
+								"flex-1 p-3 transition-all duration-500",
+								showEditor() ? "opacity-100" : "opacity-0",
+							)}
+						>
+							<div class="relative rounded-lg overflow-hidden border border-gray-3 h-full">
+								<div
+									class="absolute inset-0"
+									style={{
+										background:
+											"linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+									}}
+								/>
+								<div class="relative m-2.5 h-[80px] rounded-md bg-white/95 dark:bg-gray-1/95 border border-gray-3 shadow-md flex items-center justify-center">
+									<div class="flex flex-col gap-1.5 p-3 w-full">
+										<div class="w-3/4 h-1.5 rounded-full bg-gray-5/50" />
+										<div class="w-1/2 h-1.5 rounded-full bg-gray-5/30" />
+										<div class="w-full h-5 rounded-sm bg-gray-5/20 mt-1" />
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div
+							class={cx(
+								"w-[90px] shrink-0 border-l border-gray-3 bg-white dark:bg-gray-1 p-2 flex flex-col gap-1.5 transition-all duration-500",
+								showEditor()
+									? "opacity-100 translate-x-0"
+									: "opacity-0 translate-x-2",
+							)}
+						>
+							<div class="text-[8px] text-gray-9 font-medium uppercase tracking-wider">
+								Style
+							</div>
+							<div class="h-5 rounded-sm border border-gray-3 bg-white dark:bg-gray-2" />
+							<div class="text-[8px] text-gray-9 font-medium uppercase tracking-wider mt-1">
+								Background
+							</div>
+							<div class="flex gap-1">
+								<div class="size-4 rounded-full bg-linear-to-br from-blue-400 to-purple-500 border border-gray-3" />
+								<div class="size-4 rounded-full bg-linear-to-br from-pink-400 to-orange-400 border border-gray-3" />
+								<div class="size-4 rounded-full bg-gray-4 border border-gray-3" />
+							</div>
+						</div>
+
+						<Show when={showExporting()}>
+							<div class="absolute inset-0 bg-black/25 backdrop-blur-[2px] flex items-center justify-center z-10">
+								<div class="bg-white dark:bg-gray-1 rounded-xl border border-gray-4 shadow-xl px-6 py-5 flex flex-col items-center gap-3 min-w-[200px]">
+									<Show
+										when={phase() < 11}
+										fallback={
+											<div class="flex items-center gap-2">
+												<div class="size-6 rounded-full bg-green-100 flex items-center justify-center">
+													<IconLucideCheck class="size-3.5 text-green-600" />
+												</div>
+												<span class="text-sm font-medium text-gray-12">
+													Export complete!
+												</span>
+											</div>
+										}
+									>
+										<span class="text-sm font-medium text-gray-12">
+											Exporting...
+										</span>
+									</Show>
+									<div class="w-full h-2 bg-gray-4 rounded-full overflow-hidden">
+										<div
+											class="h-full bg-blue-9 rounded-full transition-all ease-out"
+											style={{
+												width: `${exportPercent()}%`,
+												"transition-duration":
+													phase() >= 11 ? "800ms" : "600ms",
+											}}
+										/>
+									</div>
+									<span class="text-xs text-gray-10 tabular-nums font-medium">
+										{exportPercent()}%
+									</span>
+								</div>
+							</div>
+						</Show>
+					</div>
+
+					<div
+						class={cx(
+							"px-3 pb-2 border-t border-gray-3 bg-white dark:bg-gray-1 transition-all duration-500",
+							showEditor()
+								? "opacity-100 translate-y-0"
+								: "opacity-0 translate-y-2",
+						)}
+					>
+						<div class="flex items-center gap-1.5 h-6 bg-white dark:bg-gray-2 rounded-lg px-2 border border-gray-3">
+							<div class="flex-1 h-[3px] bg-gray-4 rounded-full relative">
+								<div
+									class="h-full bg-gray-8 rounded-full"
+									style={{ width: "42%" }}
+								/>
+							</div>
+							<span class="text-[8px] text-gray-10 tabular-nums font-medium">
+								0:12
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function ScreenshotMockup(props: { active: boolean }) {
+	const phase = createLoopingPhase(
+		() => props.active,
+		[200, 700, 1400, 2600, 3400, 3900, 4900, 5900, 6700],
+		8000,
+	);
+
+	const activeStep = () => {
+		const p = phase();
+		if (p <= 5) return 0;
+		if (p <= 8) return 1;
+		return 2;
+	};
+
+	const showEditor = () => phase() >= 6;
+
+	return (
+		<div class="w-full h-full flex flex-col items-center justify-center p-4">
+			<MockupStepBar
+				steps={["Select area", "Beautify", "Copy"]}
+				activeStep={activeStep()}
+			/>
+			<div class="relative w-full max-w-[420px] h-[240px]">
+				<div
+					class="absolute inset-0 flex items-center justify-center transition-all duration-700"
+					style={{
+						opacity: !showEditor() ? 1 : 0,
+						transform: !showEditor() ? "scale(1)" : "scale(0.96)",
+						"pointer-events": !showEditor() ? "auto" : "none",
+					}}
+				>
+					<div
+						class={cx(
+							"relative w-full max-w-[380px] h-[200px] rounded-xl overflow-hidden border border-gray-5 bg-white dark:bg-gray-3 transition-all duration-500",
+							phase() >= 1
+								? "opacity-100 translate-y-0 scale-100"
+								: "opacity-0 translate-y-4 scale-95",
+						)}
+					>
+						<div class="absolute inset-0 p-5 flex flex-col gap-2.5">
+							<div class="w-20 h-2.5 rounded-full bg-gray-5/60" />
+							<div class="w-36 h-2.5 rounded-full bg-gray-5/40" />
+							<div class="w-28 h-2.5 rounded-full bg-gray-5/50" />
+							<div class="mt-3 flex gap-3">
+								<div class="flex-1 h-12 rounded-lg bg-gray-5/30" />
+								<div class="flex-1 h-12 rounded-lg bg-gray-5/20" />
+							</div>
+						</div>
+
+						<div
+							class={cx(
+								"absolute inset-0 transition-all duration-500",
+								phase() >= 2 ? "bg-black/45" : "bg-transparent",
+							)}
+						/>
+
+						<Show when={phase() >= 2 && phase() < 6}>
+							<div
+								class="absolute pointer-events-none z-10 transition-[top,left] ease-[cubic-bezier(0.22,0.82,0.28,1)]"
+								style={{
+									top: phase() >= 3 ? "calc(88% - 4px)" : "12%",
+									left: phase() >= 3 ? "calc(90% - 4px)" : "8%",
+									width: `${ostype() === "windows" ? 24 : 22}px`,
+									height: `${ostype() === "windows" ? 34 : 32}px`,
+									"transition-duration": "1200ms",
+								}}
+							>
+								<Show
+									when={ostype() === "windows"}
+									fallback={<IconCapCursorMacos class="h-full w-full" />}
+								>
+									<IconCapCursorWindows class="h-full w-full" />
+								</Show>
+							</div>
+						</Show>
+
+						<div
+							class="absolute border rounded-lg pointer-events-none"
+							style={{
+								top: "10%",
+								left: "6%",
+								right: phase() >= 3 ? "10%" : "94%",
+								bottom: phase() >= 3 ? "12%" : "90%",
+								"border-color":
+									phase() >= 3 ? "rgba(255,255,255,0.6)" : "transparent",
+								opacity: phase() >= 3 ? 1 : 0,
+								transition:
+									"right 1200ms cubic-bezier(0.22, 0.82, 0.28, 1), bottom 1200ms cubic-bezier(0.22, 0.82, 0.28, 1), border-color 200ms ease, opacity 200ms ease",
+							}}
+						>
+							<Show when={phase() >= 4}>
+								<For
+									each={[
+										"left-[-11px] top-[-11px]",
+										"right-[-11px] top-[-11px]",
+										"left-[-11px] bottom-[-11px]",
+										"right-[-11px] bottom-[-11px]",
+									]}
+								>
+									{(pos) => (
+										<svg
+											class={`absolute size-[22px] pointer-events-none ${pos} drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]`}
+											viewBox="0 0 16 16"
+											fill="none"
+										>
+											<path
+												d={
+													pos.includes("left") && pos.includes("top")
+														? "M0 0 H12 M0 0 V12"
+														: pos.includes("right") && pos.includes("top")
+															? "M16 0 H4 M16 0 V12"
+															: pos.includes("left") && pos.includes("bottom")
+																? "M0 16 H12 M0 16 V4"
+																: "M16 16 H4 M16 16 V4"
+												}
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="square"
+											/>
+										</svg>
+									)}
+								</For>
+								<div class="absolute -bottom-7 left-1/2 -translate-x-1/2 bg-gray-12 text-[9px] font-mono px-2 py-0.5 rounded-full border border-gray-12 text-gray-1 shadow-md whitespace-nowrap tabular-nums">
+									640 × 480
+								</div>
+							</Show>
+						</div>
+
+						<Show when={phase() === 5}>
+							<div class="absolute inset-0 bg-white/30 animate-[pulse_300ms_ease-out_1]" />
+						</Show>
+					</div>
+				</div>
+
+				<div
+					class="absolute inset-0 flex items-center justify-center transition-all duration-700"
+					style={{
+						opacity: showEditor() ? 1 : 0,
+						transform: showEditor()
+							? "translateY(0) scale(1)"
+							: "translateY(8px) scale(0.98)",
+						"pointer-events": showEditor() ? "auto" : "none",
+					}}
+				>
+					<div class="w-full max-w-[420px] rounded-xl overflow-hidden border border-gray-3 bg-white dark:bg-gray-2 shadow-lg">
+						<div class="flex relative flex-row items-center w-full h-10 px-3 border-b border-gray-3 shrink-0">
+							<div class="flex flex-1 items-center gap-1">
+								<div class="size-2 rounded-full bg-gray-6" />
+								<div class="size-2 rounded-full bg-gray-6" />
+								<div class="size-2 rounded-full bg-gray-6" />
+							</div>
+							<div class="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2">
+								<div class="size-4 rounded-sm bg-white dark:bg-gray-3 border border-gray-4" />
+								<div class="size-4 rounded-sm bg-white dark:bg-gray-3 border border-gray-4" />
+								<div class="w-px h-5 bg-gray-4 mx-0.5" />
+								<div class="size-4 rounded-sm bg-blue-3 border border-blue-5" />
+								<div class="size-4 rounded-sm bg-white dark:bg-gray-3 border border-gray-4" />
+								<div class="w-px h-5 bg-gray-4 mx-0.5" />
+								<div class="size-4 rounded-sm bg-white dark:bg-gray-3 border border-gray-4" />
+							</div>
+							<div class="flex flex-1 flex-row items-center justify-end gap-1.5">
+								<div class="flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-gray-3 border border-gray-4 text-[9px] text-gray-11 font-medium">
+									<IconLucideCopy class="size-3 shrink-0" stroke-width={2} />
+									Copy
+								</div>
+								<div class="flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-gray-3 border border-gray-4 text-[9px] text-gray-11 font-medium">
+									<IconLucideSave class="size-3 shrink-0" stroke-width={2} />
+									Save
+								</div>
+							</div>
+						</div>
+
+						<div class="p-3 flex items-center justify-center">
+							<div class="relative w-full h-[140px] rounded-sm overflow-hidden">
+								<div
+									class="absolute inset-0 transition-opacity duration-1000 ease-out"
+									style={{
+										background:
+											"linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+										opacity: phase() >= 7 ? 1 : 0,
+									}}
+								/>
+
+								<div
+									class="absolute transition-all duration-1000 ease-out"
+									style={{
+										top: phase() >= 8 ? "8%" : "0",
+										left: phase() >= 8 ? "8%" : "0",
+										right: phase() >= 8 ? "8%" : "0",
+										bottom: phase() >= 8 ? "8%" : "0",
+									}}
+								>
+									<div
+										class="w-full h-full bg-white dark:bg-gray-3 flex flex-col gap-2 p-3 transition-all duration-1000"
+										style={{
+											"border-radius": phase() >= 8 ? "8px" : "0px",
+											"box-shadow":
+												phase() >= 8 ? "0 4px 20px rgba(0,0,0,0.2)" : "none",
+										}}
+									>
+										<div class="w-16 h-2 rounded-full bg-gray-5/60" />
+										<div class="w-28 h-2 rounded-full bg-gray-5/40" />
+										<div class="w-20 h-2 rounded-full bg-gray-5/50" />
+										<div class="mt-1 flex gap-2">
+											<div class="flex-1 h-8 rounded-sm bg-gray-5/30" />
+											<div class="flex-1 h-8 rounded-sm bg-gray-5/20" />
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div
+							class="h-8 flex items-center justify-center transition-all duration-300"
+							style={{
+								opacity: phase() >= 9 ? 1 : 0,
+								transform: phase() >= 9 ? "translateY(0)" : "translateY(4px)",
+							}}
+						>
+							<div class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-12 text-gray-1 text-[10px] font-medium">
+								<IconLucideCheck class="size-3" />
+								Copied to clipboard
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
