@@ -31,11 +31,17 @@ import { KineticSlider } from "~/components/solarium/OLDSolariumSlider";
 import { SolariumSlider } from "~/components/solarium/SolariumSlider";
 import { SolariumSwitch } from "~/components/solarium/SolariumSwitch";
 import { Input } from "~/routes/editor/ui";
-import { authStore, generalSettingsStore } from "~/store";
+import {
+	authStore,
+	generalSettingsStore,
+	recordingStartSafetyStore,
+} from "~/store";
 import { clientEnv } from "~/utils/env";
 import {
 	deriveGeneralSettings,
 	type GeneralSettingsStore,
+	RECORDING_START_SAFETY_DEFAULTS,
+	type RecordingStartSafetySettings,
 } from "~/utils/general-settings";
 import { springs } from "~/utils/springs";
 import {
@@ -132,11 +138,20 @@ const FREE_INSTANT_MODE_MAX_RESOLUTION = 1280;
 const PRO_INSTANT_MODE_MAX_RESOLUTION = 1920;
 
 export default function GeneralSettings() {
-	const [store] = createResource(() => generalSettingsStore.get());
+	const [stores] = createResource(() =>
+		Promise.all([generalSettingsStore.get(), recordingStartSafetyStore.get()]),
+	);
 
 	return (
-		<Show when={store.state === "ready" && ([store()] as const)}>
-			{(store) => <Inner initialStore={store()[0] ?? null} />}
+		<Show when={stores()} keyed>
+			{(stores) => (
+				<Inner
+					initialStore={stores[0] ?? null}
+					initialRecordingStartSafety={
+						stores[1] ?? RECORDING_START_SAFETY_DEFAULTS
+					}
+				/>
+			)}
 		</Show>
 	);
 }
@@ -266,9 +281,18 @@ function DemoSection() {
 	);
 }
 
-function Inner(props: { initialStore: GeneralSettingsStore | null }) {
+function Inner(props: {
+	initialStore: GeneralSettingsStore | null;
+	initialRecordingStartSafety: RecordingStartSafetySettings;
+}) {
 	const [settings, setSettings] = createStore<ExtendedGeneralSettingsStore>(
 		deriveGeneralSettings(props.initialStore),
+	);
+	const [
+		confirmBeforeRecordingWithoutMicrophone,
+		setConfirmBeforeRecordingWithoutMicrophone,
+	] = createSignal(
+		props.initialRecordingStartSafety.confirmBeforeRecordingWithoutMicrophone,
 	);
 	const auth = authStore.createQuery();
 	const hasCapPro = createMemo(() => {
@@ -290,7 +314,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	const scrollToSection = (section: string) => {
 		try {
 			localStorage.removeItem("cap.settings.scrollToSection");
-		} catch {}
+		} catch { }
 		const attempt = (remaining: number) => {
 			const target = document.getElementById(`settings-section-${section}`);
 			const container = scrollContainerRef;
@@ -322,7 +346,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 		let pending: string | null = null;
 		try {
 			pending = localStorage.getItem("cap.settings.scrollToSection");
-		} catch {}
+		} catch { }
 		if (pending) {
 			scrollToSection(pending);
 		}
@@ -331,7 +355,7 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 			scrollToSection(event.payload.section);
 		});
 		onCleanup(() => {
-			unlisten.then((cb) => cb()).catch(() => {});
+			unlisten.then((cb) => cb()).catch(() => { });
 		});
 	});
 
@@ -366,6 +390,19 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 		} catch (error) {
 			setSettings(key as keyof GeneralSettingsStore, previousValue);
 			console.error(`Failed to update ${key}`, error);
+		}
+	};
+
+	const handleRecordingStartSafetyChange = async (value: boolean) => {
+		const previousValue = confirmBeforeRecordingWithoutMicrophone();
+		setConfirmBeforeRecordingWithoutMicrophone(value);
+		try {
+			await recordingStartSafetyStore.set({
+				confirmBeforeRecordingWithoutMicrophone: value,
+			});
+		} catch (error) {
+			setConfirmBeforeRecordingWithoutMicrophone(previousValue);
+			console.error("Failed to update recording start safety", error);
 		}
 	};
 
@@ -482,11 +519,11 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 	// Helper function to render select dropdown for recording behaviors
 	const SelectSettingItem = <
 		T extends
-			| MainWindowRecordingStartBehaviour
-			| PostStudioRecordingBehaviour
-			| PostDeletionBehaviour
-			| StudioRecordingQuality
-			| number,
+		| MainWindowRecordingStartBehaviour
+		| PostStudioRecordingBehaviour
+		| PostDeletionBehaviour
+		| StudioRecordingQuality
+		| number,
 	>(props: {
 		label: string;
 		description: string;
@@ -611,6 +648,12 @@ function Inner(props: { initialStore: GeneralSettingsStore | null }) {
 								{ text: "5 seconds", value: 5 },
 								{ text: "10 seconds", value: 10 },
 							]}
+						/>
+						<ToggleSettingItem
+							label="Confirm before recording without a microphone"
+							description="Require confirmation when no microphone is selected or the selected microphone is unavailable."
+							value={confirmBeforeRecordingWithoutMicrophone()}
+							onChange={handleRecordingStartSafetyChange}
 						/>
 						<SelectSettingItem
 							label="Main window when recording starts"
