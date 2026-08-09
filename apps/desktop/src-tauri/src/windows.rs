@@ -1084,6 +1084,15 @@ impl CapWindow {
         }
 
         if matches!(self, Self::Settings { .. }) {
+            if let Self::Settings { page: Some(page) } = self {
+                // Ensure the URL is set correctly for settings pages if it's already open
+                if let Some(window) = self.id(app).get(app) {
+                    let mut url = window.url()?;
+                    url.set_path(&format!("/settings/{page}"));
+                    window.navigate(url)?;
+                }
+            }
+
             hide_recording_windows(app, true);
             release_camera_preview_if_idle(app);
         }
@@ -1279,6 +1288,12 @@ impl CapWindow {
                     warn!("Failed to lock Main window zoom to 1.0: {}", e);
                 }
 
+                let main_window_always_on_top = GeneralSettingsStore::get(app)
+                    .ok()
+                    .flatten()
+                    .map(|s| s.main_window_always_on_top)
+                    .unwrap_or_default();
+
                 #[cfg(target_os = "macos")]
                 window.run_on_main_thread({
                     let window = window.clone();
@@ -1308,7 +1323,11 @@ impl CapWindow {
                                 | NSWindowCollectionBehavior::FullScreenDisallowsTiling,
                         );
 
-                        panel.set_level(100);
+                        panel.set_level(if main_window_always_on_top {
+                            100
+                        } else {
+                            objc2_app_kit::NSNormalWindowLevel as i64
+                        });
 
                         crate::permissions::schedule_macos_dock_visibility_sync(&app);
                     }
