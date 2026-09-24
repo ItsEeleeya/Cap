@@ -163,7 +163,7 @@ pub fn run(app: tauri::AppHandle) {
                 let close_ms = started.elapsed().as_secs_f64() * 1000.0;
                 tokio::time::sleep(Duration::from_millis(400)).await;
                 let started = Instant::now();
-                let shown = (crate::windows::ShowCapWindow::Camera { centered: true })
+                let shown = (crate::windows::CapWindow::Camera { centered: true })
                     .show(&app)
                     .await
                     .is_ok();

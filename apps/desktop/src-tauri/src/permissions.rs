@@ -339,7 +339,7 @@ fn macos_screen_recording_available() -> bool {
 // (lib.rs), and RunEvent::Reopen → should_show_onboarding (lib.rs); they get
 // the last strictly-observed answer without blocking — optimistic until the
 // first strict validation completes, since CGPreflight already passed. Reopen
-// consuming an optimistic answer is self-correcting: ShowCapWindow::Main
+// consuming an optimistic answer is self-correcting: CapWindow::Main
 // re-checks off-main (windows.rs) and redirects back to Onboarding. The
 // onboarding/permission UIs poll via async commands and keep the strict path.
 #[cfg(target_os = "macos")]

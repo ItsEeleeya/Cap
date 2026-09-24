@@ -9,6 +9,7 @@ export type GeneralSettingsStore = TauriGeneralSettingsStore & {
 	enableTelemetry?: boolean;
 	outOfProcessMuxer?: boolean;
 	enableGpuiApp?: boolean;
+	defaultZoomAmount?: number;
 };
 
 export const DEFAULT_TRANSCRIPTION_HINTS = [

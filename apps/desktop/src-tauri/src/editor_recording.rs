@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 use tauri_specta::Event;
 
 use crate::recording_settings::RecordingSettingsStore;
-use crate::windows::{EditorRecordingTarget, ShowCapWindow, editor_window_for_path};
+use crate::windows::{CapWindow, EditorRecordingTarget, editor_window_for_path};
 use crate::{App, ArcLock, tray};
 
 #[derive(serde::Serialize, serde::Deserialize, specta::Type, Debug, Clone, PartialEq, Eq)]
@@ -138,7 +138,7 @@ pub async fn open_editor_recording_main(
     }
     begin(&app, project_path.clone())?;
 
-    if let Err(error) = (ShowCapWindow::Main {
+    if let Err(error) = (CapWindow::Main {
         init_target_mode: None,
     })
     .show(&app)
