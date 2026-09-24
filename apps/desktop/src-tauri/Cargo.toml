@@ -1,6 +1,6 @@
 [package]
 name = "cap-desktop"
-version = "0.5.9"
+version = "0.6.0"
 description = "Beautiful screen recordings, owned by you."
 authors = ["Richie McIlroy <richie@cap.so>"]
 edition = "2024"
@@ -56,7 +56,7 @@ image = "0.25.2"
 futures-intrusive = "0.5.0"
 anyhow.workspace = true
 futures = { workspace = true }
-axum = { version = "0.7.5", features = ["ws", "macros"] }
+axum = { version = "0.8.9", features = ["ws", "macros"] }
 tracing.workspace = true
 tempfile = "3.9.0"
 ffmpeg.workspace = true
@@ -89,6 +89,7 @@ cap-editor = { path = "../../../crates/editor" }
 cap-media = { path = "../../../crates/media" }
 cap-flags = { path = "../../../crates/flags" }
 cap-recording = { path = "../../../crates/recording" }
+cap-timestamp = { path = "../../../crates/timestamp" }
 cap-export = { path = "../../../crates/export" }
 cap-automation = { path = "../../../crates/automation" }
 cap-cli-install = { path = "../../../crates/cli-install", features = ["specta"] }
@@ -107,6 +108,7 @@ cap-fail = { version = "0.1.0", path = "../../../crates/fail" }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 md5 = "0.7.0"
 tokio-util = "0.7.15"
+tokio-tungstenite = "=0.24.0"
 wgpu.workspace = true
 pollster = "0.4"
 bytemuck = "1.23.1"
@@ -129,7 +131,7 @@ aho-corasick.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
-block2= "0.6.2"
+block2 = "0.6.2"
 objc2-core-foundation = "0.3.2"
 objc2-application-services = "0.3.2"
 objc2-foundation = { version = "0.3.2", features = [
@@ -157,6 +159,11 @@ parakeet-rs = "0.3.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libappindicator = "0.9.0"
+gtk = "0.18"
+gdkwayland-sys = "0.18.2"
+wayland-sys = { version = "0.31.7", features = ["client", "dlopen"] }
+ashpd = { version = "0.11.0", default-features = false, features = ["tokio"] }
+notify-rust = "4.11"
 
 [target.'cfg(target_os= "windows")'.dependencies]
 windows = { workspace = true, features = [
@@ -168,6 +175,7 @@ windows = { workspace = true, features = [
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_System",
+    "Win32_Storage_FileSystem",
     "Win32_System_Power",
     "Win32_System_Threading",
     "Win32_System_WinRT",

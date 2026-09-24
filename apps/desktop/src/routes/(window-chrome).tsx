@@ -1,6 +1,5 @@
 import { createEventListener } from "@solid-primitives/event-listener";
 import { type RouteSectionProps, useLocation } from "@solidjs/router";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type as ostype } from "@tauri-apps/plugin-os";
 import { cx } from "cva";
@@ -14,7 +13,6 @@ import {
 import { AbsoluteInsetLoader } from "~/components/Loader";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { applyMacOSWindowMaterial } from "~/utils/macos-window-material";
-import { initializeTitlebar } from "~/utils/titlebar-state";
 import {
 	useWindowChromeContext,
 	WindowChromeContext,

@@ -22,6 +22,9 @@ const NewMainPage = lazy(() => import("./routes/(window-chrome)/new-main"));
 const SettingsGeneralPage = lazy(
 	() => import("./routes/(window-chrome)/settings/general"),
 );
+const SettingsQualityPage = lazy(
+	() => import("./routes/(window-chrome)/settings/quality"),
+);
 const SettingsRecordingsPage = lazy(
 	() => import("./routes/(window-chrome)/settings/recordings"),
 );
@@ -170,6 +173,7 @@ function Inner() {
 						>
 							<Route path="/" component={SettingsGeneralPage} />
 							<Route path="/general" component={SettingsGeneralPage} />
+							<Route path="/quality" component={SettingsQualityPage} />
 							<Route path="/recordings" component={SettingsRecordingsPage} />
 							<Route
 								path="/transcription"
@@ -258,7 +262,7 @@ function prewarmFontCaches() {
 			ctx.fillText("Ag", 0, 24);
 			ctx.font = "16px system-ui";
 			ctx.fillText("😀", 0, 24);
-		} catch { }
+		} catch {}
 	};
 
 	if ("requestIdleCallback" in window) requestIdleCallback(warm);
