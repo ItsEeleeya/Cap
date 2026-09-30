@@ -1,13 +1,21 @@
 import { Suspense } from "solid-js";
 import { Editor } from "./Editor";
 import { EditorSkeleton } from "./editor-skeleton";
+import { PreparingEditorProvider } from "./preparing-editor-context";
 
 export default function () {
 	return (
-		<div class="flex flex-col w-screen h-screen dark:bg-gray-1 bg-gray-2">
-			<Suspense fallback={<EditorSkeleton />}>
-				<Editor />
-			</Suspense>
+		<div
+			class={cx(
+				"flex flex-col w-screen h-screen bg-ed-window text-ed-text-1",
+				ostype() !== "windows" && "bg-transparent-window",
+			)}
+		>
+			<PreparingEditorProvider>
+				<Suspense fallback={<EditorSkeleton />}>
+					<Editor />
+				</Suspense>
+			</PreparingEditorProvider>
 		</div>
 	);
 }

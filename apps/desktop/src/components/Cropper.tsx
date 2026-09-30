@@ -25,6 +25,8 @@ import { MotionSafeTransition } from "~/utils/motion-safe";
 
 import { commands } from "~/utils/tauri";
 import { usePrefersReducedMotion } from "~/utils/use-media-query";
+import { alignCrop, type CropGuides } from "./crop-alignment";
+import "./cropper.css";
 export interface CropBounds {
 	x: number;
 	y: number;
@@ -250,6 +252,8 @@ export function Cropper(
 		enableAnimation?: boolean;
 		onAnimationFrame?: (bounds: CropBounds) => void;
 		hideSelection?: boolean;
+		appearance?: "editor";
+		snapToAlignmentEnabled?: boolean;
 	}>,
 ) {
 	let containerRef: HTMLDivElement | undefined;
@@ -288,6 +292,11 @@ export function Cropper(
 			cursor: string | null;
 		}
 	>({ drag: null, hoveringHandle: null, cursor: null });
+
+	const [alignmentGuides, setAlignmentGuides] = createSignal<CropGuides>({
+		x: null,
+		y: null,
+	});
 
 	const resizing = () =>
 		pointerState.drag === "handle" || pointerState.drag === "overlay";
@@ -686,6 +695,12 @@ export function Cropper(
 				newY = clamp(newY, 0, containerRect.height - currentBounds.height);
 
 				currentBounds = moveBounds(currentBounds, newX, newY);
+				const aligned =
+					props.snapToAlignmentEnabled && !e.shiftKey
+						? alignCrop(currentBounds, containerSize())
+						: { bounds: currentBounds, guides: { x: null, y: null } };
+				currentBounds = aligned.bounds;
+				setAlignmentGuides(aligned.guides);
 				setRawBounds(currentBounds);
 
 				if (!isAnimating()) setDisplayRawBounds(currentBounds);
@@ -719,6 +734,7 @@ export function Cropper(
 				if (target.hasPointerCapture?.(pointerId)) {
 					target.releasePointerCapture(pointerId);
 				}
+				setAlignmentGuides({ x: null, y: null });
 				onEnd();
 				activePointerSessionDispose = undefined;
 				dispose();
@@ -851,6 +867,7 @@ export function Cropper(
 		e: PointerEvent,
 		context: ResizeSessionState,
 	) {
+		const previousSnappedRatio = aspectState.snapped;
 		const pointX = e.clientX - context.containerRect.left;
 		const pointY = e.clientY - context.containerRect.top;
 
@@ -933,9 +950,6 @@ export function Cropper(
 				options,
 			);
 			nextBounds = bounds;
-			if (snappedRatio && !aspectState.snapped) {
-				triggerHaptic();
-			}
 			setAspectState("snapped", snappedRatio);
 		}
 
@@ -945,8 +959,39 @@ export function Cropper(
 			containerSize().y,
 		);
 
-		setRawBounds(finalBounds);
-		if (!isAnimating()) setDisplayRawBounds(finalBounds);
+		let alignedBounds = finalBounds;
+		setAlignmentGuides({ x: null, y: null });
+		if (props.snapToAlignmentEnabled && !e.shiftKey) {
+			const { movable } = context.activeHandle;
+			const start = context.startBounds;
+			const centered = context.isAltMode && ratioValue === null;
+			const aligned = alignCrop(finalBounds, containerSize(), {
+				origin: {
+					x: centered
+						? 0.5
+						: pointX < start.x + (movable.left ? start.width : 0)
+							? 1
+							: 0,
+					y: centered
+						? 0.5
+						: pointY < start.y + (movable.top ? start.height : 0)
+							? 1
+							: 0,
+				},
+				axes: {
+					x: movable.left || movable.right,
+					y: movable.top || movable.bottom,
+				},
+				ratio: ratioValue,
+			});
+			alignedBounds = aligned.bounds;
+			setAlignmentGuides(aligned.guides);
+			if (aligned.guides.x !== null || aligned.guides.y !== null)
+				setAspectState("snapped", null);
+		}
+		if (aspectState.snapped && !previousSnappedRatio) triggerHaptic();
+		setRawBounds(alignedBounds);
+		if (!isAnimating()) setDisplayRawBounds(alignedBounds);
 	}
 
 	function onHandleDoubleClick(handle: HandleSide, e: MouseEvent) {
@@ -1183,6 +1228,7 @@ export function Cropper(
 		<div
 			ref={containerRef}
 			class="relative w-full h-full select-none overscroll-contain focus:outline-hidden touch-none"
+			classList={{ "cropper-editor": props.appearance === "editor" }}
 			style={{
 				cursor: cursorStyle() ?? (props.aspectRatio ? "default" : "crosshair"),
 			}}
@@ -1228,11 +1274,30 @@ export function Cropper(
 				<div ref={occBottomRef} class="bottom-0" />
 			</div>
 
+			<For each={["x", "y"] as const}>
+				{(axis) => (
+					<Show
+						when={mouseState.drag !== null && alignmentGuides()[axis] !== null}
+					>
+						<div
+							aria-hidden="true"
+							class="cropper-alignment-guide"
+							data-axis={axis}
+							style={
+								axis === "x"
+									? { left: `${alignmentGuides().x}px` }
+									: { top: `${alignmentGuides().y}px` }
+							}
+						/>
+					</Show>
+				)}
+			</For>
+
 			{/* Crop region container */}
 			<div class="size-full">
 				<div
 					ref={regionRef}
-					class="absolute top-0 left-0 z-30 border-2 border-white/50 contrast-more:border-white contrast-more:shadow-[0_0_0_1px_rgba(0,0,0,0.8)]"
+					class="cropper-region absolute top-0 left-0 z-30 size-36 border border-white/50"
 					style={{
 						cursor: cursorStyle() ?? "grab",
 						visibility:
@@ -1272,8 +1337,8 @@ export function Cropper(
 						exitClass="opacity-100"
 						exitToClass="opacity-0"
 					>
-						<Show when={pointerState.drag !== null}>
-							<div class="pointer-events-none *:absolute *:border-white/40">
+						<Show when={mouseState.drag !== null}>
+							<div class="cropper-thirds pointer-events-none *:absolute *:border-white/40">
 								<div class="left-0 w-full border-t border-b pointer-events-none h-[calc(100%/3)] top-[calc(100%/3)]" />
 								<div class="top-0 h-full border-l border-r pointer-events-none w-[calc(100%/3)] left-[calc(100%/3)]" />
 							</div>
@@ -1285,7 +1350,7 @@ export function Cropper(
 							handle.isCorner ? (
 								<button
 									type="button"
-									class="fixed z-50 flex h-[30px] w-[30px] focus:ring-0 outline-hidden"
+									class="cropper-corner fixed z-50 flex h-[30px] w-[30px] focus:ring-0 outline-hidden"
 									tabIndex={-1}
 									classList={{ "opacity-0": pointerState.drag === "overlay" }}
 									style={{
@@ -1328,7 +1393,10 @@ export function Cropper(
 											...(handle.y === "t"
 												? { top: "9px" }
 												: { bottom: "9px" }),
-											filter: `drop-shadow(${handle.x === "l" ? "-3px" : "3px"} ${handle.y === "t" ? "-3px" : "3px"} 5px rgba(0, 0, 0, 0.3))`,
+											filter:
+												props.appearance === "editor"
+													? undefined
+													: `drop-shadow(${handle.x === "l" ? "-3px" : "3px"} ${handle.y === "t" ? "-3px" : "3px"} 5px rgba(0, 0, 0, 0.3))`,
 										}}
 									>
 										<path
@@ -1347,7 +1415,8 @@ export function Cropper(
 							) : (
 								<button
 									type="button"
-									class="absolute focus:outline-hidden focus:ring-0 outline-hidden"
+									class="cropper-edge absolute focus:outline-hidden focus:ring-0 outline-hidden"
+									data-direction={handle.direction}
 									tabIndex={-1}
 									style={{
 										visibility:
@@ -1358,7 +1427,8 @@ export function Cropper(
 										...(handle.x === "l"
 											? {
 													left: "-1px",
-													width: "10px",
+													width:
+														props.appearance === "editor" ? "18px" : "10px",
 													top: "10px",
 													bottom: "10px",
 													transform: "translateX(-50%)",
@@ -1366,7 +1436,8 @@ export function Cropper(
 											: handle.x === "r"
 												? {
 														right: "-1px",
-														width: "10px",
+														width:
+															props.appearance === "editor" ? "18px" : "10px",
 														top: "10px",
 														bottom: "10px",
 														transform: "translateX(50%)",
@@ -1374,14 +1445,16 @@ export function Cropper(
 												: handle.y === "t"
 													? {
 															top: "-1px",
-															height: "10px",
+															height:
+																props.appearance === "editor" ? "18px" : "10px",
 															left: "10px",
 															right: "10px",
 															transform: "translateY(-50%)",
 														}
 													: {
 															bottom: "-1px",
-															height: "10px",
+															height:
+																props.appearance === "editor" ? "18px" : "10px",
 															left: "10px",
 															right: "10px",
 															transform: "translateY(50%)",
@@ -1394,7 +1467,11 @@ export function Cropper(
 									onPointerDown={[onHandlePointerDown, handle]}
 									aria-label={`Resize ${handle.direction}`}
 									aria-describedby="cropper-aspect"
-								/>
+								>
+									<Show when={props.appearance === "editor"}>
+										<span class="cropper-edge-grip" />
+									</Show>
+								</button>
 							)
 						}
 					</For>
