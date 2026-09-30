@@ -12,6 +12,7 @@ import {
 	videoEdits,
 	videos,
 	videoUploads,
+	videoViewerGrants,
 } from "@cap/database/schema";
 import type { VideoMetadata } from "@cap/database/types";
 import { buildEnv, serverEnv } from "@cap/env";
@@ -56,6 +57,8 @@ import { getPublicShareVideo } from "@/lib/public-share-video";
 import * as EffectRuntime from "@/lib/server";
 import { runPromise } from "@/lib/server";
 import { getSharePageBranding } from "@/lib/share-branding";
+import { parseShareCallToAction } from "@/lib/share-call-to-action";
+import { getShareDashboardDestination } from "@/lib/share-dashboard-destination";
 import { getSharePlaybackUrl } from "@/lib/share-playback";
 import { buildShareVideoMetadata } from "@/lib/share-video-metadata";
 import { resolveShareWebUrl } from "@/lib/share-web-url";
@@ -76,6 +79,7 @@ import { optionFromTOrFirst } from "@/utils/effect";
 import { isAiGenerationEnabled } from "@/utils/flags";
 import { PasswordOverlay } from "./_components/PasswordOverlay";
 import { PendingRecordingShare } from "./_components/PendingRecordingShare";
+import { PrivateAccessActions } from "./_components/PrivateAccessActions";
 import { ShareHeader } from "./_components/ShareHeader";
 import { Share } from "./Share";
 
@@ -184,22 +188,25 @@ async function getSharedSpacesForVideo(videoId: Video.VideoId) {
 	};
 }
 
-function PolicyDeniedView({ reason }: { reason?: string }) {
+function PolicyDeniedView({
+	reason,
+	videoId,
+}: {
+	reason?: string;
+	videoId: Video.VideoId;
+}) {
 	let title = "This video is private";
-	let description: React.ReactNode = (
-		<>
-			If you own this video, please <Link href="/login">sign in</Link> to manage
-			sharing.
-		</>
-	);
+	let description: React.ReactNode = <PrivateAccessActions videoId={videoId} />;
 
 	if (reason === "email_restriction_login_required") {
 		title = "This video requires sign-in";
 		description = (
 			<>
 				The owner of this video has restricted access. Please{" "}
-				<Link href="/login">sign in</Link> with an authorized email address to
-				view.
+				<Link href={`/login?next=${encodeURIComponent(`/s/${videoId}`)}`}>
+					sign in
+				</Link>{" "}
+				with an authorized email address to view.
 			</>
 		);
 	} else if (reason === "email_restriction_denied") {
@@ -212,13 +219,15 @@ function PolicyDeniedView({ reason }: { reason?: string }) {
 		<div className="flex flex-col justify-center items-center p-4 min-h-screen text-center">
 			<Logo className="size-32" />
 			<h1 className="mb-2 text-2xl font-semibold">{title}</h1>
-			<p className="text-gray-400">{description}</p>
+			<div className="text-gray-400">{description}</div>
 		</div>
 	);
 }
 
 const renderPolicyDenied = (videoId: Video.VideoId, reason?: string) =>
-	Effect.succeed(<PolicyDeniedView key={videoId} reason={reason} />);
+	Effect.succeed(
+		<PolicyDeniedView key={videoId} videoId={videoId} reason={reason} />,
+	);
 
 const renderNoSuchElement = (awaitRecording: boolean) =>
 	awaitRecording
@@ -366,6 +375,7 @@ export default async function ShareVideoPage(props: PageProps<"/s/[videoId]">) {
 						organizationId: sharedVideos.organizationId,
 					},
 					orgSettings: organizations.settings,
+					allowedEmailDomain: organizations.allowedEmailDomain,
 					organizationName: organizations.name,
 					organizationIconUrl: organizations.iconUrl,
 					shareableLinkIconUrl: organizations.shareableLinkIconUrl,
@@ -438,6 +448,7 @@ async function AuthorizedContent({
 		hasActiveUpload: boolean;
 		activeUploadRawFileKey: string | null;
 		orgSettings?: OrganizationSettings | null;
+		allowedEmailDomain?: string | null;
 		videoSettings?: OrganizationSettings | null;
 		organizationName?: string | null;
 		organizationIconUrl?: ImageUpload.ImageUrlOrKey | null;
@@ -511,6 +522,19 @@ async function AuthorizedContent({
 		: Promise.resolve(null);
 
 	const sharedSpacesPromise = getSharedSpacesForVideo(videoId);
+	const viewerCountPromise =
+		user?.id === video.owner.id
+			? db()
+					.select({ count: sql<number>`count(*)`.mapWith(Number) })
+					.from(videoViewerGrants)
+					.where(
+						and(
+							eq(videoViewerGrants.videoId, videoId),
+							isNull(videoViewerGrants.revokedAt),
+						),
+					)
+					.then(([row]) => row?.count ?? 0)
+			: Promise.resolve(0);
 
 	const ownerIsPro = userIsPro(video.owner);
 
@@ -557,6 +581,7 @@ async function AuthorizedContent({
 	const screenshotImageUrlPromise = video.isScreenshot
 		? Effect.flatMap(Videos, (videos) => videos.getThumbnailURL(videoId)).pipe(
 				Effect.map(Option.getOrNull),
+				provideOptionalAuth,
 				runPromise,
 			)
 		: Promise.resolve(null);
@@ -750,6 +775,21 @@ async function AuthorizedContent({
 				})
 			: Promise.resolve(false);
 
+	const dashboardDestinationPromise = getShareDashboardDestination({
+		viewer: user
+			? { id: user.id, activeOrganizationId: user.activeOrganizationId }
+			: null,
+		videoId,
+		ownerId: video.owner.id,
+		videoOrganizationId: video.orgId,
+	}).catch((error) => {
+		console.error(
+			`[ShareVideoPage] Dashboard destination lookup failed for ${videoId}:`,
+			error,
+		);
+		return null;
+	});
+
 	const videoHasEditsPromise = canDownloadVideoPromise.then((canDownload) => {
 		if (!canDownload || video.isScreenshot) return false;
 		return db()
@@ -769,6 +809,7 @@ async function AuthorizedContent({
 	const [
 		spacesData,
 		{ sharedSpaces, sharedOrganizations },
+		viewerCount,
 		aiGenerationEnabled,
 		screenshotImageUrl,
 		membersList,
@@ -779,9 +820,11 @@ async function AuthorizedContent({
 		videoHasEdits,
 		ownerIsOverShareLimit,
 		resolvedImages,
+		dashboardDestination,
 	] = await Promise.all([
 		spacesDataPromise,
 		sharedSpacesPromise,
+		viewerCountPromise,
 		aiGenerationEnabledPromise,
 		screenshotImageUrlPromise,
 		membersListPromise,
@@ -792,6 +835,7 @@ async function AuthorizedContent({
 		videoHasEditsPromise,
 		overShareLimitPromise,
 		imagesPromise,
+		dashboardDestinationPromise,
 		viewNotificationPromise,
 	]);
 
@@ -862,6 +906,9 @@ async function AuthorizedContent({
 		hasInheritedPassword: rules.hasInheritedPassword,
 		inheritedPasswordSources: rules.inheritedPasswordSources,
 		inheritedSpaceSettings: rules.inheritedSettings,
+		callToAction: ownerIsPro
+			? parseShareCallToAction(video.videoSettings)
+			: null,
 	};
 	const isEditProcessing =
 		isEditSourceKey({
@@ -880,6 +927,8 @@ async function AuthorizedContent({
 			"timeline" && !video.isScreenshot
 			? ("timeline" as const)
 			: ("classic" as const);
+	const captionsInitiallyOff =
+		optionFromTOrFirst(searchParams.captions).pipe(Option.getOrNull) === "off";
 	// Recording media comments rides on the VIDEO OWNER's Pro plan; the
 	// upload/create paths re-check server-side via canUseMediaComments.
 	const canRecordMedia = Boolean(user) && videoWithOrganizationInfo.owner.isPro;
@@ -902,10 +951,12 @@ async function AuthorizedContent({
 						}}
 						customDomain={customDomain}
 						domainVerified={domainVerified}
+						allowedEmailDomain={video.allowedEmailDomain}
 						sharedOrganizations={
 							videoWithOrganizationInfo.sharedOrganizations || []
 						}
 						sharedSpaces={sharedSpaces}
+						viewerCount={viewerCount}
 						userOrganizations={userOrganizations}
 						spacesData={spacesData}
 						branding={getSharePageBranding(videoWithOrganizationInfo)}
@@ -916,8 +967,10 @@ async function AuthorizedContent({
 						// header renders for everyone, and a failed count is worth
 						// less than the header it would otherwise take down.
 						views={viewsPromise.catch(() => null)}
+						dashboardDestination={dashboardDestination}
 					/>
 				}
+				dashboardDestination={dashboardDestination}
 				data={videoWithOrganizationInfo}
 				initialPlaybackUrl={initialPlaybackUrlPromise}
 				screenshotImageUrl={screenshotImageUrl}
@@ -930,6 +983,7 @@ async function AuthorizedContent({
 				viewerId={user?.id ?? null}
 				viewerSignedIn={user !== null}
 				initialView={initialShareView}
+				captionsInitiallyOff={captionsInitiallyOff}
 				canRecordMedia={canRecordMedia}
 				isEditProcessing={isEditProcessing}
 				recordingStopped={recordingStopped}
