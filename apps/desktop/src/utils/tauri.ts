@@ -133,6 +133,18 @@ async addToolbarShell() : Promise<null> {
 async removeToolbarShell() : Promise<null> {
     return await TAURI_INVOKE("remove_toolbar_shell");
 },
+async restoreMainWindowGeometry() : Promise<boolean> {
+    return await TAURI_INVOKE("restore_main_window_geometry");
+},
+async setWindowAlwaysOnTop(alwaysOnTop: boolean, macosLevel: number | null) : Promise<null> {
+    return await TAURI_INVOKE("set_window_always_on_top", { alwaysOnTop, macosLevel });
+},
+async setWindowOpacity(opacity: number) : Promise<null> {
+    return await TAURI_INVOKE("set_window_opacity", { opacity });
+},
+async setAppearance(appearance: Appearance) : Promise<null> {
+    return await TAURI_INVOKE("set_appearance", { appearance });
+},
 async getDefaultExcludedWindows() : Promise<WindowExclusion[]> {
     return await TAURI_INVOKE("get_default_excluded_windows");
 },
@@ -382,12 +394,6 @@ async getDisplayFrameForCropping(fps: number) : Promise<number[]> {
 async getClipThumbnail(recordingSegment: number, time: number) : Promise<string> {
     return await TAURI_INVOKE("get_clip_thumbnail", { recordingSegment, time });
 },
-async setWindowAlwaysOnTop(alwaysOnTop: boolean, macosLevel: number | null) : Promise<null> {
-    return await TAURI_INVOKE("set_window_always_on_top", { alwaysOnTop, macosLevel });
-},
-async setWindowOpacity(opacity: number) : Promise<null> {
-    return await TAURI_INVOKE("set_window_opacity", { opacity });
-},
 async globalMessageDialog(message: string) : Promise<void> {
     await TAURI_INVOKE("global_message_dialog", { message });
 },
@@ -416,6 +422,9 @@ async setFail(name: string, value: boolean) : Promise<void> {
 },
 async updateAuthPlan() : Promise<void> {
     await TAURI_INVOKE("update_auth_plan");
+},
+async setWindowTransparent(value: boolean) : Promise<void> {
+    await TAURI_INVOKE("set_window_transparent", { value });
 },
 async getEditorMeta() : Promise<RecordingMeta> {
     return await TAURI_INVOKE("get_editor_meta");
@@ -549,9 +558,6 @@ async recoverRecording(projectPath: string) : Promise<string> {
 async discardIncompleteRecording(projectPath: string) : Promise<null> {
     return await TAURI_INVOKE("discard_incomplete_recording", { projectPath });
 },
-async setAppearance(appearance: Appearance) : Promise<null> {
-    return await TAURI_INVOKE("set_appearance", { appearance });
-},
 async getAutomations() : Promise<AutomationsStore> {
     return await TAURI_INVOKE("get_automations");
 },
@@ -661,8 +667,15 @@ videoImportProgress: "video-import-progress"
 /** user-defined types **/
 
 export type Action = { type: "copyToClipboard"; source?: ClipboardSource } | { type: "saveToLocation"; dir: string; filenameTemplate?: string | null } | { type: "export"; profile: ExportProfile; destination?: ExportDestination } | { type: "upload"; organizationId?: string | null; copyLink?: boolean; openInBrowser?: boolean } | { type: "revealInFileManager" } | { type: "openFile" } | { type: "runCommand"; program: string; args?: string[]; cwd?: string | null; env?: { [key in string]: string }; useShell?: boolean } | { type: "webhook"; url: string; method?: string; headers?: { [key in string]: string }; bodyTemplate?: string | null } | { type: "recognizeTextToClipboard" } | { type: "notify"; titleTemplate?: string; bodyTemplate?: string } | { type: "openEditor" } | { type: "skipEditor" } | { type: "applyPreset"; name: string } | { type: "deleteLocalFiles" }
-export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; maskType?: MaskType | null; maskLevel?: number | null }
-export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask"
+export type AnimatedGradientCatalog = { defaultConfig: AnimatedGradientConfig; templates: AnimatedGradientPreset[]; controls: AnimatedGradientControl[] }
+export type AnimatedGradientConfig = { colorStops: AnimatedGradientStop[]; direction: number; flowScale: number; flowStrength: number; curvature: number; detail: number; relief: number; light: number; shade: number; ripples: number; grainAmount: number; grainSize: number; exposure: number; contrast: number; vibrance: number; motionSpeed: number; seed: number }
+export type AnimatedGradientControl = { key: AnimatedGradientParameter; label: string; group: string; min: number; max: number; step: number }
+export type AnimatedGradientLibrary = { presets: AnimatedGradientPreset[]; lastUsed: AnimatedGradientConfig | null; selected: boolean }
+export type AnimatedGradientParameter = "direction" | "flowScale" | "flowStrength" | "curvature" | "detail" | "relief" | "light" | "shade" | "ripples" | "grainAmount" | "grainSize" | "exposure" | "contrast" | "vibrance" | "motionSpeed"
+export type AnimatedGradientPreset = { id: string; name: string; config: AnimatedGradientConfig }
+export type AnimatedGradientStop = { color: [number, number, number]; position: number }
+export type Annotation = { id: string; type: AnnotationType; x: number; y: number; width: number; height: number; strokeColor: string; strokeWidth: number; fillColor: string; opacity: number; rotation: number; text: string | null; maskType?: MaskType | null; maskLevel?: number | null; points?: ([number, number])[] | null }
+export type AnnotationType = "arrow" | "circle" | "rectangle" | "text" | "mask" | "draw"
 export type Appearance = "system" | "light" | "dark"
 export type AspectRatio = "wide" | "vertical" | "square" | "classic" | "tall"
 export type Audio = { duration: number; sample_rate: number; channels: number; start_time: number }
@@ -867,7 +880,7 @@ export type CameraShape = "square" | "source"
 export type CameraWithFormats = { deviceId: string; displayName: string; modelId: string | null; formats: CameraFormatInfo[]; bestFormat: CameraFormatInfo | null }
 export type CameraXPosition = "left" | "center" | "right"
 export type CameraYPosition = "top" | "bottom"
-export type CapWindow = { Main: { init_target_mode: RecordingTargetMode | null } } | { Settings: { page: string | null } } | { Editor: { project_path: string } } | "RecordingsOverlay" | { WindowCaptureOccluder: { screen_id: DisplayId } } | { TargetSelectOverlay: { display_id: DisplayId; target_mode: RecordingTargetMode | null } } | { Camera: { centered: boolean } } | { InProgressRecording: { countdown: number | null; capture_target?: ScreenCaptureTarget | null } } | "Upgrade" | "ModeSelect" | { ScreenshotEditor: { path: string } } | "Onboarding" | "Teleprompter"
+export type CapWindow = { Main: { init_target_mode: RecordingTargetMode | null } } | { Settings: { page: string | null } } | { Editor: { project_path: string } } | "RecordingsOverlay" | { WindowCaptureOccluder: { screen_id: DisplayId } } | { TargetSelectOverlay: { display_id: DisplayId; target_mode: RecordingTargetMode | null } } | { Camera: { centered: boolean } } | { InProgressRecording: { countdown: number | null; capture_target?: ScreenCaptureTarget | null } } | "Upgrade" | "ModeSelect" | { ScreenshotEditor: { path: string } } | "Onboarding" | "Teleprompter" | { CaptureArea: { screen_id: DisplayId } }
 export type CaptionData = { segments: CaptionSegment[]; settings: CaptionSettings | null }
 export type CaptionSegment = { id: string; start: number; end: number; text: string; words?: CaptionWord[] }
 export type CaptionSettings = { enabled: boolean; font: string; size: number; color: string; backgroundColor: string; backgroundOpacity: number; position: string; italic: boolean; fontWeight: number; outline: boolean; outlineColor: string; exportWithSubtitles: boolean; highlightColor: string; fadeDuration: number; lingerDuration: number; wordTransitionDuration: number; activeWordHighlight: boolean; manualPosition: XY<number> | null; preset: string; animation: string; highlightStyle: string; uppercase: boolean }
@@ -1067,13 +1080,13 @@ export type FrameStyle =
 "macbook"
 export type FrameTheme = "dark" | "light"
 export type FramesRendered = { renderedCount: number; totalFrames: number; type: "FramesRendered" }
-export type GeneralSettingsStore = { instanceId?: string; uploadIndividualFiles?: boolean; hideDockIcon?: boolean; autoCreateShareableLink?: boolean; enableNotifications?: boolean; disableAutoOpenLinks?: boolean; hasCompletedStartup?: boolean; appearance?: Appearance; commercialLicense?: CommercialLicense | null; lastVersion?: string | null; postStudioRecordingBehaviour?: PostStudioRecordingBehaviour; mainWindowRecordingStartBehaviour?: MainWindowRecordingStartBehaviour; custom_cursor_capture2?: boolean; serverUrl?: string; recordingCountdown?: number | null; enableNativeCameraPreview: boolean; autoZoomOnClicks?: boolean; 
+export type GeneralSettingsStore = { instanceId?: string; uploadIndividualFiles?: boolean; hideDockIcon?: boolean; autoCreateShareableLink?: boolean; enableNotifications?: boolean; disableAutoOpenLinks?: boolean; hasCompletedStartup?: boolean; appearance?: Appearance; commercialLicense?: CommercialLicense | null; lastVersion?: string | null; postStudioRecordingBehaviour?: PostStudioRecordingBehaviour; mainWindowRecordingStartBehaviour?: MainWindowRecordingStartBehaviour; custom_cursor_capture2?: boolean; serverUrl?: string; recordingCountdown?: number | null; enableNativeCameraPreview: boolean; autoZoomOnClicks?: boolean; defaultZoomAmount?: number | null;
 /**
  * `None` until [`init`] seeds it from whether this machine has a notched
  * display. From then on it is the user's preference and nothing re-reads
  * the hardware, so moving between machines can't silently flip it.
  */
-macbookNotchOverlay?: boolean | null; captureKeyboardEvents?: boolean; postDeletionBehaviour?: PostDeletionBehaviour; excludedWindows?: WindowExclusion[]; deleteInstantRecordingsAfterUpload?: boolean; instantModeMaxResolution?: number; defaultProjectNameTemplate?: string | null; crashRecoveryRecording?: boolean; maxFps?: number; transcriptionHints?: string[]; editorPreviewQuality?: EditorPreviewQuality; studioRecordingQuality?: StudioRecordingQuality; cameraWindowPosition?: WindowPosition | null; cameraWindowPositionsByMonitorName?: { [key in string]: WindowPosition }; hasCompletedOnboarding?: boolean; enableTelemetry?: boolean; outOfProcessMuxer?: boolean; experimentalUseSolarium?: boolean; recordingsPath?: string | null; 
+macbookNotchOverlay?: boolean | null; captureKeyboardEvents?: boolean; postDeletionBehaviour?: PostDeletionBehaviour; excludedWindows?: WindowExclusion[]; deleteInstantRecordingsAfterUpload?: boolean; instantModeMaxResolution?: number; defaultProjectNameTemplate?: string | null; crashRecoveryRecording?: boolean; maxFps?: number; transcriptionHints?: string[]; editorPreviewQuality?: EditorPreviewQuality; studioRecordingQuality?: StudioRecordingQuality; cameraWindowPosition?: WindowPosition | null; cameraWindowPositionsByMonitorName?: { [key in string]: WindowPosition }; hasCompletedOnboarding?: boolean; enableTelemetry?: boolean; outOfProcessMuxer?: boolean; experimentalUseSolarium?: boolean; recordingsPath?: string | null;
 /**
  * Custom recordings folders that were used before; recordings left in
  * them stay visible in the library. Most recent last.
@@ -1085,7 +1098,13 @@ previousRecordingsPaths?: string[];
  * Cleared automatically when the app version changes (one retry per
  * update, since a new ort/wgpu/driver stack may have fixed the crash).
  */
-cameraBlurDisabledByCrash?: string | null; updateChannel?: UpdateChannel; mainWindowAlwaysOnTop?: boolean }
+cameraBlurDisabledByCrash?: string | null; updateChannel?: UpdateChannel; mainWindowAlwaysOnTop?: boolean;
+/**
+ * Run the experimental gpui-native app (`cap-gpui`) *instead of* this one:
+ * while enabled, startup hands off to it and exits, and the native app's
+ * own Experimental page hands back. See `gpui_app.rs`.
+ */
+enableGpuiApp?: boolean }
 export type GifExportSettings = { fps: number; resolution_base: XY<number>; quality: GifQuality | null }
 export type GifQuality = {
 /**

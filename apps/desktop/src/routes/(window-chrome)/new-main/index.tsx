@@ -3052,12 +3052,12 @@ function Page() {
 					<MainWindowHelpButton />
 					<div class="flex-1 min-h-9 min-w-0" />
 					<div class="flex gap-1 items-center shrink-0">
-						<Tooltip
+						{/*<Tooltip
 							content={<span>{isExpanded() ? "Collapse" : "Expand"}</span>}
 						>
 							<button
 								type="button"
-								disabled={isWindowResizing()}
+								// disabled={isWindowResizing()}
 								onClick={() => void toggleMainWindowExpanded()}
 								aria-label={isExpanded() ? "Collapse window" : "Expand window"}
 								aria-pressed={isExpanded()}
@@ -3072,7 +3072,7 @@ function Page() {
 									<IconLucideMinimize2 class="transition-colors text-gray-11 size-3.5 hover:text-gray-12" />
 								</Show>
 							</button>
-						</Tooltip>
+						</Tooltip>*/}
 						<Tooltip content={<span>Settings</span>}>
 							<button
 								type="button"

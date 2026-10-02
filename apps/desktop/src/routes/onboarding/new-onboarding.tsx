@@ -414,7 +414,7 @@ function BottomNav(props: { nextLabel: string }) {
 				"pointer-events": visible() ? "auto" : "none",
 			}}
 		>
-			<StepNavigation nextLabel={props.nextLabel} />
+			{/*<StepNavigation nextLabel={props.nextLabel} />*/}
 		</div>
 	);
 }

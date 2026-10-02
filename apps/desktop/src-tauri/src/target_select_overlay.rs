@@ -414,7 +414,7 @@ fn schedule_ready_overlay(window: &WebviewWindow, reveal: lifecycle::Reveal) {
         #[cfg(target_os = "macos")]
         if focus {
             use tauri_nspanel::WebviewWindowExt;
-            if let Ok(panel) = handle.to_panel() {
+            if let Ok(panel) = crate::panel_manager::try_to_panel(&handle) {
                 panel.show();
             }
         }

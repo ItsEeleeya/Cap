@@ -1,3 +1,5 @@
+import { type } from "@tauri-apps/plugin-os";
+import { cx } from "cva";
 import { Suspense } from "solid-js";
 import { Editor } from "./Editor";
 import { EditorSkeleton } from "./editor-skeleton";
@@ -8,7 +10,7 @@ export default function () {
 		<div
 			class={cx(
 				"flex flex-col w-screen h-screen bg-ed-window text-ed-text-1",
-				ostype() !== "windows" && "bg-transparent-window",
+				type() !== "windows" && "bg-transparent-window",
 			)}
 		>
 			<PreparingEditorProvider>

@@ -124,11 +124,7 @@
 				"mimeType": "application/x-cap-project",
 				"role": "Editor",
 				"rank": "Owner",
-				"description": "Cap Project",
-				"exportedType": {
-					"identifier": "so.cap.desktop.project",
-					"conformsTo": ["com.apple.package"]
-				}
+				"description": "Cap Project"
 			}
 		],
 		"copyright": "Copyright (c) 2023-present Cap Software, Inc.",

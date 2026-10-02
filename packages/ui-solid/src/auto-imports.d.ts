@@ -103,6 +103,7 @@ declare global {
   const IconLucideMaximize2: typeof import('~icons/lucide/maximize2.jsx')['default']
   const IconLucideMessageSquarePlus: typeof import('~icons/lucide/message-square-plus.jsx')['default']
   const IconLucideMicOff: typeof import('~icons/lucide/mic-off.jsx')['default']
+  const IconLucideMinimize2: typeof import('~icons/lucide/minimize2.jsx')['default']
   const IconLucideMinus: typeof import('~icons/lucide/minus.jsx')['default']
   const IconLucideMonitor: typeof import('~icons/lucide/monitor.jsx')['default']
   const IconLucideMove: typeof import('~icons/lucide/move.jsx')['default']
