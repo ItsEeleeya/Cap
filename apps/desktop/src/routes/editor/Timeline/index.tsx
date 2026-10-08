@@ -1371,7 +1371,7 @@ export function Timeline(props: {
 					}
 				}}
 			>
-				<div class="absolute bottom-0 right-0 z-30 h-1 w-[78px]">
+				<div class="absolute bottom-0 right-5 z-30 h-1 w-[78px]">
 					<Minimap />
 				</div>
 				<div
@@ -1461,7 +1461,7 @@ export function Timeline(props: {
 							}}
 						>
 							<Show when={preview().snapped}>
-								<div class="absolute top-0 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px] bg-ed-accent" />
+								<div class="absolute top-0 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px bg-ed-accent" />
 							</Show>
 						</div>
 					)}
@@ -2012,7 +2012,7 @@ function TrackRow(props: {
 	return (
 		<div
 			class={cx(
-				"group/row relative flex items-stretch rounded-lg transition-[background-color,opacity] duration-150",
+				"group/row relative flex items-stretch rounded- transition-[background-color,opacity] duration-150",
 				active() ? "bg-ed-ctl-hover" : "bg-ed-ctl hover:bg-ed-ctl-hover",
 			)}
 			classList={{ "opacity-35": dragging() }}
@@ -2026,7 +2026,7 @@ function TrackRow(props: {
 			>
 				<button
 					type="button"
-					class="relative flex h-full w-full items-center gap-1.5 rounded-md pl-1 text-left focus-visible:outline-2 focus-visible:outline-ed-accent"
+					class="relative flex h-full w-full items-center gap-1.5 rounded- pl-1 text-left focus-visible:outline-2 focus-visible:outline-ed-accent"
 					classList={{ "cursor-grab active:cursor-grabbing": canReorder() }}
 					data-track-reorder={canReorder() ? "" : undefined}
 					title={
@@ -2081,7 +2081,7 @@ function TrackRow(props: {
 					</button>
 				</Show>
 			</div>
-			<div class="flex-1 relative overflow-hidden min-w-0 rounded-r-lg">
+			<div class="flex-1 relative overflow-hidden min-w-0 rounded-r">
 				{props.children}
 			</div>
 		</div>

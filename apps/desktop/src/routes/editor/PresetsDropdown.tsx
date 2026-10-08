@@ -40,6 +40,7 @@ export function PresetsDropdown() {
 				rightIcon={<IconCapChevronDown />}
 				title="Presets"
 				aria-label="Presets"
+				_inToolbar
 			>
 				<span class="max-[1200px]:hidden">Presets</span>
 			</EditorButton>

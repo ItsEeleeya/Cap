@@ -43,6 +43,8 @@ import { createStore, produce } from "solid-js/store";
 import { Dynamic } from "solid-js/web";
 import toast from "solid-toast";
 import { cameraBackgroundOptions } from "~/components/CameraPreviewChrome";
+import GlassEffectContainer from "~/components/GlassEffectContainer";
+import { Scroller } from "~/components/ScrollView";
 import { Toggle } from "~/components/Toggle";
 import {
 	animatedGradientsStore,
@@ -137,7 +139,6 @@ import type { Camera3DSegment } from "./three-d";
 import { Camera3DShotPanel, camera3DShotSummary } from "./three-d-panel";
 import { heldTimeBefore, holdWindows } from "./timeline-holds";
 import {
-	ComingSoonTooltip,
 	EditorButton,
 	Field,
 	Input,
@@ -570,6 +571,8 @@ function ConfigSidebarContent() {
 	const {
 		project,
 		selectedStyle,
+		dialog,
+		setDialog,
 		setProject,
 		setEditorState,
 		projectActions,
@@ -577,6 +580,22 @@ function ConfigSidebarContent() {
 		editorState,
 		meta,
 	} = useEditorContext();
+	const isTranscriptOpen = () => {
+		const currentDialog = dialog();
+		return (
+			"type" in currentDialog &&
+			currentDialog.type === "transcript" &&
+			currentDialog.open
+		);
+	};
+	const isClipsOpen = () => {
+		const currentDialog = dialog();
+		return (
+			"type" in currentDialog &&
+			currentDialog.type === "clips" &&
+			currentDialog.open
+		);
+	};
 	const organizationSelection = createSelectedOrganization();
 	const brandColorSwatches = createMemo(() =>
 		getOrganizationBrandColorSwatches(
@@ -656,6 +675,51 @@ function ConfigSidebarContent() {
 			setState("selectedTab", "background");
 	});
 	let scrollRef!: HTMLDivElement;
+	const sectionRefs = new Map<string, HTMLDivElement>();
+	const scrollToSection = (id: string) => {
+		const section = sectionRefs.get(id);
+		if (section && scrollRef) {
+			const top =
+				section.getBoundingClientRect().top -
+				scrollRef.getBoundingClientRect().top;
+			scrollRef.scrollTo({
+				top: scrollRef.scrollTop + top,
+				behavior: "smooth",
+			});
+		}
+	};
+	const sectionOrder = [
+		TAB_IDS.background,
+		TAB_IDS.camera,
+		TAB_IDS.audio,
+		TAB_IDS.cursor,
+		TAB_IDS.keyboard,
+		TAB_IDS.captions,
+	];
+	const updateSelectedSection = () => {
+		if (!scrollRef) return;
+		const scrollTop = scrollRef.scrollTop + 80;
+		let activeSection = sectionOrder[0];
+		for (const id of sectionOrder) {
+			const section = sectionRefs.get(id);
+			if (!section) continue;
+			const sectionTop =
+				section.getBoundingClientRect().top -
+				scrollRef.getBoundingClientRect().top +
+				scrollRef.scrollTop;
+			if (sectionTop <= scrollTop) activeSection = id;
+		}
+		setState("selectedTab", activeSection);
+	};
+	onMount(() => {
+		scrollRef.addEventListener("scroll", updateSelectedSection, {
+			passive: true,
+		});
+		updateSelectedSection();
+		onCleanup(() =>
+			scrollRef.removeEventListener("scroll", updateSelectedSection),
+		);
+	});
 	let selectionScrollRef!: HTMLDivElement;
 	let previousStyle: number | null = null;
 	createEffect(() => {
@@ -678,464 +742,401 @@ function ConfigSidebarContent() {
 	});
 
 	return (
-		<KTabs
-			value={
-				sidebarSelection() || editorState.timeline.audioPicker !== null
-					? undefined
-					: state.selectedTab
-			}
-			class="flex overflow-hidden z-10 flex-col flex-1 min-h-0 max-w-104 rounded-xl shrink-0 bg-ed-card shadow-ed-card"
-		>
-			<KTabs.List class="flex sticky top-0 z-60 flex-row justify-around items-center px-2.5 h-[46px] border-b border-ed-line shrink-0 bg-ed-card">
-				<For
-					each={[
-						{ id: TAB_IDS.background, icon: IconCapImage },
-						{
-							id: TAB_IDS.camera,
-							icon: IconCapCamera,
-							disabled: editorInstance.recordings.segments.every(
-								(s) => s.camera === null,
-							),
-						},
-						{ id: TAB_IDS.audio, icon: IconCapAudioOn },
-						{
-							id: TAB_IDS.cursor,
-							icon: IconCapCursor,
-							disabled: !meta().hasRecordedCursorData,
-						},
-						{
-							id: TAB_IDS.keyboard,
-							icon: IconLucideKeyboard,
-						},
-						{
-							id: TAB_IDS.captions,
-							icon: IconCapMessageBubble,
-						},
-						// { id: "hotkeys" as const, icon: IconCapHotkeys },
-					].filter(
-						(item) =>
-							!selectedStyle() ||
-							item.id === "background" ||
-							item.id === "camera" ||
-							item.id === "cursor",
-					)}
+		<div class="flex overflow-hidden z-10 flex-row flex-1 min-h-0 shrink-0 bg-transparent">
+			{/** SCR */}
+			<Scroller.Root class="flex-1" style={{ overflow: "visible" }}>
+				<Scroller.Viewport
+					edges={{ top: 60, bottom: 2 }}
+					fade
+					ref={scrollRef}
+					style={{
+						"--margin-top-scroll": "5px",
+					}}
+					class="overscroll-contain overflow-x-hidden overflow-y-auto text-[0.875rem] flex-1 min-h-0"
+					classList={{
+						hidden:
+							!!sidebarSelection() ||
+							editorState.timeline.audioPicker !== null ||
+							editorState.timeline.audioReplace !== null,
+					}}
 				>
-					{(item) => (
-						<KTabs.Trigger
-							value={item.id}
-							aria-label={
-								item.id === "background"
-									? "Background"
-									: item.id.charAt(0).toUpperCase() + item.id.slice(1)
-							}
-							title={
-								item.id === "background"
-									? "Background"
-									: item.id.charAt(0).toUpperCase() + item.id.slice(1)
-							}
-							class="flex justify-center items-center w-10 h-[30px] rounded-[9px] transition-colors shrink-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ed-accent text-ed-text-2 hover:bg-ed-ctl hover:text-ed-text-1 data-selected:bg-ed-ctl-hover data-selected:text-ed-text-1 disabled:text-ed-text-3 disabled:opacity-60 disabled:hover:bg-transparent"
-							onClick={() => {
-								// Clear any active selection first
-								if (sidebarSelection()) {
-									setEditorState("timeline", "selection", null);
-								}
-								if (editorState.timeline.audioPicker !== null) {
-									setEditorState("timeline", "audioPicker", null);
-								}
-								if (editorState.timeline.audioReplace !== null) {
-									setEditorState("timeline", "audioReplace", null);
-								}
-								setState("selectedTab", item.id);
-								scrollRef.scrollTo({
-									top: 0,
-								});
-							}}
-							disabled={item.disabled}
-						>
-							<Dynamic component={item.icon} class="size-4" />
-						</KTabs.Trigger>
-					)}
-				</For>
-			</KTabs.List>
-			<div
-				ref={scrollRef}
-				style={{
-					"--margin-top-scroll": "5px",
-				}}
-				class="custom-scroll overscroll-contain overflow-x-hidden overflow-y-auto text-[0.875rem] flex-1 min-h-0"
-				classList={{
-					hidden:
-						!!sidebarSelection() ||
-						editorState.timeline.audioPicker !== null ||
-						editorState.timeline.audioReplace !== null,
-				}}
-			>
-				<StyleSegmentConfig />
-				<BackgroundConfig
-					scrollRef={scrollRef}
-					brandColorSwatches={brandColorSwatches()}
-				/>
-				<CameraConfig scrollRef={scrollRef} />
-				<KTabs.Content
-					value="audio"
-					class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-4 min-h-0"
-				>
-					<Section name="Audio">
-						<Subfield name="Mute Audio">
-							<Toggle
-								checked={project.audio.mute}
-								onChange={(v) => setProject("audio", "mute", v)}
-							/>
-						</Subfield>
-						{editorInstance.recordings.segments[0].mic?.channels === 2 && (
-							<Subfield name="Microphone Stereo Mode">
-								<KSelect<{ name: string; value: StereoMode }>
-									options={STEREO_MODES}
-									optionValue="value"
-									optionTextValue="name"
-									value={STEREO_MODES.find(
-										(v) => v.value === project.audio.micStereoMode,
-									)}
-									onChange={(v) => {
-										if (v) setProject("audio", "micStereoMode", v.value);
-									}}
-									disallowEmptySelection
-									itemComponent={(props) => (
-										<MenuItem<typeof KSelect.Item>
-											as={KSelect.Item}
-											item={props.item}
-										>
-											<KSelect.ItemLabel class="flex-1">
-												{props.item.rawValue.name}
-											</KSelect.ItemLabel>
-										</MenuItem>
-									)}
-								>
-									<KSelect.Trigger class="flex flex-row gap-1.5 items-center px-2 w-full h-[26px] rounded-[7px] transition-colors bg-ed-ctl hover:bg-ed-ctl-hover outline-hidden disabled:text-ed-text-3">
-										<KSelect.Value<{
-											name: string;
-											value: StereoMode;
-										}> class="flex-1 text-[12px] text-left truncate text-ed-text-1 font-normal">
-											{(state) => <span>{state.selectedOption().name}</span>}
-										</KSelect.Value>
-										<KSelect.Icon<ValidComponent>
-											as={(props) => (
-												<IconCapChevronDown
-													{...props}
-													class="size-3.5 shrink-0 transform transition-transform data-expanded:rotate-180 text-ed-text-3"
-												/>
-											)}
-										/>
-									</KSelect.Trigger>
-									<KSelect.Portal>
-										<PopperContent<typeof KSelect.Content>
-											as={KSelect.Content}
-											class={cx(topSlideAnimateClasses, "z-50")}
-										>
-											<MenuItemList<typeof KSelect.Listbox>
-												class="overflow-y-auto max-h-32"
-												as={KSelect.Listbox}
-											/>
-										</PopperContent>
-									</KSelect.Portal>
-								</KSelect>
-							</Subfield>
-						)}
-
-						<Show when={meta().hasMicrophone}>
-							<StudioSoundCard />
-						</Show>
-					</Section>
-					{meta().hasMicrophone && (
-						<Field
-							inline
-							name="Microphone Volume"
-							value={formatVolumeDb(project.audio.micVolumeDb ?? 0)}
-						>
-							<Slider
-								disabled={project.audio.mute}
-								value={[project.audio.micVolumeDb ?? 0]}
-								onChange={(v) => setProject("audio", "micVolumeDb", v[0])}
-								minValue={-30}
-								maxValue={10}
-								step={0.1}
-								formatTooltip={(v) =>
-									v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
-								}
-							/>
-						</Field>
-					)}
-					{meta().hasSystemAudio && (
-						<Field
-							inline
-							name="System Audio Volume"
-							value={formatVolumeDb(project.audio.systemVolumeDb ?? 0)}
-						>
-							<Slider
-								disabled={project.audio.mute}
-								value={[project.audio.systemVolumeDb ?? 0]}
-								onChange={(v) => setProject("audio", "systemVolumeDb", v[0])}
-								minValue={-30}
-								maxValue={10}
-								step={0.1}
-								formatTooltip={(v) =>
-									v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
-								}
-							/>
-						</Field>
-					)}
-					<SyncOffsetsConfig />
-				</KTabs.Content>
-				<KTabs.Content
-					value="cursor"
-					class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-4 min-h-0"
-				>
-					<StyleGroupToggle group="cursor" />
-					<Show
-						when={!selectedStyle() || selectedStyle()?.overrides.cursor != null}
+					<StyleSegmentConfig />
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.background, el)}
+						class="pb-[50px] border-b border-ed-line last:border-b-0 last:pb-0"
 					>
-						<Field inline name="Show cursor">
-							<Toggle
-								checked={!project.cursor.hide}
-								onChange={(v) => {
-									setProject("cursor", "hide", !v);
-								}}
-							/>
-						</Field>
-						<Show when={!project.cursor.hide}>
-							<CursorStylePicker />
-							<Field
-								inline
-								name="Size"
-								value={`${Math.round(project.cursor.size)}%`}
-							>
-								<Slider
-									value={[project.cursor.size]}
-									onChange={(v) => setProject("cursor", "size", v[0])}
-									minValue={20}
-									maxValue={300}
-									step={1}
-								/>
-							</Field>
-							<Field
-								inline
-								name="Tilt"
-								value={`${Math.round(
-									(project.cursor.rotationAmount ?? 0.15) * 100,
-								)}%`}
-							>
-								<Slider
-									value={[project.cursor.rotationAmount ?? 0.15]}
-									onChange={(v) => setProject("cursor", "rotationAmount", v[0])}
-									minValue={0}
-									maxValue={1}
-									step={0.01}
-									formatTooltip={(value) => `${Math.round(value * 100)}%`}
-								/>
-							</Field>
-							<CursorRippleSection />
-							<Field inline name="Hide When Idle">
+						<BackgroundConfig
+							scrollRef={scrollRef}
+							brandColorSwatches={brandColorSwatches()}
+						/>
+					</div>
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.camera, el)}
+						class="pb-[50px] border-b border-ed-line last:border-b-0 last:pb-0"
+					>
+						<CameraConfig scrollRef={scrollRef} />
+					</div>
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.audio, el)}
+						class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-[50px] min-h-0 border-b border-ed-line last:border-b-0 last:pb-0"
+					>
+						<Section name="Audio">
+							<Subfield name="Mute Audio">
 								<Toggle
-									checked={project.cursor.hideWhenIdle}
-									onChange={(value) =>
-										setProject("cursor", "hideWhenIdle", value)
+									checked={project.audio.mute}
+									onChange={(v) => setProject("audio", "mute", v)}
+								/>
+							</Subfield>
+							{editorInstance.recordings.segments[0].mic?.channels === 2 && (
+								<Subfield name="Microphone Stereo Mode">
+									<KSelect<{ name: string; value: StereoMode }>
+										options={STEREO_MODES}
+										optionValue="value"
+										optionTextValue="name"
+										value={STEREO_MODES.find(
+											(v) => v.value === project.audio.micStereoMode,
+										)}
+										onChange={(v) => {
+											if (v) setProject("audio", "micStereoMode", v.value);
+										}}
+										disallowEmptySelection
+										itemComponent={(props) => (
+											<MenuItem<typeof KSelect.Item>
+												as={KSelect.Item}
+												item={props.item}
+											>
+												<KSelect.ItemLabel class="flex-1">
+													{props.item.rawValue.name}
+												</KSelect.ItemLabel>
+											</MenuItem>
+										)}
+									>
+										<KSelect.Trigger class="flex flex-row gap-1.5 items-center px-2 w-full h-[26px] rounded-[7px] transition-colors bg-ed-ctl hover:bg-ed-ctl-hover outline-hidden disabled:text-ed-text-3">
+											<KSelect.Value<{
+												name: string;
+												value: StereoMode;
+											}> class="flex-1 text-[12px] text-left truncate text-ed-text-1 font-normal">
+												{(state) => <span>{state.selectedOption().name}</span>}
+											</KSelect.Value>
+											<KSelect.Icon<ValidComponent>
+												as={(props) => (
+													<IconCapChevronDown
+														{...props}
+														class="size-3.5 shrink-0 transform transition-transform data-expanded:rotate-180 text-ed-text-3"
+													/>
+												)}
+											/>
+										</KSelect.Trigger>
+										<KSelect.Portal>
+											<PopperContent<typeof KSelect.Content>
+												as={KSelect.Content}
+												class={cx(topSlideAnimateClasses, "z-50")}
+											>
+												<MenuItemList<typeof KSelect.Listbox>
+													class="overflow-y-auto max-h-32"
+													as={KSelect.Listbox}
+												/>
+											</PopperContent>
+										</KSelect.Portal>
+									</KSelect>
+								</Subfield>
+							)}
+
+							<Show when={meta().hasMicrophone}>
+								<StudioSoundCard />
+							</Show>
+						</Section>
+						{meta().hasMicrophone && (
+							<Field
+								inline
+								name="Microphone Volume"
+								value={formatVolumeDb(project.audio.micVolumeDb ?? 0)}
+							>
+								<Slider
+									disabled={project.audio.mute}
+									value={[project.audio.micVolumeDb ?? 0]}
+									onChange={(v) => setProject("audio", "micVolumeDb", v[0])}
+									minValue={-30}
+									maxValue={10}
+									step={0.1}
+									formatTooltip={(v) =>
+										v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
 									}
 								/>
 							</Field>
-							<Show when={project.cursor.hideWhenIdle}>
+						)}
+						{meta().hasSystemAudio && (
+							<Field
+								inline
+								name="System Audio Volume"
+								value={formatVolumeDb(project.audio.systemVolumeDb ?? 0)}
+							>
+								<Slider
+									disabled={project.audio.mute}
+									value={[project.audio.systemVolumeDb ?? 0]}
+									onChange={(v) => setProject("audio", "systemVolumeDb", v[0])}
+									minValue={-30}
+									maxValue={10}
+									step={0.1}
+									formatTooltip={(v) =>
+										v <= -30 ? "Muted" : `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
+									}
+								/>
+							</Field>
+						)}
+						<SyncOffsetsConfig />
+					</div>
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.cursor, el)}
+						class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-[50px] min-h-0 border-b border-ed-line last:border-b-0 last:pb-0"
+					>
+						<StyleGroupToggle group="cursor" />
+						<Show
+							when={
+								!selectedStyle() || selectedStyle()?.overrides.cursor != null
+							}
+						>
+							<Field inline name="Show cursor">
+								<Toggle
+									checked={!project.cursor.hide}
+									onChange={(v) => {
+										setProject("cursor", "hide", !v);
+									}}
+								/>
+							</Field>
+							<Show when={!project.cursor.hide}>
+								<CursorStylePicker />
 								<Field
 									inline
-									name="Inactivity Delay"
-									value={`${cursorIdleDelay().toFixed(1)}s`}
+									name="Size"
+									value={`${Math.round(project.cursor.size)}%`}
 								>
 									<Slider
-										value={[cursorIdleDelay()]}
-										onChange={(v) => {
-											const rounded = clampIdleDelay(v[0]);
-											setProject("cursor", "hideWhenIdleDelay", rounded);
-										}}
-										minValue={0.5}
-										maxValue={5}
-										step={0.1}
-										formatTooltip={(value) => `${value.toFixed(1)}s`}
+										value={[project.cursor.size]}
+										onChange={(v) => setProject("cursor", "size", v[0])}
+										minValue={20}
+										maxValue={300}
+										step={1}
 									/>
 								</Field>
-							</Show>
-							<Field name="Cursor Movement Style">
-								<RadioGroup
-									class="flex flex-col gap-2"
-									value={project.cursor.animationStyle}
-									onChange={(value) =>
-										applyCursorStylePreset(value as CursorAnimationStyle)
-									}
+								<Field
+									inline
+									name="Tilt"
+									value={`${Math.round(
+										(project.cursor.rotationAmount ?? 0.15) * 100,
+									)}%`}
 								>
-									{CURSOR_ANIMATION_STYLE_OPTIONS.map((option) => (
-										<RadioGroup.Item
-											value={option.value}
-											class="rounded-lg border border-gray-3 transition-colors data-checked:border-blue-8 data-checked:bg-blue-3/40"
-										>
-											<RadioGroup.ItemInput class="sr-only" />
-											<RadioGroup.ItemLabel class="flex items-start gap-3 p-3">
-												<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 data-checked:border-blue-9 data-checked:bg-blue-9" />
-												<div class="flex flex-col text-left">
-													<span class="text-[13px] font-medium text-ed-text-1">
-														{option.label}
-													</span>
-													<span class="text-[11px] text-ed-text-3">
-														{option.description}
-													</span>
-												</div>
-											</RadioGroup.ItemLabel>
-										</RadioGroup.Item>
-									))}
-								</RadioGroup>
-							</Field>
-							<KCollapsible open={!project.cursor.raw}>
-								<Field inline name="Smooth Movement">
-									<Toggle
-										checked={!project.cursor.raw}
-										onChange={(value) => {
-											setProject("cursor", "raw", !value);
-										}}
+									<Slider
+										value={[project.cursor.rotationAmount ?? 0.15]}
+										onChange={(v) =>
+											setProject("cursor", "rotationAmount", v[0])
+										}
+										minValue={0}
+										maxValue={1}
+										step={0.01}
+										formatTooltip={(value) => `${Math.round(value * 100)}%`}
 									/>
 								</Field>
-								<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up data-expanded:animate-collapsible-down data-expanded:opacity-100">
-									{/* if Content has padding or margin the animation doesn't look as good */}
-									<div class="flex flex-col gap-1 pt-2 pb-4">
-										<Field
-											inline
-											name="Tension"
-											value={Math.round(project.cursor.tension)}
-										>
-											<Slider
-												value={[project.cursor.tension]}
-												onChange={(v) => setCursorPhysics("tension", v[0])}
-												minValue={1}
-												maxValue={600}
-												step={1}
-											/>
-										</Field>
-										<Field
-											inline
-											name="Friction"
-											value={project.cursor.friction.toFixed(1)}
-										>
-											<Slider
-												value={[project.cursor.friction]}
-												onChange={(v) => setCursorPhysics("friction", v[0])}
-												minValue={0}
-												maxValue={200}
-												step={0.1}
-											/>
-										</Field>
-										<Field
-											inline
-											name="Mass"
-											value={project.cursor.mass.toFixed(2)}
-										>
-											<Slider
-												value={[project.cursor.mass]}
-												onChange={(v) => setCursorPhysics("mass", v[0])}
-												minValue={0.1}
-												maxValue={15}
-												step={0.01}
-											/>
-										</Field>
-									</div>
-								</KCollapsible.Content>
-							</KCollapsible>
-							<Show when={!isExplicitCursorFamily(project.cursor.type)}>
-								<Field inline name="High Quality SVG Cursors">
+								<CursorRippleSection />
+								<Field inline name="Hide When Idle">
 									<Toggle
-										checked={project.cursor.useSvg ?? true}
-										onChange={(value) => {
-											setProject("cursor", "useSvg", value);
-										}}
+										checked={project.cursor.hideWhenIdle}
+										onChange={(value) =>
+											setProject("cursor", "hideWhenIdle", value)
+										}
 									/>
 								</Field>
+								<Show when={project.cursor.hideWhenIdle}>
+									<Field
+										inline
+										name="Inactivity Delay"
+										value={`${cursorIdleDelay().toFixed(1)}s`}
+									>
+										<Slider
+											value={[cursorIdleDelay()]}
+											onChange={(v) => {
+												const rounded = clampIdleDelay(v[0]);
+												setProject("cursor", "hideWhenIdleDelay", rounded);
+											}}
+											minValue={0.5}
+											maxValue={5}
+											step={0.1}
+											formatTooltip={(value) => `${value.toFixed(1)}s`}
+										/>
+									</Field>
+								</Show>
+								<Field name="Cursor Movement Style">
+									<RadioGroup
+										class="flex flex-col gap-2"
+										value={project.cursor.animationStyle}
+										onChange={(value) =>
+											applyCursorStylePreset(value as CursorAnimationStyle)
+										}
+									>
+										{CURSOR_ANIMATION_STYLE_OPTIONS.map((option) => (
+											<RadioGroup.Item
+												value={option.value}
+												class="rounded-lg border border-gray-3 transition-colors data-checked:border-blue-8 data-checked:bg-blue-3/40"
+											>
+												<RadioGroup.ItemInput class="sr-only" />
+												<RadioGroup.ItemLabel class="flex items-start gap-3 p-3">
+													<RadioGroup.ItemControl class="mt-1 size-4 rounded-full border border-gray-7 data-checked:border-blue-9 data-checked:bg-blue-9" />
+													<div class="flex flex-col text-left">
+														<span class="text-[13px] font-medium text-ed-text-1">
+															{option.label}
+														</span>
+														<span class="text-[11px] text-ed-text-3">
+															{option.description}
+														</span>
+													</div>
+												</RadioGroup.ItemLabel>
+											</RadioGroup.Item>
+										))}
+									</RadioGroup>
+								</Field>
+								<KCollapsible open={!project.cursor.raw}>
+									<Field inline name="Smooth Movement">
+										<Toggle
+											checked={!project.cursor.raw}
+											onChange={(value) => {
+												setProject("cursor", "raw", !value);
+											}}
+										/>
+									</Field>
+									<KCollapsible.Content class="overflow-hidden border-b opacity-0 transition-opacity border-gray-3 animate-collapsible-up data-expanded:animate-collapsible-down data-expanded:opacity-100">
+										{/* if Content has padding or margin the animation doesn't look as good */}
+										<div class="flex flex-col gap-1 pt-2 pb-4">
+											<Field
+												inline
+												name="Tension"
+												value={Math.round(project.cursor.tension)}
+											>
+												<Slider
+													value={[project.cursor.tension]}
+													onChange={(v) => setCursorPhysics("tension", v[0])}
+													minValue={1}
+													maxValue={600}
+													step={1}
+												/>
+											</Field>
+											<Field
+												inline
+												name="Friction"
+												value={project.cursor.friction.toFixed(1)}
+											>
+												<Slider
+													value={[project.cursor.friction]}
+													onChange={(v) => setCursorPhysics("friction", v[0])}
+													minValue={0}
+													maxValue={200}
+													step={0.1}
+												/>
+											</Field>
+											<Field
+												inline
+												name="Mass"
+												value={project.cursor.mass.toFixed(2)}
+											>
+												<Slider
+													value={[project.cursor.mass]}
+													onChange={(v) => setCursorPhysics("mass", v[0])}
+													minValue={0.1}
+													maxValue={15}
+													step={0.01}
+												/>
+											</Field>
+										</div>
+									</KCollapsible.Content>
+								</KCollapsible>
+								<Show when={!isExplicitCursorFamily(project.cursor.type)}>
+									<Field inline name="High Quality SVG Cursors">
+										<Toggle
+											checked={project.cursor.useSvg ?? true}
+											onChange={(value) => {
+												setProject("cursor", "useSvg", value);
+											}}
+										/>
+									</Field>
+								</Show>
 							</Show>
-						</Show>
 
-						{/* <Field name="Animation Style" icon={<IconLucideRabbit />}>
-            <RadioGroup
-              defaultValue="regular"
-              value={project.cursor.animationStyle}
-              onChange={(value) => {
-                setProject(
-                  "cursor",
-                  "animationStyle",
-                  value as CursorAnimationStyle
-                );
-              }}
-              class="flex flex-col gap-2"
-              disabled
-            >
-              {(
-                Object.entries(CURSOR_ANIMATION_STYLES) as [
-                  CursorAnimationStyle,
-                  string
-                ][]
-              ).map(([value, label]) => (
-                <RadioGroup.Item value={value} class="flex items-center">
-                  <RadioGroup.ItemInput class="sr-only peer" />
-                  <RadioGroup.ItemControl
-                    class={cx(
-                      "mr-2 w-4 h-4 rounded-full border border-gray-300",
-                      "relative after:absolute after:inset-0 after:m-auto after:block after:w-2 after:h-2 after:rounded-full",
-                      "after:transition-colors after:duration-200",
-                      "peer-checked:border-blue-500 peer-checked:after:bg-blue-400",
-                      "peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400/50",
-                      "peer-disabled:opacity-50"
-                    )}
-                  />
-                  <span
-                    class={cx(
-                      "text-gray-12",
-                      "peer-checked:text-gray-900",
-                      "peer-disabled:opacity-50"
-                    )}
-                  >
-                    {label}
-                  </span>
-                </RadioGroup.Item>
-              ))}
-            </RadioGroup>
-          </Field> */}
-					</Show>
-				</KTabs.Content>
-				<KTabs.Content
-					value="hotkeys"
-					class="flex flex-1 pt-3.5 px-4 pb-4 min-h-0"
-				>
-					<Section name="Hotkeys">
-						<ComingSoonTooltip>
-							<Subfield name="Show hotkeys">
-								<Toggle disabled />
-							</Subfield>
-						</ComingSoonTooltip>
-					</Section>
-				</KTabs.Content>
-				<KTabs.Content
-					value={TAB_IDS.captions}
-					class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-4 min-h-0"
-				>
-					<Suspense>
-						<CaptionsTab brandColorSwatches={brandColorSwatches()} />
-					</Suspense>
-				</KTabs.Content>
-				<KTabs.Content
-					value={TAB_IDS.keyboard}
-					class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-4 min-h-0"
-				>
-					<KeyboardTab brandColorSwatches={brandColorSwatches()} />
-				</KTabs.Content>
-			</div>
+							{/* <Field name="Animation Style" icon={<IconLucideRabbit />}>
+                     <RadioGroup
+                       defaultValue="regular"
+                       value={project.cursor.animationStyle}
+                       onChange={(value) => {
+                         setProject(
+                           "cursor",
+                           "animationStyle",
+                           value as CursorAnimationStyle
+                         );
+                       }}
+                       class="flex flex-col gap-2"
+                       disabled
+                     >
+                       {(
+                         Object.entries(CURSOR_ANIMATION_STYLES) as [
+                           CursorAnimationStyle,
+                           string
+                         ][]
+                       ).map(([value, label]) => (
+                         <RadioGroup.Item value={value} class="flex items-center">
+                           <RadioGroup.ItemInput class="sr-only peer" />
+                           <RadioGroup.ItemControl
+                             class={cx(
+                               "mr-2 w-4 h-4 rounded-full border border-gray-300",
+                               "relative after:absolute after:inset-0 after:m-auto after:block after:w-2 after:h-2 after:rounded-full",
+                               "after:transition-colors after:duration-200",
+                               "peer-checked:border-blue-500 peer-checked:after:bg-blue-400",
+                               "peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400/50",
+                               "peer-disabled:opacity-50"
+                             )}
+                           />
+                           <span
+                             class={cx(
+                               "text-gray-12",
+                               "peer-checked:text-gray-900",
+                               "peer-disabled:opacity-50"
+                             )}
+                           >
+                             {label}
+                           </span>
+                         </RadioGroup.Item>
+                       ))}
+                     </RadioGroup>
+                   </Field> */}
+						</Show>
+					</div>
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.keyboard, el)}
+						class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-[50px] min-h-0 border-b border-ed-line last:border-b-0 last:pb-0"
+					>
+						<KeyboardTab brandColorSwatches={brandColorSwatches()} />
+					</div>
+					<div
+						ref={(el) => sectionRefs.set(TAB_IDS.captions, el)}
+						class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-[50px] mb-[50px] min-h-0 border-b border-ed-line last:mb-0 last:border-b-0 last:pb-0"
+					>
+						<Suspense>
+							<CaptionsTab brandColorSwatches={brandColorSwatches()} />
+						</Suspense>
+					</div>
+				</Scroller.Viewport>
+				<Scroller.Scrollbar
+					class=""
+					thickness={2}
+					edges={{ top: 60, bottom: 5 }}
+					style={{ right: "-54px" }}
+				/>
+				<Scroller.EdgeEffect to="top" size={65} blurIntensity={0.5} />
+			</Scroller.Root>
+
 			<div
 				ref={selectionScrollRef}
 				style={{
 					"--margin-top-scroll": "5px",
 				}}
-				class="custom-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pt-3.5 px-4 pb-4 text-[0.875rem] space-y-3.5 bg-ed-card z-50"
+				class="custom-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pt-3.5 px-2 pb-4 text-[0.875rem] space-y-3.5 bg-ed-card z-50"
 				classList={{
 					hidden:
 						!sidebarSelection() &&
@@ -1829,7 +1830,129 @@ function ConfigSidebarContent() {
 					)}
 				</Show>
 			</div>
-		</KTabs>
+			<div class="flex h-full flex-col flex-none items-center pr-2">
+				<div class="flex flex-1 items-center justify-center">
+					<GlassEffectContainer class="rounded-full bg-ed-card/5 mt-20">
+						<nav
+							aria-label="Settings sections"
+							class="flex flex-col justify-around items-center gap-1 px-1 py-1 border-ed-line shrink-0"
+						>
+							<For
+								each={[
+									{ id: TAB_IDS.background, icon: IconCapImage },
+									{
+										id: TAB_IDS.camera,
+										icon: IconCapCamera,
+										disabled: editorInstance.recordings.segments.every(
+											(s) => s.camera === null,
+										),
+									},
+									{ id: TAB_IDS.audio, icon: IconCapAudioOn },
+									{
+										id: TAB_IDS.cursor,
+										icon: IconCapCursor,
+										disabled: !meta().hasRecordedCursorData,
+									},
+									{ id: TAB_IDS.keyboard, icon: IconLucideKeyboard },
+									{ id: TAB_IDS.captions, icon: IconCapMessageBubble },
+								].filter(
+									(item) =>
+										!selectedStyle() ||
+										item.id === "background" ||
+										item.id === "camera" ||
+										item.id === "cursor",
+								)}
+							>
+								{(item) => (
+									<button
+										type="button"
+										aria-label={
+											item.id.charAt(0).toUpperCase() + item.id.slice(1)
+										}
+										title={item.id.charAt(0).toUpperCase() + item.id.slice(1)}
+										aria-pressed={state.selectedTab === item.id}
+										class="flex justify-center items-center w-10 h-10 smoothed rounded-full transition-colors shrink-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ed-accent text-ed-text-2 hover:bg-ed-ctl hover:text-ed-text-1 disabled:text-ed-text-3 disabled:opacity-60 disabled:hover:bg-transparent"
+										classList={{
+											"bg-ed-ctl-hover text-ed-text-1":
+												state.selectedTab === item.id,
+										}}
+										onClick={() => {
+											if (sidebarSelection()) {
+												setEditorState("timeline", "selection", null);
+											}
+											if (editorState.timeline.audioPicker !== null) {
+												setEditorState("timeline", "audioPicker", null);
+											}
+											if (editorState.timeline.audioReplace !== null) {
+												setEditorState("timeline", "audioReplace", null);
+											}
+											scrollToSection(item.id);
+										}}
+										disabled={item.disabled}
+									>
+										<Dynamic component={item.icon} class="size-4" />
+									</button>
+								)}
+							</For>
+						</nav>
+					</GlassEffectContainer>
+				</div>
+				<GlassEffectContainer class="mb-3 rounded-full bg-ed-card/5">
+					<div class="flex flex-col items-center gap-1 px-1 py-1">
+						<button
+							type="button"
+							aria-label="Clips"
+							title="Clips"
+							aria-pressed={isClipsOpen()}
+							class="flex size-10 items-center justify-center rounded-full text-ed-text-2 transition-colors hover:bg-ed-ctl hover:text-ed-text-1 focus-visible:ring-1 focus-visible:ring-ed-accent"
+							classList={{
+								"bg-ed-ctl-hover text-ed-text-1": isClipsOpen(),
+							}}
+							onClick={() => {
+								if (editorState.timeline.selection) {
+									setEditorState("timeline", "selection", null);
+								}
+								if (isClipsOpen()) {
+									setDialog((currentDialog) => ({
+										...currentDialog,
+										open: false,
+									}));
+								} else {
+									setDialog({ type: "clips", open: true });
+								}
+							}}
+						>
+							<IconCapClapperboard class="size-4" />
+						</button>
+						<button
+							type="button"
+							aria-label={isTranscriptOpen() ? "Back to editor" : "Captions"}
+							title={isTranscriptOpen() ? "Back to editor" : "Captions"}
+							aria-pressed={isTranscriptOpen()}
+							class="flex size-10 items-center justify-center rounded-full text-ed-text-2 transition-colors hover:bg-ed-ctl hover:text-ed-text-1 focus-visible:ring-1 focus-visible:ring-ed-accent"
+							classList={{
+								"bg-ed-ctl-hover text-ed-text-1": isTranscriptOpen(),
+							}}
+							onClick={() => {
+								if (editorState.timeline.selection) {
+									setEditorState("timeline", "selection", null);
+								}
+								if (isTranscriptOpen()) {
+									setDialog((currentDialog) => ({
+										...currentDialog,
+										open: false,
+									}));
+								} else {
+									setDialog({ type: "transcript", open: true });
+								}
+							}}
+						>
+							<IconCapCaptions class="size-4" />
+						</button>
+					</div>
+				</GlassEffectContainer>
+			</div>
+		</div>
 	);
 }
 
@@ -2210,7 +2333,7 @@ function BackgroundConfig(props: {
 					animatedGradientLibrary.isError)
 			}
 			class={cx(
-				"flex flex-1 justify-center items-center h-[26px] px-1 text-[11.5px] font-medium whitespace-nowrap text-ed-text-2 rounded-md border-0 transition-colors duration-200 outline-hidden data-selected:bg-ed-card data-selected:text-ed-text-1 data-selected:shadow-[0_1px_2px_rgba(0,0,0,.12),0_0_0_.5px_rgba(0,0,0,.06)] dark:data-selected:bg-white/11 dark:data-selected:shadow-none not-data-selected:hover:text-ed-text-1 disabled:opacity-40",
+				"flex flex-1 justify-center items-center h-[26px] px-2 text-[11.5px] font-medium whitespace-nowrap text-ed-text-2 rounded-full smoothed border-0 transition-colors duration-200 outline-hidden data-selected:bg-ed-card data-selected:text-ed-text-1 data-selected:shadow-[0_1px_2px_rgba(0,0,0,.12),0_0_0_.5px_rgba(0,0,0,.06)] dark:data-selected:bg-white/11 dark:data-selected:shadow-none not-data-selected:hover:text-ed-text-1 disabled:opacity-40",
 				props.class,
 			)}
 		>
@@ -2361,10 +2484,7 @@ function BackgroundConfig(props: {
 	};
 
 	return (
-		<KTabs.Content
-			value={TAB_IDS.background}
-			class="flex flex-col gap-3.5 pt-3.5 px-4 pb-4"
-		>
+		<div class="flex flex-col gap-3.5 pt-3.5 px-2 pb-4">
 			<StyleGroupToggle group="background" />
 			<Show
 				when={!selectedStyle() || selectedStyle()?.overrides.background != null}
@@ -2390,7 +2510,7 @@ function BackgroundConfig(props: {
 						value={backgroundSourceTab()}
 						onChange={selectBackgroundSourceTab}
 					>
-						<KTabs.List class="flex flex-row gap-0.5 p-0.5 rounded-lg bg-ed-ctl">
+						<KTabs.List class="flex flex-row gap-0.5 p-0.5 rounded-full smoothed bg-ed-ctl">
 							<For each={BACKGROUND_SOURCE_TABS}>
 								{(item) => <BackgroundSourceTrigger item={item} />}
 							</For>
@@ -2522,7 +2642,7 @@ function BackgroundConfig(props: {
 														)
 													}
 													value={key}
-													class="flex relative z-10 flex-1 justify-center items-center px-2.5 h-6 text-[12px] font-medium bg-transparent rounded-[7px] border-0 transition-colors duration-200 text-ed-text-2 not-data-selected:hover:text-ed-text-1 data-selected:bg-ed-ctl-hover group data-selected:text-ed-text-1 disabled:opacity-50 focus:outline-hidden"
+													class="flex relative z-10 flex-1 justify-center items-center px-2.5 h-6 text-[12px] font-medium bg-transparent rounded-full border-0 transition-colors duration-200 text-ed-text-2 not-data-selected:hover:text-ed-text-1 data-selected:bg-ed-ctl-hover group data-selected:text-ed-text-1 disabled:opacity-50 focus:outline-hidden"
 												>
 													{value}
 												</KTabs.Trigger>
@@ -3163,7 +3283,7 @@ function BackgroundConfig(props: {
             </Field>
           </ComingSoonTooltip> */}
 			</Show>
-		</KTabs.Content>
+		</div>
 	);
 }
 
@@ -3178,10 +3298,7 @@ function CameraConfig(props: { scrollRef: HTMLDivElement }) {
 	);
 
 	return (
-		<KTabs.Content
-			value={TAB_IDS.camera}
-			class="flex flex-col flex-1 gap-3.5 pt-3.5 px-4 pb-4 min-h-0"
-		>
+		<div class="flex flex-col flex-1 gap-3.5 pt-3.5 px-2 pb-4 min-h-0">
 			<StyleGroupToggle group="camera" />
 			<Show
 				when={!selectedStyle() || selectedStyle()?.overrides.camera != null}
@@ -3524,7 +3641,7 @@ function CameraConfig(props: { scrollRef: HTMLDivElement }) {
             </Field>
           </ComingSoonTooltip> */}
 			</Show>
-		</KTabs.Content>
+		</div>
 	);
 }
 
@@ -3533,7 +3650,7 @@ function CornerStyleSelect(props: {
 	onChange: (value: CornerRoundingType) => void;
 }) {
 	return (
-		<div class="w-32">
+		<div class="">
 			<KSelect<{ name: string; value: CornerRoundingType }>
 				options={CORNER_STYLE_OPTIONS}
 				optionValue="value"
@@ -3554,18 +3671,18 @@ function CornerStyleSelect(props: {
 					</MenuItem>
 				)}
 			>
-				<KSelect.Trigger class="flex flex-row gap-1.5 items-center px-2 w-full h-[26px] rounded-[7px] transition-colors bg-ed-ctl hover:bg-ed-ctl-hover outline-hidden disabled:text-ed-text-3">
+				<KSelect.Trigger class="flex flex-row gap-1.5 items-center px-2 w-fit h-[26px] rounded-full transition-colors hover:bg-ed-ctl-hover outline-hidden disabled:text-ed-text-3">
 					<KSelect.Value<{
 						name: string;
 						value: CornerRoundingType;
-					}> class="flex-1 text-[12px] text-left truncate text-ed-text-1 font-normal">
+					}> class="flex-1 text-[12px] text-end truncate px-1 text-ed-text-1 font-normal">
 						{(state) => <span>{state.selectedOption().name}</span>}
 					</KSelect.Value>
 					<KSelect.Icon<ValidComponent>
 						as={(iconProps) => (
 							<IconCapChevronDown
 								{...iconProps}
-								class="size-3.5 shrink-0 transform transition-transform data-expanded:rotate-180 text-ed-text-3"
+								class="size-4 pt-[1px] shrink-0 transform transition-transform data-expanded:rotate-180 text-ed-text-3 not-hover:bg-ed-ctl rounded-full"
 							/>
 						)}
 					/>

@@ -1101,7 +1101,10 @@ impl CapWindowId {
 
     #[cfg(target_os = "macos")]
     pub fn appears_more_round(&self) -> bool {
-        matches!(self, Self::Main | Self::Onboarding | Self::Teleprompter)
+        matches!(
+            self,
+            Self::Main | Self::Onboarding | Self::Teleprompter | Self::Editor { .. }
+        )
     }
 
     pub fn min_size(&self) -> Option<(f64, f64)> {

@@ -2,7 +2,7 @@ import { Button } from "@cap/ui-solid";
 import { Dialog as KDialog } from "@kobalte/core/dialog";
 import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import { Polymorphic, type PolymorphicProps } from "@kobalte/core/polymorphic";
-import { Slider as KSlider } from "@kobalte/core/slider";
+import type { Slider as KSlider } from "@kobalte/core/slider";
 import { Tooltip as KTooltip } from "@kobalte/core/tooltip";
 import { createElementBounds } from "@solid-primitives/bounds";
 import { createEventListener } from "@solid-primitives/event-listener";
@@ -21,6 +21,7 @@ import {
 	splitProps,
 	type ValidComponent,
 } from "solid-js";
+import { SolariumSlider } from "~/components/solarium/SolariumSlider";
 import Tooltip from "~/components/Tooltip";
 import { useEditorContext } from "./context";
 import { TextInput } from "./TextInput";
@@ -150,6 +151,111 @@ export function Subfield(
 		</div>
 	);
 }
+//
+// export function Slider(
+// 	_props: ComponentProps<typeof KSlider> & {
+// 		formatTooltip?: string | ((v: number) => string);
+// 		history?: { pause: () => () => void };
+// 		thumbClass?: string;
+// 	},
+// ) {
+// 	const [local, props] = splitProps(_props, ["thumbClass"]);
+// 	const context = useEditorContext();
+// 	const history = props.history ?? context?.projectHistory;
+//
+// 	// Pause history when slider is being dragged
+// 	let resumeHistory: (() => void) | null = null;
+// 	onCleanup(() => resumeHistory?.());
+//
+// 	const [thumbRef, setThumbRef] = createSignal<HTMLDivElement>();
+//
+// 	let boundsFrame: number | undefined;
+// 	const deferBoundsUpdate = (update: () => void) => () => {
+// 		if (boundsFrame !== undefined) return;
+// 		boundsFrame = requestAnimationFrame(() => {
+// 			boundsFrame = undefined;
+// 			update();
+// 		});
+// 	};
+// 	onCleanup(() => {
+// 		if (boundsFrame !== undefined) cancelAnimationFrame(boundsFrame);
+// 	});
+// 	const thumbBounds = createElementBounds(thumbRef, {
+// 		trackResize: deferBoundsUpdate,
+// 		trackMutation: deferBoundsUpdate,
+// 	});
+//
+// 	const [dragging, setDragging] = createSignal(false);
+//
+// 	return (
+// 		<KSlider
+// 			{...props}
+// 			class={cx(
+// 				"ed-slider relative px-1 h-8 flex flex-row justify-stretch items-center",
+// 				props.class,
+// 			)}
+// 			onChange={(v) => {
+// 				if (!resumeHistory && history) resumeHistory = history.pause();
+// 				props.onChange?.(v);
+// 			}}
+// 			onChangeEnd={(e) => {
+// 				resumeHistory?.();
+// 				resumeHistory = null;
+// 				props.onChangeEnd?.(e);
+// 			}}
+// 		>
+// 			<KSlider.Track
+// 				class="h-[3px] transition-[height] relative mx-1 bg-ed-ctl-active rounded-full w-full before:content-[''] before:absolute before:inset-0 before:-top-3 before:-bottom-3"
+// 				onPointerDown={() => {
+// 					setDragging(true);
+// 					createRoot((dispose) => {
+// 						createEventListener(window, "mouseup", () => {
+// 							setDragging(false);
+// 							dispose();
+// 						});
+// 					});
+// 				}}
+// 			>
+// 				<KSlider.Fill class="absolute -ml-2 h-full rounded-full bg-ed-accent data-disabled:bg-ed-ctl-active" />
+// 				<Tooltip
+// 					open={dragging() ? true : undefined}
+// 					getAnchorRect={() => {
+// 						return {
+// 							x: thumbBounds.left ?? undefined,
+// 							y: thumbBounds.top ?? undefined,
+// 							width: thumbBounds.width ?? undefined,
+// 							height: thumbBounds.height ?? undefined,
+// 						};
+// 					}}
+// 					content={
+// 						props.value?.[0] !== undefined
+// 							? typeof props.formatTooltip === "string"
+// 								? `${props.value[0].toFixed(1)}${props.formatTooltip}`
+// 								: props.formatTooltip
+// 									? props.formatTooltip(props.value[0])
+// 									: props.value[0].toFixed(1)
+// 							: undefined
+// 					}
+// 				>
+// 					<KSlider.Thumb
+// 						ref={setThumbRef}
+// 						onPointerDown={() => {
+// 							setDragging(true);
+// 						}}
+// 						onPointerUp={() => {
+// 							setDragging(false);
+// 						}}
+// 						class={cx(
+// 							"bg-ed-thumb rounded-full outline-hidden size-3.5 -top-[5.5px] shadow-[0_1px_3px_rgba(0,0,0,.25),0_0_0_.5px_rgba(0,0,0,.1)] data-disabled:opacity-50 after:content-[''] after:absolute after:inset-0 after:-m-3",
+// 							local.thumbClass,
+// 						)}
+// 					/>
+// 				</Tooltip>
+// 			</KSlider.Track>
+// 		</KSlider>
+// 	);
+// }
+//
 
 export function Slider(
 	_props: ComponentProps<typeof KSlider> & {
@@ -166,28 +272,9 @@ export function Slider(
 	let resumeHistory: (() => void) | null = null;
 	onCleanup(() => resumeHistory?.());
 
-	const [thumbRef, setThumbRef] = createSignal<HTMLDivElement>();
-
-	let boundsFrame: number | undefined;
-	const deferBoundsUpdate = (update: () => void) => () => {
-		if (boundsFrame !== undefined) return;
-		boundsFrame = requestAnimationFrame(() => {
-			boundsFrame = undefined;
-			update();
-		});
-	};
-	onCleanup(() => {
-		if (boundsFrame !== undefined) cancelAnimationFrame(boundsFrame);
-	});
-	const thumbBounds = createElementBounds(thumbRef, {
-		trackResize: deferBoundsUpdate,
-		trackMutation: deferBoundsUpdate,
-	});
-
-	const [dragging, setDragging] = createSignal(false);
-
 	return (
-		<KSlider
+		<SolariumSlider
+			size="sm"
 			{...props}
 			class={cx(
 				"ed-slider relative px-1 h-8 flex flex-row justify-stretch items-center",
@@ -202,56 +289,7 @@ export function Slider(
 				resumeHistory = null;
 				props.onChangeEnd?.(e);
 			}}
-		>
-			<KSlider.Track
-				class="h-[3px] transition-[height] relative mx-1 bg-ed-ctl-active rounded-full w-full before:content-[''] before:absolute before:inset-0 before:-top-3 before:-bottom-3"
-				onPointerDown={() => {
-					setDragging(true);
-					createRoot((dispose) => {
-						createEventListener(window, "mouseup", () => {
-							setDragging(false);
-							dispose();
-						});
-					});
-				}}
-			>
-				<KSlider.Fill class="absolute -ml-2 h-full rounded-full bg-ed-accent data-disabled:bg-ed-ctl-active" />
-				<Tooltip
-					open={dragging() ? true : undefined}
-					getAnchorRect={() => {
-						return {
-							x: thumbBounds.left ?? undefined,
-							y: thumbBounds.top ?? undefined,
-							width: thumbBounds.width ?? undefined,
-							height: thumbBounds.height ?? undefined,
-						};
-					}}
-					content={
-						props.value?.[0] !== undefined
-							? typeof props.formatTooltip === "string"
-								? `${props.value[0].toFixed(1)}${props.formatTooltip}`
-								: props.formatTooltip
-									? props.formatTooltip(props.value[0])
-									: props.value[0].toFixed(1)
-							: undefined
-					}
-				>
-					<KSlider.Thumb
-						ref={setThumbRef}
-						onPointerDown={() => {
-							setDragging(true);
-						}}
-						onPointerUp={() => {
-							setDragging(false);
-						}}
-						class={cx(
-							"bg-ed-thumb rounded-full outline-hidden size-3.5 -top-[5.5px] shadow-[0_1px_3px_rgba(0,0,0,.25),0_0_0_.5px_rgba(0,0,0,.1)] data-disabled:opacity-50 after:content-[''] after:absolute after:inset-0 after:-m-3",
-							local.thumbClass,
-						)}
-					/>
-				</Tooltip>
-			</KSlider.Track>
-		</KSlider>
+		></SolariumSlider>
 	);
 }
 
@@ -455,6 +493,7 @@ type EditorButtonProps<T extends ValidComponent = "button"> =
 		tooltipText?: string;
 		comingSoon?: boolean;
 		rightIconEnd?: boolean;
+		_inToolbar?: boolean;
 	} & VariantProps<typeof editorButtonStyles>;
 
 export function EditorButton<T extends ValidComponent = "button">(
@@ -474,6 +513,7 @@ export function EditorButton<T extends ValidComponent = "button">(
 			"ref",
 			"comingSoon",
 			"rightIconEnd",
+			"_inToolbar",
 		],
 		["class", "variant", "size"],
 	);
@@ -518,6 +558,8 @@ export function EditorButton<T extends ValidComponent = "button">(
 							? "px-1.5"
 							: "px-[7px]",
 					cvaProps.class,
+					props._inToolbar &&
+						"size-full h-full rounded-full outline-none ring-none focus:outline-none! bg-none!",
 				),
 			}),
 			local.rightIconEnd && "justify-between",

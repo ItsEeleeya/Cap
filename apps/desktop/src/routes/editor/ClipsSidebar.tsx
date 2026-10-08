@@ -543,7 +543,7 @@ export function ClipsSidebar(props: { class?: string }) {
 	return (
 		<div
 			class={cx(
-				"flex overflow-hidden flex-col flex-1 min-h-0 rounded-xl bg-ed-card shadow-ed-card",
+				"flex overflow-hidden flex-col flex-1 min-h-0 rounded-xl bg-ed-card shadow-ed-card pt-10",
 				props.class,
 			)}
 		>

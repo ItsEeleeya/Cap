@@ -40,6 +40,7 @@ import {
 	createCropOptionsMenuItems,
 	type Ratio,
 } from "~/components/Cropper";
+import CommandPalette from "~/components/solarium/CommandPalette";
 import { Toggle } from "~/components/Toggle";
 import { composeEventHandlers } from "~/utils/composeEventHandlers";
 import { createTauriEventListener } from "~/utils/createEventListener";
@@ -502,6 +503,19 @@ function Inner(props: {
 	};
 
 	const [clipsSidebarMounted, setClipsSidebarMounted] = createSignal(false);
+	const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+
+	onMount(() => {
+		const openCommandPalette = (event: KeyboardEvent) => {
+			if (!(event.metaKey || event.ctrlKey)) return;
+			if (!["p", "k"].includes(event.key.toLowerCase())) return;
+			event.preventDefault();
+			setCommandPaletteOpen((open) => !open);
+		};
+
+		window.addEventListener("keydown", openCommandPalette);
+		onCleanup(() => window.removeEventListener("keydown", openCommandPalette));
+	});
 
 	createEffect(() => {
 		if (isClipsMode()) setClipsSidebarMounted(true);
@@ -852,6 +866,10 @@ function Inner(props: {
 		createSignal(DEFAULT_SPLIT_RATIO),
 		{ name: "editorTranscriptSplitRatio" },
 	);
+	const [sidebarWidth, setSidebarWidth] = makePersisted(createSignal(480), {
+		name: "editorSidebarWidth",
+	});
+	const [isResizingSidebar, setIsResizingSidebar] = createSignal(false);
 	const [isResizingSplit, setIsResizingSplit] = createSignal(false);
 	const [splitContainerRef, setSplitContainerRef] =
 		createSignal<HTMLDivElement>();
@@ -886,6 +904,29 @@ function Inner(props: {
 		window.addEventListener("mouseup", handleUp);
 	};
 
+	const handleSidebarResizeStart = (event: MouseEvent) => {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		const startX = event.clientX;
+		const startWidth = sidebarWidth();
+		setIsResizingSidebar(true);
+
+		const handleMove = (moveEvent: MouseEvent) => {
+			setSidebarWidth(
+				Math.min(640, Math.max(380, startWidth + startX - moveEvent.clientX)),
+			);
+		};
+
+		const handleUp = () => {
+			setIsResizingSidebar(false);
+			window.removeEventListener("mousemove", handleMove);
+			window.removeEventListener("mouseup", handleUp);
+		};
+
+		window.addEventListener("mousemove", handleMove);
+		window.addEventListener("mouseup", handleUp);
+	};
+
 	return (
 		<Show
 			when={!fullscreenMode()}
@@ -896,12 +937,16 @@ function Inner(props: {
 			}
 		>
 			<div
-				class="relative flex flex-col flex-1 min-h-0"
+				class="relative flex flex-col flex-1 min-h-0 bg-transparent"
 				aria-busy={!editorReady() && !preparingSession?.handoffFailed()}
 			>
 				<Header
 					registerTitleSave={registerEditorSave}
 					disabled={!editorReady()}
+				/>
+				<CommandPalette
+					open={commandPaletteOpen()}
+					onClose={() => setCommandPaletteOpen(false)}
 				/>
 				<Show when={preparingSession?.handoffFailed()}>
 					<div class="absolute inset-0 top-13 max-[900px]:top-[72px] z-30 flex items-center justify-center p-6">
@@ -944,17 +989,17 @@ function Inner(props: {
 				>
 					<div
 						ref={setLayoutRef}
-						class="flex overflow-hidden flex-col flex-1 gap-2 pb-2 min-h-0"
+						class="flex overflow-hidden flex-col flex-1 gap-2 min-h-0"
 					>
 						<div
 							ref={setSplitContainerRef}
-							class="flex overflow-hidden flex-row flex-1 min-h-0 px-2"
+							class="flex overflow-hidden flex-row flex-1 min-h-0 pl-2 pr-0"
 							style={{
 								"min-height": `${layoutLimits().minPlayerHeight}px`,
 							}}
 						>
 							<div
-								class="flex overflow-hidden flex-col rounded-xl bg-ed-card shadow-ed-card"
+								class="flex overflow-hidden flex-col rounded-xl pt-10 pb-2"
 								style={{
 									flex: isTranscriptMode()
 										? `0 0 ${splitRatio() * 100}%`
@@ -965,7 +1010,23 @@ function Inner(props: {
 								<PlayerContent compactness={layoutLimits().compactness} />
 							</div>
 							<Show when={!isTranscriptMode()}>
-								<div class="ml-2 flex min-h-0 w-104 min-w-104 flex-none overflow-hidden">
+								<div
+									class="ml-2 flex min-h-0 flex-none overflow-hidden"
+									style={{ width: `${sidebarWidth()}px` }}
+								>
+									<div
+										class="flex-none flex items-center justify-center cursor-col-resize select-none group z-10"
+										style={{ width: "12px" }}
+										onMouseDown={handleSidebarResizeStart}
+										aria-label="Resize editor sidebar"
+										role="separator"
+										aria-orientation="vertical"
+									>
+										<div
+											class="w-1 h-10 rounded-full transition-colors bg-ed-line-strong group-hover:bg-ed-text-3"
+											classList={{ "bg-ed-text-3": isResizingSidebar() }}
+										/>
+									</div>
 									<div
 										class="overflow-hidden min-h-0"
 										classList={{
@@ -979,7 +1040,7 @@ function Inner(props: {
 									<Show when={clipsSidebarMounted()}>
 										<Suspense>
 											<ClipsSidebar
-												class={isClipsMode() ? undefined : "hidden"}
+												class={isClipsMode() ? undefined : "hidden pt-15"}
 											/>
 										</Suspense>
 									</Show>
@@ -1017,7 +1078,7 @@ function Inner(props: {
 							</Show>
 						</div>
 						<div
-							class="relative flex-none px-2 min-h-0"
+							class="relative flex-none min-h-0"
 							style={{ height: `${timelineHeight()}px` }}
 						>
 							<div
@@ -1034,8 +1095,8 @@ function Inner(props: {
 									}}
 								/>
 							</div>
-							<div class="overflow-hidden relative px-3 pt-2.5 pb-3 h-full rounded-xl bg-ed-card shadow-ed-card">
-								<div class="h-full">
+							<div class="overflow-hidden relative h-full bg-ed-card border-t">
+								<div class="h-full pt-1">
 									<Timeline
 										onViewportOverflowChange={setTimelineViewportOverflow}
 										onContentHeightChange={updateTimelineContentHeight}

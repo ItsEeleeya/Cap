@@ -227,7 +227,7 @@ function Viewport(props: ViewportProps) {
 			style={{
 				"--fade-top-length": `${edge().top}px`,
 				"--fade-top-start": `${edge().top * 0.5}px`,
-				"--fade-top-intensity": "0.85",
+				"--fade-top-intensity": "0.9",
 
 				"--fade-bottom-length": `${edge().bottom}px`,
 				"--fade-bottom-start": `${edge().bottom * 0.7}px`,

@@ -403,6 +403,7 @@ export function OrganizationDropdown() {
 					rightIcon={<IconCapChevronDown />}
 					title={triggerLabel()}
 					aria-label={`Organization: ${triggerLabel()}`}
+					_inToolbar
 				>
 					<span class="block max-w-32 truncate max-[1200px]:hidden">
 						{triggerLabel()}

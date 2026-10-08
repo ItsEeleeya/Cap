@@ -221,7 +221,7 @@ export const SolariumSwitch: Component<SwitchProps> = (rawProps) => {
 	]);
 
 	function fontSizePx() {
-		return SIZE_FONT_SIZE_PX[local.size ?? "md"];
+		return SIZE_FONT_SIZE_PX[local.size ?? "sm"];
 	}
 	function thumbWidth() {
 		return fontSizePx() * THUMB_SIZE_EM;

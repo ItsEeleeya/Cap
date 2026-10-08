@@ -15,6 +15,7 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
+import GlassEffectContainer from "~/components/GlassEffectContainer";
 import Tooltip from "~/components/Tooltip";
 import { captionsStore } from "~/store/captions";
 import { createTauriEventListener } from "~/utils/createEventListener";
@@ -374,8 +375,9 @@ export function PlayerContent(props: { compactness?: number }) {
 			onMouseEnter={() => setPanelHovered(true)}
 			onMouseLeave={() => setPanelHovered(false)}
 		>
+			{/* PLAYER HEADER */}
 			<div
-				class="flex overflow-x-auto relative z-10 flex-none flex-row gap-3 items-center px-3"
+				class="flex overflow-x-auto relative z-10 flex-none flex-row gap-3 items-center px-3 hidden"
 				style={{ height: `${44 - 4 * (props.compactness ?? 0)}px` }}
 			>
 				<div class="flex flex-1 gap-0.5 items-center min-w-fit">
@@ -429,22 +431,27 @@ export function PlayerContent(props: { compactness?: number }) {
 					if (event.button === 0) setPreviewPointerDown(true);
 				}}
 			/>
+			{/* PLAYER BOTTOM BAR */}
 			<div
-				class="flex overflow-x-auto relative z-10 flex-none flex-row gap-3 items-center px-3.5"
-				style={{ height: `${48 - 4 * (props.compactness ?? 0)}px` }}
+				class="flex overflow-x-auto relative z-10 flex-none flex-row gap-3 items-center px-1"
+				style={{ height: `${46 - 4 * (props.compactness ?? 0)}px` }}
 			>
-				<div class="flex flex-1 items-center min-w-fit whitespace-nowrap">
-					<Time
-						class="font-medium text-ed-text-1"
-						seconds={Math.max(
-							editorState.previewTime ?? editorState.playbackTime,
-							0,
-						)}
-					/>
-					<span class="text-[13px] tabular-nums text-ed-text-3"> / </span>
-					<Time seconds={totalDuration()} />
+				<div class="flex flex-1 gap-0.5 items-center min-w-fit">
+					<Show when={!selectedStyle()}>
+						<AspectRatioSelect />
+					</Show>
+					<EditorButton
+						variant="text"
+						tooltipText="Crop Video"
+						onClick={cropDialogHandler}
+						leftIcon={<IconCapCrop />}
+					>
+						<span class="max-[1200px]:hidden">Crop</span>
+					</EditorButton>
+					<FrameButton />
 				</div>
-				<div class="flex flex-row flex-none gap-3.5 items-center">
+				<div class="flex-1" />
+				<div class="flex flex-row flex-none gap-3.5 pl-10 items-center">
 					<button
 						type="button"
 						class="text-ed-text-2 transition-opacity hover:opacity-70 will-change-[opacity]"
@@ -464,17 +471,17 @@ export function PlayerContent(props: { compactness?: number }) {
 						<IconCapPrev class="size-3.5" />
 					</button>
 					<Tooltip kbd={["Space"]} content="Play/Pause video">
-						<button
-							type="button"
+						<GlassEffectContainer
+							as={"button"}
 							onClick={handlePlayPauseClick}
-							class="flex justify-center items-center rounded-full transition-opacity size-8 bg-ed-text-1 text-ed-card hover:opacity-90"
+							class="flex justify-center items-center rounded-full transition-opacity size-8 bg-ed-text-1/10 text-ed-text-10 hover:opacity-90 apple-glass"
 						>
 							{!playbackIntent() || isAtEnd() ? (
 								<IconCapPlay class="size-3" />
 							) : (
 								<IconCapPause class="size-3" />
 							)}
-						</button>
+						</GlassEffectContainer>
 					</Tooltip>
 					<button
 						type="button"
@@ -493,6 +500,21 @@ export function PlayerContent(props: { compactness?: number }) {
 						<IconCapNext class="size-3.5" />
 					</button>
 				</div>
+
+				<div class="flex-1" />
+
+				<div class="flex flex-1 items-center min-w-fit whitespace-nowrap">
+					<Time
+						class="font-medium text-ed-text-1"
+						seconds={Math.max(
+							editorState.previewTime ?? editorState.playbackTime,
+							0,
+						)}
+					/>
+					<span class="text-[13px] tabular-nums text-ed-text-3 px-1"> / </span>
+					<Time seconds={totalDuration()} />
+				</div>
+
 				<div class="flex flex-row flex-1 gap-0.5 justify-end items-center min-w-fit">
 					<EditorButton<typeof KToggleButton>
 						tooltipText="Toggle Split"
@@ -736,7 +758,7 @@ function PreviewCanvas(props: {
 	return (
 		<div
 			ref={setCanvasContainerRef}
-			class="relative flex-1 justify-center items-center min-h-0 bg-ed-card"
+			class="relative flex-1 justify-center items-center min-h-0"
 			style={{ contain: "layout style" }}
 			onContextMenu={handleContextMenu}
 		>
@@ -797,7 +819,12 @@ function PreviewCanvas(props: {
 
 function Time(props: { seconds: number; fps?: number; class?: string }) {
 	return (
-		<span class={cx("text-[13px] tabular-nums text-ed-text-3", props.class)}>
+		<span
+			class={cx(
+				"text-[13px] tabular-nums font-mono text-ed-text-3",
+				props.class,
+			)}
+		>
 			{formatTime(props.seconds, props.fps ?? FPS)}
 		</span>
 	);

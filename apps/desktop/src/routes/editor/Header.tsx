@@ -5,13 +5,13 @@ import { cx } from "cva";
 import {
 	type ComponentProps,
 	createEffect,
-	createMemo,
 	createSignal,
 	on,
 	onCleanup,
-	Show,
+	type ParentProps,
 } from "solid-js";
 import toast from "solid-toast";
+import GlassEffectContainer from "~/components/GlassEffectContainer";
 import Tooltip from "~/components/Tooltip";
 import CaptionControlsWindows11 from "~/components/titlebar/controls/CaptionControlsWindows11";
 import { trackEvent } from "~/utils/analytics";
@@ -55,9 +55,7 @@ export function Header(props: {
 }) {
 	const {
 		editorInstance,
-		project,
 		projectHistory,
-		dialog,
 		setDialog,
 		meta,
 		exportState,
@@ -72,181 +70,304 @@ export function Header(props: {
 		return true;
 	};
 
-	const hasTranscript = createMemo(() => {
-		const segments = project.captions?.segments ?? [];
-		return segments.some((seg) => seg.words && seg.words.length > 0);
-	});
-
-	const isTranscriptOpen = createMemo(() => {
-		const d = dialog();
-		return "type" in d && d.type === "transcript" && d.open;
-	});
-
-	const isClipsOpen = createMemo(() => {
-		const d = dialog();
-		return "type" in d && d.type === "clips" && d.open;
-	});
-
 	const [titleReadOnly, setTitleReadOnly] = createSignal(false);
+
+	function ItemGroup(
+		props: ParentProps<{
+			fullSize?: boolean;
+			class?: string;
+		}>,
+	) {
+		return (
+			<GlassEffectContainer
+				class={cx(
+					"rounded-full h-9 inline-flex bg-ed-card/20 has-[>_:nth-child(2)]:px-2 has-[>_:nth-child(2)]:gap-2.5",
+					props.class,
+				)}
+			>
+				{props.children}
+			</GlassEffectContainer>
+		);
+	}
+
+	function ItemGroupButton(props: ParentProps) {
+		return (
+			<button
+				type="button"
+				class="w-[22px] inline-flex items-center justify-center px-0.5"
+			>
+				{props.children}
+			</button>
+		);
+	}
 
 	return (
 		<div
 			data-tauri-drag-region
-			class="flex relative shrink-0 flex-row items-center w-full h-13 pr-3 max-[900px]:grid max-[900px]:grid-cols-1 max-[900px]:grid-rows-[36px_36px] max-[900px]:h-[72px] max-[900px]:pr-2"
+			class="z-50 fixed top-0 flex shrink-0 flex-row items-center w-full h-13 pr-2 max-[900px]:grid max-[900px]:grid-cols-1 max-[900px]:grid-rows-[36px_36px] max-[900px]:h-[72px] max-[900px]:pr-0"
 		>
-			<div
-				data-tauri-drag-region
-				class={cx(
-					"flex flex-row flex-1 min-w-0 items-center h-full",
-					ostype() === "windows" && "max-[900px]:pr-[146px]",
-				)}
-			>
-				{ostype() === "macos" && (
-					<div data-tauri-drag-region class="h-full w-[92px] shrink-0" />
-				)}
-				{ostype() === "linux" && (
-					<CaptionControlsWindows11 class="mr-1 ml-3 shrink-0" />
-				)}
-				{ostype() === "windows" && <div class="w-3 shrink-0" />}
+			{ostype() === "macos" && (
+				<div data-tauri-drag-region class="h-full w-[92px] shrink-0" />
+			)}
 
-				<div inert={props.disabled} class="flex gap-1.5 items-center min-w-0">
-					<NameEditor
-						name={meta().prettyName}
-						registerTitleSave={props.registerTitleSave}
-						readOnly={titleReadOnly() || props.disabled === true}
-						setReadOnly={setTitleReadOnly}
+			{/* Left section */}
+			<div class="flex items-center gap-1 min-w-0">
+				{/* open bundle, delete, org, presets */}
+				<div
+					inert={props.disabled}
+					class="flex gap-2 items-center ml-1.5 shrink-0"
+				>
+					<ItemGroup>
+						<ItemGroupButton>
+							<IconLucideFolder />
+						</ItemGroupButton>
+						<ItemGroupButton>
+							<IconCapTrash />
+						</ItemGroupButton>
+					</ItemGroup>
+
+					<div
+						inert={props.disabled}
+						class="flex gap-1.5 px-2 items-center min-w-0"
+					>
+						<NameEditor
+							name={meta().prettyName}
+							registerTitleSave={props.registerTitleSave}
+							readOnly={titleReadOnly() || props.disabled === true}
+							setReadOnly={setTitleReadOnly}
+						/>
+						<span class="shrink-0 text-[13px] text-ed-text-3">.cap</span>
+					</div>
+				</div>
+			</div>
+
+			{/* Center section */}
+			<div class="absolute left-1/2 flex items-center gap-1 -translate-x-1/2">
+				{/*<ItemGroup class="mx-1">
+
+				</ItemGroup>*/}
+
+				{/*<ItemGroup class="inline-flex items-center jusitfy-center gap-2.5 px-2.5!">
+					<button class="inline-flex items-center justify-center size-4 text-blue-11">
+						<IconLucidePanelRight />
+					</button>
+					<button class="inline-flex items-center justify-center size-4 text-blue-11">
+						<IconLucidePanelBottom />
+					</button>
+					<button class="inline-flex items-center justify-center size-4.5">
+						<IconCapClapperboard />
+					</button>
+					<button class="inline-flex items-center justify-center size-4.5 apple-vibrancy-fill">
+						<IconCapCaptions />
+					</button>
+				</ItemGroup>*/}
+			</div>
+
+			{/* Right section */}
+			<div class="flex items-center gap-2 ml-auto">
+				{/* reupload, copy link, export */}
+
+				<ItemGroup class="px-1! py-1">
+					<EditorButton
+						onClick={() => {
+							clearTimelineSelection();
+							if (!projectHistory.canUndo()) return;
+							projectHistory.undo();
+						}}
+						disabled={
+							!projectHistory.canUndo() && !editorState.timeline.selection
+						}
+						tooltipText="Undo"
+						leftIcon={<IconCapUndo />}
+						class="size-9"
+						_inToolbar
 					/>
-					<span class="shrink-0 text-[13px] text-ed-text-3">.cap</span>
+					<EditorButton
+						onClick={() => {
+							clearTimelineSelection();
+							if (!projectHistory.canRedo()) return;
+							projectHistory.redo();
+						}}
+						disabled={
+							!projectHistory.canRedo() && !editorState.timeline.selection
+						}
+						tooltipText="Redo"
+						leftIcon={<IconCapRedo />}
+						class="size-9"
+						_inToolbar
+					/>
+				</ItemGroup>
+
+				<ItemGroup>
+					<OrganizationDropdown />
+				</ItemGroup>
+				<ItemGroup>
+					<PresetsDropdown />
+				</ItemGroup>
+
+				{/*<ShareButton />*/}
+				<ItemGroup class="px-0!">
+					<EditorButton
+						leftIcon={<IconCapUpload />}
+						class="size-9 w-fit"
+						_inToolbar
+					>
+						Reupload
+					</EditorButton>
+					<div class="h-5 self-center w-[1px] rounded-full border-white border-l apple-vibrancy-secondary-fill" />
+					<div class="inline-flex items-center justify-center gap-4 px-1 pr-3.5">
+						<button>
+							<IconLucideExternalLink class="size-4 text-ed-text-2" />
+						</button>
+						<button>
+							<IconCapCopy class="size-4" />
+						</button>
+					</div>
+				</ItemGroup>
+
+				<div class="relative shrink-0">
+					<div class="absolute inset-1 rounded-full shadow-[0_8px_24px_rgba(0,80,220,0.55)]" />
+					<GlassEffectContainer
+						as={"button"}
+						class={cx(
+							"relative z-10 flex shrink-0 gap-[7px] justify-center items-center pl-3 pr-3.5 h-9 text-[13px] font-medium text-white rounded-full outline-hidden",
+							"bg-linear-to-b from-ed-accent-2 to-ed-accent",
+							"transition-[filter] duration-150 ease-out",
+							"hover:brightness-[1.06] active:brightness-[0.96]",
+						)}
+						onClick={() => {
+							clearTimelineSelection();
+
+							trackEvent("export_button_clicked");
+							if (exportState.type === "done") setExportState({ type: "idle" });
+
+							setDialog({ type: "export", open: true });
+						}}
+					>
+						<UploadIcon class="size-4" />
+						Export
+					</GlassEffectContainer>
+				</div>
+			</div>
+
+			<div class="hidden">
+				<div
+					data-tauri-drag-region
+					class={cx(
+						"flex flex-row flex-1 min-w-0 items-center h-full",
+						ostype() === "windows" && "max-[900px]:pr-[146px]",
+					)}
+				>
+					{ostype() === "macos" && (
+						<div data-tauri-drag-region class="h-full w-[92px] shrink-0" />
+					)}
+					{ostype() === "linux" && (
+						<CaptionControlsWindows11 class="mr-1 ml-3 shrink-0" />
+					)}
+					{ostype() === "windows" && <div class="w-3 shrink-0" />}
+
+					<div inert={props.disabled} class="flex gap-1.5 items-center min-w-0">
+						<NameEditor
+							name={meta().prettyName}
+							registerTitleSave={props.registerTitleSave}
+							readOnly={titleReadOnly() || props.disabled === true}
+							setReadOnly={setTitleReadOnly}
+						/>
+						<span class="shrink-0 text-[13px] text-ed-text-3">.cap</span>
+					</div>
+
+					<div
+						inert={props.disabled}
+						class="flex gap-0.5 items-center ml-1.5 shrink-0"
+					>
+						<EditorButton
+							onClick={() => {
+								clearTimelineSelection();
+
+								console.log({ path: `${editorInstance.path}/` });
+								revealItemInDir(`${editorInstance.path}/`);
+							}}
+							tooltipText="Open recording bundle"
+							leftIcon={<IconLucideFolder />}
+						/>
+						<EditorButton
+							onClick={async () => {
+								clearTimelineSelection();
+
+								if (
+									!(await ask(
+										"Are you sure you want to delete this recording?",
+									))
+								)
+									return;
+
+								await commands.editorDeleteProject();
+							}}
+							tooltipText="Delete recording"
+							leftIcon={<IconCapTrash />}
+						/>
+					</div>
+
+					<div data-tauri-drag-region class="flex-1 h-full min-w-2" />
 				</div>
 
 				<div
+					data-tauri-drag-region
 					inert={props.disabled}
-					class="flex gap-0.5 items-center ml-1.5 shrink-0"
+					class="flex shrink-0 flex-row items-center gap-1 max-[900px]:justify-end"
 				>
 					<EditorButton
 						onClick={() => {
 							clearTimelineSelection();
-
-							console.log({ path: `${editorInstance.path}/` });
-							revealItemInDir(`${editorInstance.path}/`);
+							if (!projectHistory.canUndo()) return;
+							projectHistory.undo();
 						}}
-						tooltipText="Open recording bundle"
-						leftIcon={<IconLucideFolder />}
+						disabled={
+							!projectHistory.canUndo() && !editorState.timeline.selection
+						}
+						tooltipText="Undo"
+						leftIcon={<IconCapUndo />}
 					/>
 					<EditorButton
-						onClick={async () => {
-							clearTimelineSelection();
-
-							if (
-								!(await ask("Are you sure you want to delete this recording?"))
-							)
-								return;
-
-							await commands.editorDeleteProject();
-						}}
-						tooltipText="Delete recording"
-						leftIcon={<IconCapTrash />}
-					/>
-				</div>
-
-				<div data-tauri-drag-region class="flex-1 h-full min-w-2" />
-			</div>
-
-			<div
-				data-tauri-drag-region
-				inert={props.disabled}
-				class="flex shrink-0 flex-row items-center gap-1 max-[900px]:justify-end"
-			>
-				<EditorButton
-					onClick={() => {
-						clearTimelineSelection();
-						if (!projectHistory.canUndo()) return;
-						projectHistory.undo();
-					}}
-					disabled={
-						!projectHistory.canUndo() && !editorState.timeline.selection
-					}
-					tooltipText="Undo"
-					leftIcon={<IconCapUndo />}
-				/>
-				<EditorButton
-					onClick={() => {
-						clearTimelineSelection();
-						if (!projectHistory.canRedo()) return;
-						projectHistory.redo();
-					}}
-					disabled={
-						!projectHistory.canRedo() && !editorState.timeline.selection
-					}
-					tooltipText="Redo"
-					leftIcon={<IconCapRedo />}
-				/>
-				<div class="mx-1.5 w-px h-4 shrink-0 bg-ed-line-strong" />
-				<OrganizationDropdown />
-				<PresetsDropdown />
-				<EditorButton
-					title="Clips"
-					aria-label="Clips"
-					class={cx(isClipsOpen() && "bg-ed-ctl-hover text-ed-text-1")}
-					leftIcon={<IconCapClapperboard />}
-					onClick={() => {
-						clearTimelineSelection();
-						if (isClipsOpen()) {
-							setDialog((d) => ({ ...d, open: false }));
-						} else {
-							setDialog({ type: "clips", open: true });
-						}
-					}}
-				>
-					<span class="max-[1200px]:hidden">Clips</span>
-				</EditorButton>
-				<Show when={hasTranscript()}>
-					<EditorButton
-						title={isTranscriptOpen() ? "Back to editor" : "Captions"}
-						aria-label={isTranscriptOpen() ? "Back to editor" : "Captions"}
-						class={cx(isTranscriptOpen() && "bg-ed-ctl-hover text-ed-text-1")}
-						leftIcon={
-							<Show when={isTranscriptOpen()} fallback={<IconCapCaptions />}>
-								<IconLucideArrowLeft />
-							</Show>
-						}
 						onClick={() => {
 							clearTimelineSelection();
-							if (isTranscriptOpen()) {
-								setDialog((d) => ({ ...d, open: false }));
-							} else {
-								setDialog({ type: "transcript", open: true });
-							}
+							if (!projectHistory.canRedo()) return;
+							projectHistory.redo();
+						}}
+						disabled={
+							!projectHistory.canRedo() && !editorState.timeline.selection
+						}
+						tooltipText="Redo"
+						leftIcon={<IconCapRedo />}
+					/>
+					<div class="mx-1.5 w-px h-4 shrink-0 bg-ed-line-strong" />
+					<OrganizationDropdown />
+					<PresetsDropdown />
+					<ShareButton />
+					<button
+						type="button"
+						class={cx(
+							"flex shrink-0 gap-[7px] justify-center items-center pl-3 pr-3.5 ml-1.5 h-[30px] text-[13px] font-medium text-white rounded-lg outline-hidden",
+							"bg-linear-to-b from-ed-accent-2 to-ed-accent",
+							"shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(0,60,160,0.25)]",
+							"transition-[filter] duration-150 ease-out",
+							"hover:brightness-[1.06] active:brightness-[0.96]",
+						)}
+						onClick={() => {
+							clearTimelineSelection();
+
+							trackEvent("export_button_clicked");
+							if (exportState.type === "done") setExportState({ type: "idle" });
+
+							setDialog({ type: "export", open: true });
 						}}
 					>
-						<span class="max-[1200px]:hidden">
-							{isTranscriptOpen() ? "Back" : "Captions"}
-						</span>
-					</EditorButton>
-				</Show>
-				<ShareButton />
-				<button
-					type="button"
-					class={cx(
-						"flex shrink-0 gap-[7px] justify-center items-center pl-3 pr-3.5 ml-1.5 h-[30px] text-[13px] font-medium text-white rounded-lg outline-hidden",
-						"bg-linear-to-b from-ed-accent-2 to-ed-accent",
-						"shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(0,60,160,0.25)]",
-						"transition-[filter] duration-150 ease-out",
-						"hover:brightness-[1.06] active:brightness-[0.96]",
-					)}
-					onClick={() => {
-						clearTimelineSelection();
-
-						trackEvent("export_button_clicked");
-						if (exportState.type === "done") setExportState({ type: "idle" });
-
-						setDialog({ type: "export", open: true });
-					}}
-				>
-					<UploadIcon class="size-4" />
-					Export
-				</button>
+						<UploadIcon class="size-4" />
+						Export
+					</button>
+				</div>
 			</div>
+
 			{ostype() === "windows" && (
 				<CaptionControlsWindows11 class="shrink-0 max-[900px]:absolute max-[900px]:right-0 max-[900px]:top-0 max-[900px]:h-9" />
 			)}
